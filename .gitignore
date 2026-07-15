@@ -1,0 +1,23 @@
+# Dépendances
+node_modules/
+
+# Données de l'utilisateur (jamais versionnées)
+data/
+
+# Variables d'environnement (au cas où)
+.env
+.env.*
+
+# Journaux et fichiers temporaires
+*.log
+npm-debug.log*
+*.tmp
+
+# Réglages locaux de l'éditeur / des outils
+.claude/
+.vscode/
+.idea/
+
+# Système
+.DS_Store
+Thumbs.db

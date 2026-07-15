@@ -1,0 +1,105 @@
+/**
+ * Tests des calculs : totaux, statistiques du tableau de bord, bilan de
+ * période et construction du registre exporté.
+ */
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  totalRecettes, filtrerParPeriode, statistiquesTableauDeBord, bilanPeriode
+} from '../src/totaux.js';
+import { construireRegistre } from '../src/exports/registre.js';
+
+/** Petite fabrique de recettes pour les tests. */
+function recette(date, montant, extra = {}) {
+  return {
+    dateEncaissement: date,
+    client: 'Client test',
+    libelle: '',
+    numeroFacture: '',
+    montant,
+    modeReglement: 'virement',
+    creeLe: '2026-01-01T00:00:00.000Z',
+    ...extra
+  };
+}
+
+const RECETTES = [
+  recette('2026-01-10', 100),
+  recette('2026-01-20', 200.10),
+  recette('2026-03-05', 300),
+  recette('2026-07-01', 0.1),
+  recette('2026-07-02', 0.2),
+  recette('2025-12-31', 999)
+];
+
+test('totalRecettes cumule sans erreur d’arrondi', () => {
+  assert.equal(totalRecettes([recette('2026-07-01', 0.1), recette('2026-07-02', 0.2)]), 0.3);
+});
+
+test('filtrerParPeriode filtre par année, mois et trimestre', () => {
+  assert.equal(filtrerParPeriode(RECETTES, { annee: 2026 }).length, 5);
+  assert.equal(filtrerParPeriode(RECETTES, { annee: 2026, mois: 1 }).length, 2);
+  assert.equal(filtrerParPeriode(RECETTES, { annee: 2026, trimestre: 1 }).length, 3);
+  assert.equal(filtrerParPeriode(RECETTES, { annee: 2025 }).length, 1);
+});
+
+test('statistiquesTableauDeBord calcule le mois et l’année en cours', () => {
+  const stats = statistiquesTableauDeBord(RECETTES, new Date(2026, 0, 25));
+  assert.equal(stats.caMois, 300.10);
+  assert.equal(stats.caAnnee, 600.40);
+  assert.equal(stats.nombreEncaissements, 5);
+  assert.equal(stats.moyenneEncaissement, 120.08);
+  assert.equal(stats.dernieresRecettes.length, 5);
+  // Triées par date décroissante.
+  assert.equal(stats.dernieresRecettes[0].dateEncaissement, '2026-07-02');
+});
+
+test('bilanPeriode répond pour un mois, un trimestre et une année', () => {
+  const mois = bilanPeriode(RECETTES, { annee: 2026, type: 'mois', valeur: 1 });
+  assert.equal(mois.chiffreAffaires, 300.10);
+  assert.equal(mois.nombreEncaissements, 2);
+  assert.equal(mois.libellePeriode, 'janvier 2026');
+
+  const trimestre = bilanPeriode(RECETTES, { annee: 2026, type: 'trimestre', valeur: 3 });
+  assert.equal(trimestre.chiffreAffaires, 0.3);
+  assert.equal(trimestre.libellePeriode, '3e trimestre 2026');
+
+  const annee = bilanPeriode(RECETTES, { annee: 2026, type: 'annee' });
+  assert.equal(annee.chiffreAffaires, 600.40);
+  assert.equal(annee.nombreEncaissements, 5);
+});
+
+test('construireRegistre trie chronologiquement et insère les totaux', () => {
+  const registre = construireRegistre(RECETTES, { annee: 2026 });
+  assert.equal(registre.nombre, 5);
+  assert.equal(registre.total, 600.40);
+  assert.equal(registre.titre, 'Année 2026');
+
+  const types = registre.lignes.map((l) => l.type);
+  // 2 recettes de janvier + total, 1 de mars + total, 2 de juillet + total, total annuel.
+  assert.deepEqual(types, [
+    'recette', 'recette', 'total',
+    'recette', 'total',
+    'recette', 'recette', 'total',
+    'total'
+  ]);
+
+  const totaux = registre.lignes.filter((l) => l.type === 'total');
+  assert.equal(totaux[0].libelle, 'Total janvier 2026');
+  assert.equal(totaux[0].montant, 300.10);
+  assert.equal(totaux.at(-1).libelle, 'Total année 2026');
+  assert.equal(totaux.at(-1).final, true);
+
+  // Ordre chronologique croissant.
+  const dates = registre.lignes.filter((l) => l.type === 'recette').map((l) => l.recette.dateEncaissement);
+  assert.deepEqual(dates, [...dates].sort());
+});
+
+test('construireRegistre pour un seul mois : total mensuel uniquement', () => {
+  const registre = construireRegistre(RECETTES, { annee: 2026, mois: 1 });
+  assert.equal(registre.titre, 'Janvier 2026');
+  const totaux = registre.lignes.filter((l) => l.type === 'total');
+  assert.equal(totaux.length, 1);
+  assert.equal(totaux[0].libelle, 'Total janvier 2026');
+});

@@ -1,0 +1,4 @@
+# Fins de ligne normalisées : LF dans le dépôt et sur tous les systèmes,
+# sauf les scripts Windows qui exigent CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
