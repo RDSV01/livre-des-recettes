@@ -36,7 +36,7 @@ export function genererCsv(registre, parametres) {
         champ(formaterDate(r.dateEncaissement, parametres.formatDate)),
         champ(r.client),
         montantCsv(r.montant),
-        champ(libelleMode(r.modeReglement)),
+        champ(libelleMode(r.modeReglement, parametres.modesPersonnalises)),
         champ(r.numeroFacture),
         champ(r.libelle)
       ].join(SEPARATEUR));

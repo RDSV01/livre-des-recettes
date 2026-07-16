@@ -7,7 +7,8 @@
  */
 
 import express from 'express';
-import { validerRecette, estDoublon } from '../validation.js';
+import { validerRecette } from '../validation.js';
+import { estDoublon } from '../partage/doublons.js';
 import { comparerParDateDesc, filtrerParPeriode } from '../totaux.js';
 import { normaliserTexte } from '../partage/texte.js';
 import { analyserMontant, enCentimes } from '../partage/montants.js';
@@ -41,6 +42,12 @@ function correspondRecherche(recette, recherche) {
 export function routesRecettes(stockage) {
   const routeur = express.Router();
 
+  /** Contexte de validation courant : modes personnalisés et type d'activité. */
+  const contexteValidation = () => {
+    const { modesPersonnalises, typeActivite } = stockage.obtenirParametres();
+    return { modesPersonnalises, typeActivite };
+  };
+
   // Liste filtrée : GET /api/recettes?annee=2026&mois=7&mode=virement&q=dupont
   routeur.get('/', (req, res) => {
     let recettes = filtrerParPeriode(stockage.listerRecettes(), {
@@ -65,8 +72,29 @@ export function routesRecettes(stockage) {
     res.json({ annees });
   });
 
+  /**
+   * Libellés déjà utilisés, pour l'auto-complétion à la saisie :
+   * sans doublon (insensible à la casse), du plus fréquent au moins fréquent
+   * puis par ordre alphabétique.
+   */
+  routeur.get('/libelles', (req, res) => {
+    const frequences = new Map();
+    for (const recette of stockage.listerRecettes()) {
+      const libelle = String(recette.libelle ?? '').trim();
+      if (!libelle) continue;
+      const cle = normaliserTexte(libelle);
+      const entree = frequences.get(cle) ?? { libelle, total: 0 };
+      entree.total += 1;
+      frequences.set(cle, entree);
+    }
+    const libelles = [...frequences.values()]
+      .sort((a, b) => b.total - a.total || a.libelle.localeCompare(b.libelle, 'fr'))
+      .map((e) => e.libelle);
+    res.json({ libelles });
+  });
+
   routeur.post('/', (req, res) => {
-    const { erreurs, valeurs } = validerRecette(req.body);
+    const { erreurs, valeurs } = validerRecette(req.body, contexteValidation());
     if (erreurs) return res.status(400).json({ erreurs });
     res.status(201).json({ recette: stockage.ajouterRecette(valeurs) });
   });
@@ -75,7 +103,8 @@ export function routesRecettes(stockage) {
    * Import en lot : POST /api/recettes/import
    * Corps : `{ lignes: [...], importerDoublons: bool, simulation: bool }`.
    * En simulation, rien n'est écrit : le rapport permet à l'utilisateur de
-   * décider avant d'importer réellement.
+   * décider avant d'importer réellement. Un import réel est toujours précédé
+   * d'une sauvegarde automatique, restaurable depuis les paramètres.
    */
   routeur.post('/import', (req, res) => {
     const { lignes, importerDoublons = false, simulation = false } = req.body ?? {};
@@ -86,13 +115,14 @@ export function routesRecettes(stockage) {
       return res.status(400).json({ erreur: `Import limité à ${IMPORT_MAX_LIGNES} lignes à la fois.` });
     }
 
+    const contexte = contexteValidation();
     const existantes = stockage.listerRecettes();
     const valides = [];
     const doublons = [];
     const erreurs = [];
 
     lignes.forEach((entree, index) => {
-      const resultat = validerRecette(entree);
+      const resultat = validerRecette(entree, contexte);
       if (resultat.erreurs) {
         erreurs.push({ ligne: index + 1, erreurs: resultat.erreurs });
         return;
@@ -108,7 +138,9 @@ export function routesRecettes(stockage) {
     const aImporter = importerDoublons
       ? valides.concat(doublons.map((d) => d.valeurs))
       : valides;
+    let sauvegarde = null;
     if (!simulation && aImporter.length > 0) {
+      sauvegarde = stockage.creerSauvegarde('avant-import');
       stockage.ajouterRecettes(aImporter);
     }
 
@@ -118,6 +150,7 @@ export function routesRecettes(stockage) {
       valides: valides.length,
       importables: aImporter.length,
       importees: simulation ? 0 : aImporter.length,
+      sauvegarde,
       doublons: doublons.map(({ ligne, valeurs }) => ({
         ligne,
         dateEncaissement: valeurs.dateEncaissement,
@@ -129,7 +162,7 @@ export function routesRecettes(stockage) {
   });
 
   routeur.put('/:id', (req, res) => {
-    const { erreurs, valeurs } = validerRecette(req.body);
+    const { erreurs, valeurs } = validerRecette(req.body, contexteValidation());
     if (erreurs) return res.status(400).json({ erreurs });
     const recette = stockage.modifierRecette(req.params.id, valeurs);
     if (!recette) return res.status(404).json({ erreur: 'Recette introuvable.' });

@@ -8,13 +8,16 @@
  *    ce qui protège le stockage de toute écriture de champ arbitraire.
  */
 
-import { MODES_REGLEMENT, DEVISES, FORMATS_DATE } from './partage/constantes.js';
+import crypto from 'node:crypto';
+import { MODES_REGLEMENT, DEVISES, FORMATS_DATE, CATEGORIES_RECETTE } from './partage/constantes.js';
+import { TYPES_ACTIVITE } from './partage/seuils.js';
 import { estDateIso } from './partage/dates.js';
-import { analyserMontant, enCentimes } from './partage/montants.js';
+import { analyserMontant } from './partage/montants.js';
 import { normaliserTexte } from './partage/texte.js';
 
 const LONGUEUR_MAX = 500;
 const MONTANT_MAX = 100_000_000; // garde-fou contre les fautes de frappe
+const MODES_PERSONNALISES_MAX = 20;
 
 /** Nettoie une valeur libre en chaîne (trim), `''` si absente. */
 function texte(valeur) {
@@ -25,12 +28,22 @@ function texte(valeur) {
 /**
  * Valide et normalise une recette.
  *
- * Le livre des recettes ne comporte que les six colonnes légales :
- * date d'encaissement, client, libellé, numéro de facture, montant et
- * mode de règlement. Seuls le client, la date, le montant et le mode sont
+ * Le livre des recettes exporté ne comporte que les six colonnes légales :
+ * date d'encaissement, client, libellé, numéro de facture, montant et mode
+ * de règlement. Seuls le client, la date, le montant et le mode sont
  * obligatoires ; le libellé et la facture restent facultatifs.
+ *
+ * Une recette porte en plus une catégorie interne (vente / prestation),
+ * obligatoire pour les activités mixtes : elle alimente le suivi des seuils
+ * et le bilan URSSAF, sans jamais apparaître dans les exports.
+ *
+ * @param {object} [contexte]
+ * @param {Array<{code: string}>} [contexte.modesPersonnalises] modes ajoutés
+ *   par l'utilisateur, acceptés en plus des modes par défaut.
+ * @param {string} [contexte.typeActivite] type d'activité des paramètres :
+ *   « mixte » rend la catégorie obligatoire.
  */
-export function validerRecette(entree) {
+export function validerRecette(entree, { modesPersonnalises = [], typeActivite = '' } = {}) {
   const e = entree ?? {};
   const erreurs = {};
 
@@ -58,7 +71,8 @@ export function validerRecette(entree) {
   }
 
   const modeReglement = texte(e.modeReglement);
-  if (!MODES_REGLEMENT.some((m) => m.code === modeReglement)) {
+  if (!MODES_REGLEMENT.some((m) => m.code === modeReglement) &&
+      !modesPersonnalises.some((m) => m.code === modeReglement)) {
     erreurs.modeReglement = 'Mode de règlement inconnu.';
   }
 
@@ -66,6 +80,13 @@ export function validerRecette(entree) {
   const numeroFacture = texte(e.numeroFacture);
   if (libelle.length > LONGUEUR_MAX) erreurs.libelle = `Le libellé dépasse ${LONGUEUR_MAX} caractères.`;
   if (numeroFacture.length > 100) erreurs.numeroFacture = 'Le numéro de facture dépasse 100 caractères.';
+
+  const categorie = texte(e.categorie);
+  if (categorie && !CATEGORIES_RECETTE.some((c) => c.code === categorie)) {
+    erreurs.categorie = 'Catégorie inconnue (vente ou prestation).';
+  } else if (typeActivite === 'mixte' && !categorie) {
+    erreurs.categorie = 'Activité mixte : précisez s’il s’agit d’une vente ou d’une prestation.';
+  }
 
   if (Object.keys(erreurs).length > 0) {
     return { erreurs, valeurs: null };
@@ -78,29 +99,10 @@ export function validerRecette(entree) {
       libelle,
       numeroFacture,
       montant: Math.round(montant * 100) / 100,
-      modeReglement
+      modeReglement,
+      categorie
     }
   };
-}
-
-/**
- * Détecte si une recette est un doublon parmi `existantes`.
- * Règle : même date d'encaissement, même montant et même client
- * (comparaison insensible à la casse et aux accents). Si les deux recettes
- * portent un numéro de facture, il doit aussi coïncider : deux factures
- * distinctes de même montant le même jour ne sont pas des doublons.
- */
-export function estDoublon(recette, existantes) {
-  const client = normaliserTexte(recette.client);
-  const facture = normaliserTexte(recette.numeroFacture);
-  const centimes = enCentimes(recette.montant);
-  return existantes.some((autre) =>
-    autre.dateEncaissement === recette.dateEncaissement &&
-    enCentimes(autre.montant) === centimes &&
-    normaliserTexte(autre.client) === client &&
-    (!facture || !normaliserTexte(autre.numeroFacture) ||
-      normaliserTexte(autre.numeroFacture) === facture)
-  );
 }
 
 /**
@@ -132,6 +134,51 @@ export function validerClient(entree) {
   return { erreurs: null, valeurs: { nom, siret } };
 }
 
+/**
+ * Valide la liste des modes de règlement personnalisés.
+ * Chaque mode garde un code stable (`perso-xxxxxxxx`) même s'il est renommé :
+ * les recettes stockent le code, jamais le libellé.
+ */
+function validerModesPersonnalises(entree) {
+  const liste = Array.isArray(entree) ? entree : [];
+  if (liste.length > MODES_PERSONNALISES_MAX) {
+    return { erreur: `Au plus ${MODES_PERSONNALISES_MAX} modes personnalisés.`, valeurs: null };
+  }
+
+  const libellesVus = new Set(MODES_REGLEMENT.map((m) => normaliserTexte(m.libelle)));
+  const codesVus = new Set();
+  const valeurs = [];
+  for (const mode of liste) {
+    const libelle = texte(mode?.libelle);
+    if (!libelle) {
+      return { erreur: 'Un mode personnalisé n’a pas de nom.', valeurs: null };
+    }
+    if (libelle.length > 50) {
+      return { erreur: `Le nom d’un mode dépasse 50 caractères (« ${libelle.slice(0, 20)}… »).`, valeurs: null };
+    }
+    const cle = normaliserTexte(libelle);
+    if (libellesVus.has(cle)) {
+      return { erreur: `Le mode « ${libelle} » existe déjà.`, valeurs: null };
+    }
+    libellesVus.add(cle);
+
+    // Code stable conservé s'il est bien formé, sinon un nouveau est généré.
+    let code = texte(mode?.code);
+    if (!/^perso-[a-f0-9]{8}$/.test(code) || codesVus.has(code)) {
+      code = `perso-${crypto.randomBytes(4).toString('hex')}`;
+    }
+    codesVus.add(code);
+    valeurs.push({ code, libelle });
+  }
+  return { erreur: null, valeurs };
+}
+
+/** Booléen d'option : valeur explicite si fournie, sinon la valeur par défaut. */
+function booleen(valeur, defaut) {
+  if (valeur === undefined || valeur === null) return defaut;
+  return valeur === true || valeur === 'true' || valeur === 'on';
+}
+
 /** Valide et normalise les paramètres de l'application. */
 export function validerParametres(entree) {
   const e = entree ?? {};
@@ -155,6 +202,11 @@ export function validerParametres(entree) {
     erreurs.siret = 'Un SIRET comporte exactement 14 chiffres.';
   }
 
+  const typeActivite = texte(e.typeActivite);
+  if (!TYPES_ACTIVITE.some((t) => t.code === typeActivite)) {
+    erreurs.typeActivite = 'Type d’activité inconnu.';
+  }
+
   const devise = texte(e.devise) || 'EUR';
   if (!DEVISES.some((d) => d.code === devise)) {
     erreurs.devise = 'Devise non prise en charge.';
@@ -165,11 +217,22 @@ export function validerParametres(entree) {
     erreurs.formatDate = 'Format de date non pris en charge.';
   }
 
+  const modes = validerModesPersonnalises(e.modesPersonnalises);
+  if (modes.erreur) {
+    erreurs.modesPersonnalises = modes.erreur;
+  }
+
   if (Object.keys(erreurs).length > 0) {
     return { erreurs, valeurs: null };
   }
   return {
     erreurs: null,
-    valeurs: { nomEntreprise, siren, siret, adresse, activite, devise, formatDate }
+    valeurs: {
+      nomEntreprise, siren, siret, adresse, activite, typeActivite,
+      devise, formatDate, modesPersonnalises: modes.valeurs,
+      alertesNumerotation: booleen(e.alertesNumerotation, true),
+      alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
+      suiviSeuils: booleen(e.suiviSeuils, true)
+    }
   };
 }

@@ -8,7 +8,7 @@ Le projet fait **une seule chose** : tenir le livre des recettes des
 micro-entrepreneurs français. Les pull requests qui l'éloignent de ce cap seront
 refusées, même excellentes techniquement. En particulier :
 
-- facturation, devis, comptabilité générale, gestion des achats : hors périmètre ;
+- facturation, devis, comptabilité générale : hors périmètre ;
 - télédéclaration ou connexion à l'URSSAF / aux impôts : hors périmètre ;
 - hébergement cloud, comptes utilisateurs, synchronisation via un serveur tiers : hors périmètre ;
 - frameworks front (React, Vue…), bundlers, ou toute étape de build : hors périmètre ;
@@ -61,9 +61,15 @@ Prérequis : Node.js >= 18. Les données de développement vivent dans `data/`
   fonctions exportées. Indentation 2 espaces (voir `.editorconfig`).
 - **Montants** : toute somme d'argent se calcule **en centimes entiers**
   (`src/partage/montants.js`), jamais d'addition directe de flottants.
-- **Registre légal** : une recette se limite aux six colonnes officielles
-  (date, client, libellé, facture, mode de règlement, montant). N'ajoutez pas de
-  champ « pour faire joli » : cela alourdirait un outil qui se veut minimal.
+- **Registre légal** : les exports se limitent aux six colonnes officielles
+  (date, client, libellé, facture, mode de règlement, montant). La seule donnée
+  interne supplémentaire d'une recette est sa catégorie vente / prestation
+  (suivi des seuils et ventilation URSSAF des activités mixtes) ; elle
+  n'apparaît jamais dans les exports. N'ajoutez pas d'autre champ « pour faire
+  joli » : cela alourdirait un outil qui se veut minimal.
+- **Seuils légaux** (plafond micro, franchise de TVA) : uniquement dans
+  `src/partage/seuils.js`, avec leur année de validité. Aucune valeur de seuil
+  en dur ailleurs.
 - **Sécurité** : côté navigateur, tout texte utilisateur passe par `echapperHtml`
   avant insertion dans le DOM ; côté serveur, par `src/validation.js`.
 - **Tests** : toute correction de bug arrive avec le test qui l'aurait attrapée ;
@@ -76,7 +82,7 @@ Prérequis : Node.js >= 18. Les données de développement vivent dans `data/`
 2. Créez une branche depuis `main` : `git checkout -b correction/mon-sujet`.
 3. Faites des commits ciblés avec des messages clairs (« Corrige le tri des
    recettes du même jour », pas « fix »).
-4. Vérifiez `npm test`, puis ouvrez la pull request en expliquant le *pourquoi*.
+4. Vérifiez `npm test`, puis ouvrez la pull request en expliquant le _pourquoi_.
 
 Les mainteneurs relisent au plus vite. Soyez bienveillants dans les échanges ;
 tout le monde ici donne de son temps libre.

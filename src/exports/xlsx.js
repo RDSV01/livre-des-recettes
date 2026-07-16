@@ -65,7 +65,7 @@ export async function genererXlsx(registre, parametres) {
         formaterDate(r.dateEncaissement, parametres.formatDate),
         r.client,
         r.montant,
-        libelleMode(r.modeReglement),
+        libelleMode(r.modeReglement, parametres.modesPersonnalises),
         r.numeroFacture,
         r.libelle
       ]);

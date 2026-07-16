@@ -15,9 +15,13 @@
  *  - écriture atomique (fichier temporaire puis renommage) : une coupure en
  *    pleine écriture ne corrompt jamais le fichier existant ;
  *  - une sauvegarde quotidienne automatique est conservée dans
- *    `data/sauvegardes/` (30 jours glissants) avant la première écriture du jour ;
+ *    `data/sauvegardes/` (30 jours glissants), plus une sauvegarde étiquetée
+ *    avant chaque opération sensible (import, restauration) ;
  *  - toute écriture qui échoue est annulée en mémoire : mémoire et fichier ne
- *    divergent jamais.
+ *    divergent jamais ;
+ *  - au démarrage, le fichier est vérifié : s'il est corrompu, l'application
+ *    démarre en lecture seule et propose de restaurer une sauvegarde, sans
+ *    JAMAIS écraser le fichier abîmé.
  */
 
 import fs from 'node:fs';
@@ -27,7 +31,22 @@ import { PARAMETRES_DEFAUT } from './partage/constantes.js';
 
 const NOM_FICHIER = 'livre-des-recettes.json';
 const DOSSIER_SAUVEGARDES = 'sauvegardes';
-const SAUVEGARDES_CONSERVEES = 30;
+const SAUVEGARDES_QUOTIDIENNES_CONSERVEES = 30;
+const SAUVEGARDES_ETIQUETEES_CONSERVEES = 10;
+
+/** Nom de fichier accepté pour une sauvegarde (borne toute traversée de chemin). */
+const MOTIF_SAUVEGARDE = /^livre-des-recettes-[A-Za-z0-9-]+\.json$/;
+
+/** Vérifie qu'un objet a bien la forme attendue du fichier de données. */
+export function estDonneesValides(objet) {
+  return objet !== null &&
+    typeof objet === 'object' &&
+    !Array.isArray(objet) &&
+    (objet.recettes === undefined || Array.isArray(objet.recettes)) &&
+    (objet.clients === undefined || Array.isArray(objet.clients)) &&
+    (objet.parametres === undefined ||
+      (typeof objet.parametres === 'object' && objet.parametres !== null && !Array.isArray(objet.parametres)));
+}
 
 /**
  * Crée le stockage adossé au dossier donné (créé au besoin).
@@ -38,24 +57,13 @@ export function creerStockage(dossierDonnees) {
   const cheminFichier = path.join(dossierDonnees, NOM_FICHIER);
   const dossierSauvegardes = path.join(dossierDonnees, DOSSIER_SAUVEGARDES);
 
-  const donnees = charger();
+  /** Message d'erreur si le fichier est corrompu, sinon `null`. */
+  let corruption = null;
 
-  function charger() {
-    if (!fs.existsSync(cheminFichier)) {
-      return { version: 1, parametres: { ...PARAMETRES_DEFAUT }, recettes: [], clients: [] };
-    }
-    const brut = fs.readFileSync(cheminFichier, 'utf8');
-    let lu;
-    try {
-      lu = JSON.parse(brut);
-    } catch (erreur) {
-      // On ne repart JAMAIS de zéro en écrasant un fichier illisible :
-      // l'utilisateur doit pouvoir restaurer une sauvegarde.
-      throw new Error(
-        `Le fichier de données « ${cheminFichier} » est illisible (JSON invalide : ${erreur.message}). ` +
-        `Restaurez une copie depuis « ${dossierSauvegardes} » puis relancez l'application.`
-      );
-    }
+  let donnees = charger();
+
+  /** Complète un contenu lu avec les valeurs par défaut manquantes. */
+  function normaliser(lu) {
     return {
       version: 1,
       parametres: { ...PARAMETRES_DEFAUT, ...(lu.parametres ?? {}) },
@@ -64,12 +72,48 @@ export function creerStockage(dossierDonnees) {
     };
   }
 
+  function charger() {
+    if (!fs.existsSync(cheminFichier)) {
+      return normaliser({});
+    }
+    try {
+      const lu = JSON.parse(fs.readFileSync(cheminFichier, 'utf8'));
+      if (!estDonneesValides(lu)) {
+        throw new Error('structure inattendue');
+      }
+      return normaliser(lu);
+    } catch (erreur) {
+      // On ne repart JAMAIS de zéro en écrasant un fichier illisible : le
+      // stockage passe en lecture seule et l'application proposera de
+      // restaurer une sauvegarde.
+      corruption = `Le fichier de données « ${cheminFichier} » est illisible (${erreur.message}).`;
+      return normaliser({});
+    }
+  }
+
   function sauvegarder() {
+    if (corruption) {
+      throw Object.assign(
+        new Error('Les données sont corrompues : restaurez une sauvegarde avant toute modification.'),
+        { code: 'CORROMPU' }
+      );
+    }
     fs.mkdirSync(dossierDonnees, { recursive: true });
     creerSauvegardeQuotidienne();
     const temporaire = `${cheminFichier}.tmp`;
     fs.writeFileSync(temporaire, JSON.stringify(donnees, null, 2), 'utf8');
     fs.renameSync(temporaire, cheminFichier);
+  }
+
+  /** Garde les `garder` sauvegardes les plus récentes correspondant au motif. */
+  function purger(motif, garder) {
+    const anciennes = fs.readdirSync(dossierSauvegardes)
+      .filter((f) => motif.test(f))
+      .sort() // le nom commence par la date : tri par nom = tri chronologique
+      .slice(0, -garder);
+    for (const fichier of anciennes) {
+      fs.unlinkSync(path.join(dossierSauvegardes, fichier));
+    }
   }
 
   /** Copie le fichier courant une fois par jour avant de le modifier. */
@@ -80,15 +124,7 @@ export function creerStockage(dossierDonnees) {
     const cible = path.join(dossierSauvegardes, `livre-des-recettes-${jour}.json`);
     if (fs.existsSync(cible)) return;
     fs.copyFileSync(cheminFichier, cible);
-
-    // Purge : on garde les 30 sauvegardes les plus récentes (tri par nom = tri par date).
-    const anciennes = fs.readdirSync(dossierSauvegardes)
-      .filter((f) => /^livre-des-recettes-\d{4}-\d{2}-\d{2}\.json$/.test(f))
-      .sort()
-      .slice(0, -SAUVEGARDES_CONSERVEES);
-    for (const fichier of anciennes) {
-      fs.unlinkSync(path.join(dossierSauvegardes, fichier));
-    }
+    purger(/^livre-des-recettes-\d{4}-\d{2}-\d{2}\.json$/, SAUVEGARDES_QUOTIDIENNES_CONSERVEES);
   }
 
   const horodatage = () => new Date().toISOString();
@@ -112,6 +148,11 @@ export function creerStockage(dossierDonnees) {
 
   return {
     cheminFichier,
+
+    /** Message décrivant la corruption du fichier de données, ou `null`. */
+    corruption() {
+      return corruption;
+    },
 
     // ---- Recettes ------------------------------------------------------------
 
@@ -206,16 +247,82 @@ export function creerStockage(dossierDonnees) {
     // ---- Paramètres ----------------------------------------------------------
 
     obtenirParametres() {
-      return { ...donnees.parametres };
+      return structuredClone(donnees.parametres);
     },
 
     /** Remplace les paramètres (déjà validés). */
     modifierParametres(parametres) {
       const avant = donnees.parametres;
       return ecrire(
-        () => { donnees.parametres = { ...donnees.parametres, ...parametres }; return { ...donnees.parametres }; },
+        () => { donnees.parametres = { ...donnees.parametres, ...parametres }; return structuredClone(donnees.parametres); },
         () => { donnees.parametres = avant; }
       );
+    },
+
+    // ---- Sauvegardes ----------------------------------------------------------
+
+    /**
+     * Copie immédiate du fichier de données, étiquetée (« avant-import »…).
+     * Les 10 plus récentes de chaque étiquette sont conservées.
+     * Retourne le nom du fichier créé, ou `null` s'il n'y a rien à copier.
+     */
+    creerSauvegarde(etiquette) {
+      if (!fs.existsSync(cheminFichier)) return null;
+      fs.mkdirSync(dossierSauvegardes, { recursive: true });
+      const horo = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const nom = `livre-des-recettes-${horo}-${etiquette}.json`;
+      fs.copyFileSync(cheminFichier, path.join(dossierSauvegardes, nom));
+      purger(new RegExp(`^livre-des-recettes-.*-${etiquette}\\.json$`), SAUVEGARDES_ETIQUETEES_CONSERVEES);
+      return nom;
+    },
+
+    /** Sauvegardes disponibles, de la plus récente à la plus ancienne. */
+    listerSauvegardes() {
+      if (!fs.existsSync(dossierSauvegardes)) return [];
+      return fs.readdirSync(dossierSauvegardes)
+        .filter((f) => MOTIF_SAUVEGARDE.test(f))
+        .map((fichier) => {
+          const infos = fs.statSync(path.join(dossierSauvegardes, fichier));
+          return { fichier, date: infos.mtime.toISOString(), taille: infos.size };
+        })
+        .sort((a, b) => b.date.localeCompare(a.date));
+    },
+
+    /**
+     * Remplace les données courantes par le contenu d'une sauvegarde.
+     * Le fichier courant est d'abord mis de côté (étiquette
+     * « avant-restauration ») : une restauration n'efface jamais rien.
+     */
+    restaurerSauvegarde(fichier) {
+      if (!MOTIF_SAUVEGARDE.test(fichier)) {
+        throw new Error('Nom de sauvegarde invalide.');
+      }
+      const chemin = path.join(dossierSauvegardes, fichier);
+      if (!fs.existsSync(chemin)) {
+        throw new Error('Sauvegarde introuvable.');
+      }
+      let lu;
+      try {
+        lu = JSON.parse(fs.readFileSync(chemin, 'utf8'));
+      } catch {
+        throw new Error('Cette sauvegarde est elle-même illisible : choisissez-en une autre.');
+      }
+      if (!estDonneesValides(lu)) {
+        throw new Error('Cette sauvegarde n’a pas la structure attendue : choisissez-en une autre.');
+      }
+
+      // Mise de côté du fichier courant (même corrompu : ce sont des octets).
+      if (fs.existsSync(cheminFichier)) {
+        fs.mkdirSync(dossierSauvegardes, { recursive: true });
+        const horo = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        fs.copyFileSync(cheminFichier, path.join(dossierSauvegardes, `livre-des-recettes-${horo}-avant-restauration.json`));
+        purger(/^livre-des-recettes-.*-avant-restauration\.json$/, SAUVEGARDES_ETIQUETEES_CONSERVEES);
+      }
+
+      donnees = normaliser(lu);
+      corruption = null;
+      sauvegarder();
+      return { recettes: donnees.recettes.length, clients: donnees.clients.length };
     },
 
     /** Copie complète des données, pour la sauvegarde téléchargeable. */

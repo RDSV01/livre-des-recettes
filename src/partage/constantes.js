@@ -33,6 +33,16 @@ export const FORMATS_DATE = [
   { code: 'AAAA-MM-JJ', libelle: '2026-12-31' }
 ];
 
+/**
+ * Catégories d'une recette, pour les activités mixtes : la part « prestations »
+ * a ses propres plafonds (micro et TVA) et la déclaration URSSAF distingue les
+ * deux. La catégorie ne figure jamais dans les exports du registre légal.
+ */
+export const CATEGORIES_RECETTE = [
+  { code: 'ventes', libelle: 'Vente de marchandises' },
+  { code: 'prestations', libelle: 'Prestation de services' }
+];
+
 /** Paramètres appliqués tant que l'utilisateur n'a rien configuré. */
 export const PARAMETRES_DEFAUT = {
   nomEntreprise: '',
@@ -40,12 +50,23 @@ export const PARAMETRES_DEFAUT = {
   siret: '',
   adresse: '',
   activite: '',
+  typeActivite: '',
   devise: 'EUR',
-  formatDate: 'JJ/MM/AAAA'
+  formatDate: 'JJ/MM/AAAA',
+  modesPersonnalises: [],
+  // Options d'interface, désactivables dans les paramètres.
+  alertesNumerotation: true,
+  alerteRecetteSimilaire: true,
+  suiviSeuils: true
 };
 
-/** Libellé lisible d'un code de mode de règlement (« virement » donne « Virement »). */
-export function libelleMode(code) {
-  const mode = MODES_REGLEMENT.find((m) => m.code === code);
+/**
+ * Libellé lisible d'un code de mode de règlement (« virement » donne
+ * « Virement »). Cherche d'abord dans les modes par défaut, puis dans les
+ * modes personnalisés de l'utilisateur.
+ */
+export function libelleMode(code, modesPersonnalises = []) {
+  const mode = MODES_REGLEMENT.find((m) => m.code === code) ??
+    modesPersonnalises.find((m) => m.code === code);
   return mode ? mode.libelle : code;
 }

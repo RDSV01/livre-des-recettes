@@ -33,10 +33,15 @@ export const api = {
   // Recettes
   listerRecettes: (filtres) => requete(`/api/recettes${chaineRequete(filtres)}`),
   listerAnnees: () => requete('/api/recettes/annees'),
+  listerLibelles: () => requete('/api/recettes/libelles'),
   creerRecette: (recette) => requete('/api/recettes', { methode: 'POST', corps: recette }),
   modifierRecette: (id, recette) => requete(`/api/recettes/${id}`, { methode: 'PUT', corps: recette }),
   supprimerRecette: (id) => requete(`/api/recettes/${id}`, { methode: 'DELETE' }),
   importerRecettes: (demande) => requete('/api/recettes/import', { methode: 'POST', corps: demande }),
+
+  // Sauvegardes
+  listerSauvegardes: () => requete('/api/sauvegardes'),
+  restaurerSauvegarde: (fichier) => requete('/api/sauvegardes/restaurer', { methode: 'POST', corps: { fichier } }),
 
   // Clients
   listerClients: () => requete('/api/clients'),
@@ -46,7 +51,7 @@ export const api = {
   supprimerClient: (id) => requete(`/api/clients/${id}`, { methode: 'DELETE' }),
 
   // Tableau de bord et bilan URSSAF
-  tableauDeBord: () => requete('/api/tableau-de-bord'),
+  tableauDeBord: (params) => requete(`/api/tableau-de-bord${chaineRequete(params)}`),
   bilanUrssaf: (params) => requete(`/api/urssaf${chaineRequete(params)}`),
 
   // Paramètres et système

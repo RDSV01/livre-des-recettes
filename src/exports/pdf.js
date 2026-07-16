@@ -175,7 +175,7 @@ export function genererPdf(registre, parametres, flux) {
           formaterDate(r.dateEncaissement, parametres.formatDate),
           texteSur(r.client),
           texteSur(formaterMontant(r.montant, parametres.devise)),
-          libelleMode(r.modeReglement),
+          texteSur(libelleMode(r.modeReglement, parametres.modesPersonnalises)),
           texteSur(r.numeroFacture),
           texteSur(r.libelle)
         ]);

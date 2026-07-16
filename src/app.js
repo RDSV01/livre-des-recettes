@@ -6,8 +6,8 @@
  * vraies données.
  *
  * L'application sert aussi `src/partage/` sous l'URL `/partage/` : ces
- * modules (constantes, dates, montants) sont écrits une seule fois et
- * utilisés à la fois par le serveur et par le navigateur.
+ * modules (constantes, dates, montants, seuils…) sont écrits une seule fois
+ * et utilisés à la fois par le serveur et par le navigateur.
  */
 
 import fs from 'node:fs';
@@ -20,6 +20,7 @@ import { routesClients } from './routes/clients.js';
 import { routesParametres } from './routes/parametres.js';
 import { routesExports } from './routes/exports.js';
 import { routesUrssaf } from './routes/urssaf.js';
+import { routesSauvegardes } from './routes/sauvegardes.js';
 import { statistiquesTableauDeBord } from './totaux.js';
 import { aujourdHuiIso } from './partage/dates.js';
 
@@ -45,13 +46,22 @@ export function creerApp({ dossierDonnees } = {}) {
   app.use('/api/parametres', routesParametres(stockage));
   app.use('/api/exports', routesExports(stockage));
   app.use('/api/urssaf', routesUrssaf(stockage));
+  app.use('/api/sauvegardes', routesSauvegardes(stockage));
 
+  // GET /api/tableau-de-bord?annee=2025 (année courante par défaut)
   app.get('/api/tableau-de-bord', (req, res) => {
-    res.json(statistiquesTableauDeBord(stockage.listerRecettes()));
+    const annee = Number.parseInt(req.query.annee, 10);
+    res.json(statistiquesTableauDeBord(stockage.listerRecettes(), {
+      annee: Number.isInteger(annee) && annee >= 2000 && annee <= 2100 ? annee : null
+    }));
   });
 
   app.get('/api/systeme', (req, res) => {
-    res.json({ version: VERSION, fichierDonnees: stockage.cheminFichier });
+    res.json({
+      version: VERSION,
+      fichierDonnees: stockage.cheminFichier,
+      corruption: stockage.corruption()
+    });
   });
 
   // Sauvegarde complète téléchargeable (le fichier de données, tel quel).
@@ -76,6 +86,9 @@ export function creerApp({ dossierDonnees } = {}) {
   app.use((erreur, req, res, next) => {
     if (erreur.type === 'entity.parse.failed') {
       return res.status(400).json({ erreur: 'Corps de requête JSON invalide.' });
+    }
+    if (erreur.code === 'CORROMPU') {
+      return res.status(503).json({ erreur: erreur.message });
     }
     console.error(erreur);
     res.status(500).json({ erreur: 'Erreur interne du serveur.' });

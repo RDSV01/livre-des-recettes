@@ -2,40 +2,13 @@
  * Feuille de style unique de l'application.
  * Vanilla CSS, aucun framework.
  *
- * Thèmes : le sombre est appliqué par défaut (`:root`), le clair via
- * `:root[data-theme="light"]`. Toutes les couleurs passent par des variables,
+ * Thèmes : le clair est appliqué par défaut (`:root`), le sombre via
+ * `:root[data-theme="dark"]`. Toutes les couleurs passent par des variables,
  * si bien que les composants ne connaissent jamais le thème courant.
  */
 
 :root {
-  /* ---- Thème sombre (par défaut) ---- */
-  --fond: #0f172a;
-  --carte: #1e293b;
-  --champ-fond: #111c30;
-  --nav-fond: #0b1120;
-  --nav-texte: #cbd5e1;
-  --texte: #e2e8f0;
-  --texte-secondaire: #94a3b8;
-  --accent: #3b82f6;
-  --accent-fort: #2563eb;
-  --accent-contraste: #ffffff;
-  --accent-doux: rgba(59, 130, 246, 0.16);
-  --bordure: #334155;
-  --bordure-douce: #263248;
-  --survol: rgba(148, 163, 184, 0.10);
-  --succes: #22c55e;
-  --succes-doux: rgba(34, 197, 94, 0.16);
-  --alerte: #f97316;
-  --alerte-doux: rgba(249, 115, 22, 0.16);
-  --danger: #ef4444;
-  --danger-doux: rgba(239, 68, 68, 0.16);
-  --neutre-doux: rgba(148, 163, 184, 0.16);
-  --ombre: 0 1px 2px rgba(0, 0, 0, 0.30), 0 8px 24px rgba(0, 0, 0, 0.28);
-  --rayon: 12px;
-  --rayon-petit: 8px;
-}
-
-:root[data-theme='light'] {
+  /* ---- Thème clair (par défaut) ---- */
   --fond: #f8fafc;
   --carte: #ffffff;
   --champ-fond: #ffffff;
@@ -58,6 +31,33 @@
   --danger-doux: #fee2e2;
   --neutre-doux: #eef1f6;
   --ombre: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.06);
+  --rayon: 12px;
+  --rayon-petit: 8px;
+}
+
+:root[data-theme='dark'] {
+  --fond: #0f172a;
+  --carte: #1e293b;
+  --champ-fond: #111c30;
+  --nav-fond: #0b1120;
+  --nav-texte: #cbd5e1;
+  --texte: #e2e8f0;
+  --texte-secondaire: #94a3b8;
+  --accent: #3b82f6;
+  --accent-fort: #2563eb;
+  --accent-contraste: #ffffff;
+  --accent-doux: rgba(59, 130, 246, 0.16);
+  --bordure: #334155;
+  --bordure-douce: #263248;
+  --survol: rgba(148, 163, 184, 0.10);
+  --succes: #22c55e;
+  --succes-doux: rgba(34, 197, 94, 0.16);
+  --alerte: #f97316;
+  --alerte-doux: rgba(249, 115, 22, 0.16);
+  --danger: #ef4444;
+  --danger-doux: rgba(239, 68, 68, 0.16);
+  --neutre-doux: rgba(148, 163, 184, 0.16);
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.30), 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 * { box-sizing: border-box; }
@@ -74,6 +74,9 @@ html, body {
   font-size: 15px;
   line-height: 1.5;
 }
+
+/* Les liens gardent la couleur d'accent, visités compris (jamais le violet natif). */
+a { color: var(--accent); }
 
 /* ---- Icônes -------------------------------------------------------------- */
 
@@ -180,6 +183,7 @@ html, body {
 .entete-vue p { margin: 4px 0 0; color: var(--texte-secondaire); font-size: 14px; }
 
 .actions-vue { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.actions-vue .selecteur-annee { width: auto; padding: 8px 10px; font-weight: 600; }
 
 h2 { font-size: 17px; margin: 0 0 14px; }
 
@@ -322,7 +326,7 @@ textarea {
 }
 
 /* Rend l'icône du sélecteur de date lisible en thème sombre. */
-:root:not([data-theme='light']) input[type='date']::-webkit-calendar-picker-indicator {
+:root[data-theme='dark'] input[type='date']::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
 }
 
@@ -363,10 +367,21 @@ th {
   color: var(--texte-secondaire);
   border-bottom: 1px solid var(--bordure);
   padding: 9px 10px;
-  white-space: nowrap;
 }
 
-td { padding: 10px; border-bottom: 1px solid var(--bordure-douce); vertical-align: middle; }
+/*
+ * Tableau des recettes : largeurs fixées en pourcentages (colgroup), si bien
+ * qu'il occupe toujours exactement la largeur disponible. Jamais de barre de
+ * défilement horizontale : le contenu passe à la ligne au besoin.
+ */
+#table-recettes { table-layout: fixed; }
+
+td {
+  padding: 10px;
+  border-bottom: 1px solid var(--bordure-douce);
+  vertical-align: middle;
+  overflow-wrap: break-word;
+}
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--survol); }
 
@@ -383,6 +398,11 @@ td.actions .btn-icone { vertical-align: middle; }
 .ligne-vide td { text-align: center; color: var(--texte-secondaire); padding: 34px 10px; }
 
 .attenue { color: var(--texte-secondaire); }
+
+/* En-têtes triables : tout le th est cliquable, le chevron marque le sens. */
+th.triable { cursor: pointer; user-select: none; }
+th.triable:hover { color: var(--texte); }
+th.triable .icone { margin-left: 4px; }
 
 /* ---- Badges -------------------------------------------------------------- */
 
@@ -497,6 +517,148 @@ dialog::backdrop { background: rgba(2, 6, 23, 0.55); }
 .compteur.attention strong { color: var(--alerte); }
 .compteur.erreur strong { color: var(--danger); }
 
+/* ---- Jauges de seuils ------------------------------------------------------ */
+
+.ligne-jauge { margin-bottom: 18px; }
+.ligne-jauge:last-child { margin-bottom: 0; }
+
+.entete-jauge {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+}
+
+.entete-jauge .valeur-jauge { font-variant-numeric: tabular-nums; color: var(--texte-secondaire); }
+.entete-jauge .valeur-jauge strong { color: var(--texte); }
+
+.jauge {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--neutre-doux);
+  overflow: hidden;
+}
+
+.jauge > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.jauge.attention > span { background: var(--alerte); }
+.jauge.depasse > span { background: var(--danger); }
+
+.detail-jauge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
+}
+.detail-jauge.attention { color: var(--alerte); }
+.detail-jauge.depasse { color: var(--danger); }
+
+/* ---- Graphique du CA mensuel ------------------------------------------------ */
+
+.graphique-ca { width: 100%; height: auto; display: block; }
+.graphique-ca .barre { fill: var(--accent); }
+.graphique-ca .colonne:hover .barre { fill: var(--accent-fort); }
+.graphique-ca .grille { stroke: var(--bordure-douce); }
+.graphique-ca text { fill: var(--texte-secondaire); font-size: 11px; }
+
+.grille-deux {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.grille-deux > .carte { margin-bottom: 20px; }
+
+@media (max-width: 1080px) {
+  .grille-deux { grid-template-columns: 1fr; }
+  .grille-deux > .carte { margin-bottom: 0; }
+}
+
+/* ---- Anomalies de numérotation ---------------------------------------------- */
+
+details.anomalies {
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  background: var(--alerte-doux);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+details.anomalies summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--alerte);
+  font-weight: 600;
+  list-style: none;
+}
+details.anomalies summary::-webkit-details-marker { display: none; }
+details.anomalies ul { margin: 10px 0 2px; padding-left: 20px; color: var(--texte); }
+details.anomalies li { margin-bottom: 3px; }
+
+/* ---- Avertissement dans un formulaire ---------------------------------------- */
+
+.avertissement-formulaire {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 11px 14px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  background: var(--alerte-doux);
+  color: var(--texte);
+  font-size: 13.5px;
+}
+.avertissement-formulaire .icone { color: var(--alerte); flex-shrink: 0; }
+
+/* ---- Options (cases à cocher des paramètres) ----------------------------------- */
+
+.liste-options { display: flex; flex-direction: column; gap: 10px; }
+
+.option-case {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.option-case input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ---- Listes de gestion (modes personnalisés, sauvegardes) --------------------- */
+
+.ligne-gestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  background: var(--fond);
+  margin-bottom: 8px;
+}
+.ligne-gestion .libelle-gestion { flex: 1; min-width: 0; }
+.ligne-gestion .details-gestion { font-size: 12.5px; color: var(--texte-secondaire); white-space: nowrap; }
+.ligne-gestion input { background: var(--champ-fond); }
+
 /* ---- Résultat / bilan ---------------------------------------------------- */
 
 .resultat-bilan { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
@@ -517,6 +679,49 @@ code.chemin {
   padding: 2px 6px;
   font-size: 12.5px;
   word-break: break-all;
+}
+
+/* ---- Suggestions de saisie (liste maison, sans composant natif) ------------ */
+
+.porte-suggestions { position: relative; }
+
+.liste-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  box-shadow: var(--ombre);
+  overflow: hidden;
+}
+
+.liste-suggestions [role='option'] {
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.liste-suggestions [role='option'].actif,
+.liste-suggestions [role='option']:hover {
+  background: var(--accent-doux);
+}
+
+/* ---- Info-bulle du graphique (instantanée, suit le pointeur) --------------- */
+
+.infobulle-graphique {
+  position: fixed;
+  z-index: 60;
+  background: var(--carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  box-shadow: var(--ombre);
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ---- Recherche SIRET ----------------------------------------------------- */

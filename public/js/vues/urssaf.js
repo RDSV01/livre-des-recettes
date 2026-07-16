@@ -91,15 +91,23 @@ export async function vueUrssaf(conteneur) {
         type: refs.type.value,
         valeur: refs.type.value === 'annee' ? '' : refs.valeur.value
       });
+      const devise = etat.parametres.devise;
+      const estMixte = etat.parametres.typeActivite === 'mixte';
+
+      // Pour une activité mixte, la déclaration distingue les ventes des
+      // prestations : la ventilation est affichée en plus du total.
+      const carte = (etiquette, montant, principale = false) => `
+        <div class="carte-stat ${principale ? 'principale' : ''}">
+          <div class="pastille">${icone('billet', { taille: 22 })}</div>
+          <div>
+            <div class="etiquette">${echapperHtml(etiquette)}</div>
+            <div class="valeur">${echapperHtml(formaterMontant(montant, devise))}</div>
+          </div>
+        </div>`;
+
       refs.resultat.innerHTML = `
         <div class="resultat-bilan">
-          <div class="carte-stat principale">
-            <div class="pastille">${icone('billet', { taille: 22 })}</div>
-            <div>
-              <div class="etiquette">CA encaissé (${echapperHtml(bilan.libellePeriode)})</div>
-              <div class="valeur">${echapperHtml(formaterMontant(bilan.chiffreAffaires, etat.parametres.devise))}</div>
-            </div>
-          </div>
+          ${carte(`CA encaissé (${bilan.libellePeriode})`, bilan.chiffreAffaires, true)}
           <div class="carte-stat">
             <div class="pastille">${icone('diese', { taille: 22 })}</div>
             <div>
@@ -107,7 +115,17 @@ export async function vueUrssaf(conteneur) {
               <div class="valeur">${bilan.nombreEncaissements}</div>
             </div>
           </div>
-        </div>`;
+          ${estMixte ? `
+            ${carte('dont ventes de marchandises', bilan.ventes.chiffreAffaires)}
+            ${carte('dont prestations de services', bilan.prestations.chiffreAffaires)}` : ''}
+        </div>
+        ${estMixte && bilan.nonCategorise.nombreEncaissements > 0 ? `
+          <p class="note-legale">
+            ${icone('cercle-alerte', { taille: 16 })}
+            <span>${bilan.nonCategorise.nombreEncaissements} recette${bilan.nonCategorise.nombreEncaissements > 1 ? 's' : ''}
+            sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
+            modifiez-les pour une ventilation exacte entre ventes et prestations.</span>
+          </p>` : ''}`;
     } catch (erreur) {
       toast(erreur.message, 'erreur');
     }

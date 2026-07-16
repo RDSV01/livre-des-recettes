@@ -1,11 +1,10 @@
 /**
- * Tests de la validation des recettes, des clients et des paramètres,
- * ainsi que de la détection de doublons.
+ * Tests de la validation des recettes, des clients et des paramètres.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validerRecette, estDoublon, validerClient, validerParametres } from '../src/validation.js';
+import { validerRecette, validerClient, validerParametres } from '../src/validation.js';
 
 const RECETTE_VALIDE = {
   dateEncaissement: '2026-07-15',
@@ -23,11 +22,11 @@ test('une recette complète est acceptée et normalisée', () => {
   assert.equal(valeurs.client, 'Boulangerie Dupré');
 });
 
-test('une recette ne conserve que les six champs légaux', () => {
+test('une recette ne conserve que les champs attendus', () => {
   const { valeurs } = validerRecette(RECETTE_VALIDE);
   assert.deepEqual(
     Object.keys(valeurs).sort(),
-    ['client', 'dateEncaissement', 'libelle', 'modeReglement', 'montant', 'numeroFacture'].sort()
+    ['categorie', 'client', 'dateEncaissement', 'libelle', 'modeReglement', 'montant', 'numeroFacture'].sort()
   );
 });
 
@@ -57,6 +56,32 @@ test('un mode de règlement inconnu est refusé', () => {
   assert.ok(validerRecette({ ...RECETTE_VALIDE, modeReglement: 'bitcoin' }).erreurs.modeReglement);
 });
 
+test('un mode personnalisé déclaré dans les paramètres est accepté', () => {
+  const modesPersonnalises = [{ code: 'perso-a1b2c3d4', libelle: 'Lydia' }];
+  assert.ok(validerRecette({ ...RECETTE_VALIDE, modeReglement: 'perso-a1b2c3d4' }).erreurs.modeReglement);
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, modeReglement: 'perso-a1b2c3d4' }, { modesPersonnalises }).erreurs, null);
+});
+
+test('la catégorie est libre en activité simple, obligatoire en activité mixte', () => {
+  // Activité simple : catégorie facultative, mais contrôlée si fournie.
+  assert.equal(validerRecette(RECETTE_VALIDE).valeurs.categorie, '');
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, categorie: 'ventes' }).valeurs.categorie, 'ventes');
+  assert.ok(validerRecette({ ...RECETTE_VALIDE, categorie: 'troc' }).erreurs.categorie);
+
+  // Activité mixte : la catégorie devient obligatoire.
+  assert.ok(validerRecette(RECETTE_VALIDE, { typeActivite: 'mixte' }).erreurs.categorie);
+  assert.equal(
+    validerRecette({ ...RECETTE_VALIDE, categorie: 'prestations' }, { typeActivite: 'mixte' }).erreurs,
+    null
+  );
+});
+
+test('le montant accepte les écritures relâchées (« 12,5 » vaut 12,50)', () => {
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, montant: '12,5' }).valeurs.montant, 12.5);
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, montant: '12' }).valeurs.montant, 12);
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, montant: '1 234,56 €' }).valeurs.montant, 1234.56);
+});
+
 test('seuls les champs autorisés sont conservés', () => {
   const { valeurs } = validerRecette({ ...RECETTE_VALIDE, id: 'pirate', typeClient: 'x', notes: 'y' });
   assert.equal(valeurs.id, undefined);
@@ -64,31 +89,16 @@ test('seuls les champs autorisés sont conservés', () => {
   assert.equal(valeurs.notes, undefined);
 });
 
-// ---- Doublons -----------------------------------------------------------------
+test('les options d’interface sont des booléens, activées par défaut', () => {
+  const { valeurs } = validerParametres({});
+  assert.equal(valeurs.alertesNumerotation, true);
+  assert.equal(valeurs.alerteRecetteSimilaire, true);
+  assert.equal(valeurs.suiviSeuils, true);
 
-const EXISTANTES = [
-  { dateEncaissement: '2026-07-15', client: 'Boulangerie Dupré', montant: 450, numeroFacture: 'FAC-1' }
-];
-
-test('même date + même client + même montant = doublon', () => {
-  assert.equal(estDoublon(
-    { dateEncaissement: '2026-07-15', client: 'boulangerie dupre', montant: 450, numeroFacture: '' },
-    EXISTANTES
-  ), true);
-});
-
-test('deux factures différentes de même montant ne sont pas des doublons', () => {
-  assert.equal(estDoublon(
-    { dateEncaissement: '2026-07-15', client: 'Boulangerie Dupré', montant: 450, numeroFacture: 'FAC-2' },
-    EXISTANTES
-  ), false);
-});
-
-test('un montant différent n’est pas un doublon', () => {
-  assert.equal(estDoublon(
-    { dateEncaissement: '2026-07-15', client: 'Boulangerie Dupré', montant: 450.01, numeroFacture: '' },
-    EXISTANTES
-  ), false);
+  const desactive = validerParametres({ alertesNumerotation: false, suiviSeuils: false }).valeurs;
+  assert.equal(desactive.alertesNumerotation, false);
+  assert.equal(desactive.alerteRecetteSimilaire, true);
+  assert.equal(desactive.suiviSeuils, false);
 });
 
 // ---- Clients ------------------------------------------------------------------
@@ -120,4 +130,28 @@ test('le SIREN et le SIRET sont vérifiés quand ils sont renseignés', () => {
 test('les espaces de présentation du SIREN sont retirés', () => {
   const { valeurs } = validerParametres({ siren: '123 456 789' });
   assert.equal(valeurs.siren, '123456789');
+});
+
+test('le type d’activité est contrôlé', () => {
+  assert.equal(validerParametres({ typeActivite: 'prestations' }).erreurs, null);
+  assert.equal(validerParametres({ typeActivite: '' }).erreurs, null);
+  assert.ok(validerParametres({ typeActivite: 'artisanat' }).erreurs.typeActivite);
+});
+
+test('les modes personnalisés reçoivent un code stable et refusent les doublons', () => {
+  const bon = validerParametres({ modesPersonnalises: [{ libelle: 'Lydia' }] });
+  assert.equal(bon.erreurs, null);
+  assert.match(bon.valeurs.modesPersonnalises[0].code, /^perso-[a-f0-9]{8}$/);
+
+  // Un code existant bien formé est conservé (renommage sans casser les recettes).
+  const renomme = validerParametres({
+    modesPersonnalises: [{ code: 'perso-a1b2c3d4', libelle: 'Lydia Pro' }]
+  });
+  assert.equal(renomme.valeurs.modesPersonnalises[0].code, 'perso-a1b2c3d4');
+
+  assert.ok(validerParametres({ modesPersonnalises: [{ libelle: '' }] }).erreurs.modesPersonnalises);
+  assert.ok(validerParametres({ modesPersonnalises: [{ libelle: 'Virement' }] }).erreurs.modesPersonnalises);
+  assert.ok(validerParametres({
+    modesPersonnalises: [{ libelle: 'Lydia' }, { libelle: 'lydia' }]
+  }).erreurs.modesPersonnalises);
 });

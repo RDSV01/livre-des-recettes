@@ -1,6 +1,6 @@
 {
   "name": "livre-des-recettes",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Tenez votre livre des recettes de micro-entrepreneur : simple, local et conforme aux obligations françaises.",
   "type": "module",
   "private": true,

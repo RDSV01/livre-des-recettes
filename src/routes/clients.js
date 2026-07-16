@@ -1,5 +1,6 @@
 /**
- * API des clients : liste, CRUD et recherche par SIRET.
+ * API des clients : liste (avec le chiffre d'affaires généré par chacun),
+ * CRUD et recherche par SIRET.
  *
  * Le carnet de clients sert uniquement à fiabiliser la saisie des recettes
  * (choisir un client existant évite les fautes de frappe sur le nom). Une
@@ -10,6 +11,7 @@ import express from 'express';
 import { validerClient } from '../validation.js';
 import { rechercherEntreprise } from '../entreprises.js';
 import { normaliserTexte } from '../partage/texte.js';
+import { enCentimes, enEuros } from '../partage/montants.js';
 
 /** Cherche un client déjà enregistré portant le même nom ou le même SIRET. */
 function clientExistant(clients, { nom, siret }) {
@@ -22,8 +24,22 @@ function clientExistant(clients, { nom, siret }) {
 export function routesClients(stockage) {
   const routeur = express.Router();
 
+  // Liste triée par nom, enrichie du nombre de recettes et du CA par client
+  // (rapprochement par nom, insensible à la casse et aux accents).
   routeur.get('/', (req, res) => {
-    res.json({ clients: stockage.listerClients() });
+    const totaux = new Map();
+    for (const recette of stockage.listerRecettes()) {
+      const cle = normaliserTexte(recette.client);
+      const entree = totaux.get(cle) ?? { nombre: 0, centimes: 0 };
+      entree.nombre += 1;
+      entree.centimes += enCentimes(recette.montant);
+      totaux.set(cle, entree);
+    }
+    const clients = stockage.listerClients().map((client) => {
+      const stats = totaux.get(normaliserTexte(client.nom)) ?? { nombre: 0, centimes: 0 };
+      return { ...client, nombreRecettes: stats.nombre, totalRecettes: enEuros(stats.centimes) };
+    });
+    res.json({ clients });
   });
 
   /**

@@ -102,6 +102,16 @@ test('GET /api/recettes/annees liste les années décroissantes', async () => {
   assert.deepEqual(annees, [2026, 2025]);
 });
 
+test('GET /api/recettes/libelles dédoublonne et trie par fréquence', async () => {
+  await appeler('/api/recettes', { methode: 'POST', corps: { ...RECETTE, numeroFacture: 'LIB-1', libelle: 'cours de piano' } });
+  await appeler('/api/recettes', { methode: 'POST', corps: { ...RECETTE, numeroFacture: 'LIB-2', libelle: 'Accordage' } });
+  const { libelles } = await (await appeler('/api/recettes/libelles')).json();
+  // « Cours de piano » (3 occurrences, casse mélangée) devant « Accordage ».
+  assert.equal(libelles[0], 'Cours de piano');
+  assert.equal(libelles.filter((l) => l.toLowerCase() === 'cours de piano').length, 1);
+  assert.ok(libelles.includes('Accordage'));
+});
+
 test('PUT et DELETE fonctionnent et signalent les identifiants inconnus', async () => {
   const creation = await (await appeler('/api/recettes', { methode: 'POST', corps: RECETTE })).json();
   const id = creation.recette.id;
@@ -116,6 +126,36 @@ test('PUT et DELETE fonctionnent et signalent les identifiants inconnus', async 
   assert.equal((await appeler('/api/recettes/inconnu', { methode: 'PUT', corps: RECETTE })).status, 404);
   assert.equal((await appeler(`/api/recettes/${id}`, { methode: 'DELETE' })).status, 204);
   assert.equal((await appeler(`/api/recettes/${id}`, { methode: 'DELETE' })).status, 404);
+});
+
+test('un import réel crée une sauvegarde automatique restaurable', async () => {
+  const lignes = [{ ...RECETTE, client: 'Client import sauvegarde', numeroFacture: 'SAUV-1' }];
+  const rapport = await (await appeler('/api/recettes/import', {
+    methode: 'POST',
+    corps: { lignes }
+  })).json();
+  assert.equal(rapport.importees, 1);
+  assert.match(rapport.sauvegarde, /avant-import\.json$/);
+
+  const { sauvegardes } = await (await appeler('/api/sauvegardes')).json();
+  assert.ok(sauvegardes.some((s) => s.fichier === rapport.sauvegarde));
+
+  // La restaurer efface la recette importée (retour à l'état d'avant l'import).
+  const restauration = await appeler('/api/sauvegardes/restaurer', {
+    methode: 'POST',
+    corps: { fichier: rapport.sauvegarde }
+  });
+  assert.equal(restauration.status, 200);
+  const { recettes } = await (await appeler('/api/recettes?q=SAUV-1')).json();
+  assert.equal(recettes.length, 0);
+});
+
+test('la restauration refuse un nom de fichier invalide', async () => {
+  const reponse = await appeler('/api/sauvegardes/restaurer', {
+    methode: 'POST',
+    corps: { fichier: '../../nimporte.json' }
+  });
+  assert.equal(reponse.status, 400);
 });
 
 test('l’import détecte doublons et erreurs, la simulation n’écrit rien', async () => {
@@ -151,6 +191,14 @@ test('l’import détecte doublons et erreurs, la simulation n’écrit rien', a
 
 // ---- Clients -------------------------------------------------------------------
 
+test('la liste des clients porte le nombre de recettes et le CA par client', async () => {
+  await appeler('/api/clients', { methode: 'POST', corps: { nom: 'Époux Lefèvre' } });
+  const { clients } = await (await appeler('/api/clients')).json();
+  const lefevre = clients.find((c) => c.nom === 'Époux Lefèvre');
+  assert.ok(lefevre.nombreRecettes >= 1, 'les recettes du client sont comptées');
+  assert.ok(lefevre.totalRecettes > 0, 'le CA du client est cumulé');
+});
+
 test('CRUD des clients et refus des doublons', async () => {
   const creation = await appeler('/api/clients', { methode: 'POST', corps: { nom: 'Café des Arts', siret: '12345678900012' } });
   assert.equal(creation.status, 201);
@@ -182,10 +230,11 @@ test('la recherche SIRET valide le format avant tout appel externe', async () =>
 
 // ---- Tableau de bord, URSSAF, exports ------------------------------------------
 
-test('GET /api/tableau-de-bord répond avec les statistiques', async () => {
+test('GET /api/tableau-de-bord répond avec les statistiques et le CA mensuel', async () => {
   const stats = await (await appeler('/api/tableau-de-bord')).json();
   assert.ok(stats.caAnnee >= 0);
   assert.ok(Array.isArray(stats.dernieresRecettes));
+  assert.equal(stats.caParMois.length, 12);
 });
 
 test('GET /api/urssaf calcule un bilan de trimestre', async () => {
@@ -241,13 +290,94 @@ test('les exports exigent une année valide', async () => {
 test('PUT /api/parametres enregistre et valide', async () => {
   const bon = await appeler('/api/parametres', {
     methode: 'PUT',
-    corps: { nomEntreprise: 'Ma micro', siren: '123 456 789', devise: 'EUR', formatDate: 'JJ/MM/AAAA' }
+    corps: { nomEntreprise: 'Ma micro', siren: '123 456 789', typeActivite: 'prestations', devise: 'EUR', formatDate: 'JJ/MM/AAAA' }
   });
   assert.equal(bon.status, 200);
-  assert.equal((await bon.json()).parametres.siren, '123456789');
+  const { parametres } = await bon.json();
+  assert.equal(parametres.siren, '123456789');
+  assert.equal(parametres.typeActivite, 'prestations');
 
   const mauvais = await appeler('/api/parametres', { methode: 'PUT', corps: { siren: '12' } });
   assert.equal(mauvais.status, 400);
+});
+
+test('un mode personnalisé se crée, sert dans une recette, et ne peut plus être supprimé', async () => {
+  // Création du mode.
+  const creation = await (await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { typeActivite: 'prestations', modesPersonnalises: [{ libelle: 'Lydia' }] }
+  })).json();
+  const mode = creation.parametres.modesPersonnalises[0];
+  assert.equal(mode.libelle, 'Lydia');
+
+  // Une recette peut l'utiliser ; le filtre par mode la retrouve.
+  const recette = await appeler('/api/recettes', {
+    methode: 'POST',
+    corps: { ...RECETTE, client: 'Client Lydia', numeroFacture: 'LYD-1', modeReglement: mode.code }
+  });
+  assert.equal(recette.status, 201);
+  const filtre = await (await appeler(`/api/recettes?mode=${mode.code}`)).json();
+  assert.equal(filtre.recettes.length, 1);
+
+  // L'export CSV affiche le libellé du mode personnalisé.
+  const csv = new TextDecoder('utf-8').decode(
+    await (await appeler('/api/exports/csv?annee=2026')).arrayBuffer()
+  );
+  assert.match(csv, /Lydia/);
+
+  // Suppression refusée tant que des recettes l'utilisent ; renommage accepté.
+  const suppression = await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { typeActivite: 'prestations', modesPersonnalises: [] }
+  });
+  assert.equal(suppression.status, 400);
+  const renommage = await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { typeActivite: 'prestations', modesPersonnalises: [{ code: mode.code, libelle: 'Lydia Pro' }] }
+  });
+  assert.equal(renommage.status, 200);
+});
+
+test('activité mixte : catégorie obligatoire et bilan URSSAF ventilé', async () => {
+  const { parametres } = await (await appeler('/api/parametres')).json();
+  const bascule = await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { ...parametres, typeActivite: 'mixte' }
+  });
+  assert.equal(bascule.status, 200);
+
+  // Sans catégorie : refusé, avec le message sur le bon champ.
+  const refus = await appeler('/api/recettes', {
+    methode: 'POST',
+    corps: { ...RECETTE, client: 'Client mixte', numeroFacture: 'MIX-1' }
+  });
+  assert.equal(refus.status, 400);
+  assert.ok((await refus.json()).erreurs.categorie);
+
+  // Avec catégorie : accepté, et le bilan URSSAF ventile.
+  assert.equal((await appeler('/api/recettes', {
+    methode: 'POST',
+    corps: { ...RECETTE, client: 'Client mixte', numeroFacture: 'MIX-2', montant: 300, categorie: 'ventes' }
+  })).status, 201);
+  assert.equal((await appeler('/api/recettes', {
+    methode: 'POST',
+    corps: { ...RECETTE, client: 'Client mixte bis', numeroFacture: 'MIX-3', montant: 200, categorie: 'prestations' }
+  })).status, 201);
+
+  const bilan = await (await appeler('/api/urssaf?annee=2026&type=annee')).json();
+  assert.ok(bilan.ventes.chiffreAffaires >= 300);
+  assert.ok(bilan.prestations.chiffreAffaires >= 200);
+  assert.ok(bilan.nonCategorise.nombreEncaissements >= 1);
+
+  // Le tableau de bord expose la part prestations et respecte l'année demandée.
+  const statsPassees = await (await appeler('/api/tableau-de-bord?annee=2025')).json();
+  assert.equal(statsPassees.annee, 2025);
+  const stats = await (await appeler('/api/tableau-de-bord')).json();
+  assert.ok(stats.caAnneePrestations >= 200);
+  assert.ok(stats.nombreNonCategorisees >= 1);
+
+  // Retour à une activité simple pour ne pas contraindre les tests suivants.
+  await appeler('/api/parametres', { methode: 'PUT', corps: { ...parametres, typeActivite: 'prestations' } });
 });
 
 test('GET /api/sauvegarde renvoie le fichier de données complet', async () => {

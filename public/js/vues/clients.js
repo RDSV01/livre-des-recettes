@@ -8,11 +8,13 @@
  */
 
 import { api } from '../api.js';
+import { etat } from '../etat.js';
 import {
   echapperHtml, toast, confirmer,
   afficherErreursFormulaire, effacerErreursFormulaire
 } from '../ui.js';
 import { icone } from '../icones.js';
+import { formaterMontant } from '/partage/montants.js';
 
 export async function vueClients(conteneur) {
   let clients = [];
@@ -130,16 +132,19 @@ export async function vueClients(conteneur) {
 
     if (clients.length === 0) {
       refs.corps.innerHTML = `
-        <tr class="ligne-vide"><td colspan="3">
+        <tr class="ligne-vide"><td colspan="5">
           Votre carnet est vide. Ajoutez un client pour le retrouver ensuite à la saisie d’une recette.
         </td></tr>`;
       return;
     }
 
+    const devise = etat.parametres.devise;
     refs.corps.innerHTML = clients.map((c) => `
       <tr>
         <td>${echapperHtml(c.nom)}</td>
         <td>${c.siret ? echapperHtml(c.siret) : '<span class="attenue">-</span>'}</td>
+        <td>${c.nombreRecettes > 0 ? `${c.nombreRecettes} recette${c.nombreRecettes > 1 ? 's' : ''}` : '<span class="attenue">-</span>'}</td>
+        <td class="montant">${c.nombreRecettes > 0 ? echapperHtml(formaterMontant(c.totalRecettes, devise)) : '<span class="attenue">-</span>'}</td>
         <td class="actions">
           <button type="button" class="btn-icone" data-action="modifier" data-id="${c.id}" title="Modifier" aria-label="Modifier">${icone('crayon', { taille: 16 })}</button>
           <button type="button" class="btn-icone danger" data-action="supprimer" data-id="${c.id}" title="Supprimer" aria-label="Supprimer">${icone('corbeille', { taille: 16 })}</button>
@@ -162,7 +167,7 @@ export async function vueClients(conteneur) {
         <div class="conteneur-tableau">
           <table>
             <thead>
-              <tr><th>Nom</th><th>SIRET</th><th></th></tr>
+              <tr><th>Nom</th><th>SIRET</th><th>Recettes</th><th class="montant">CA total</th><th></th></tr>
             </thead>
             <tbody id="corps-clients"></tbody>
           </table>

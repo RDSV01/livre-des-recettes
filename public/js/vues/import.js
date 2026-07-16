@@ -6,6 +6,7 @@
  */
 
 import { api } from '../api.js';
+import { etat } from '../etat.js';
 import { echapperHtml, toast } from '../ui.js';
 import { icone } from '../icones.js';
 import { analyserCsv, lireFichierCsv } from '../csv.js';
@@ -15,6 +16,7 @@ import { normaliserTexte } from '/partage/texte.js';
 /**
  * Champs du livre pouvant être alimentés par le fichier.
  * `indices` sert à deviner la colonne à partir de son en-tête.
+ * La cible « catégorie » n'est proposée qu'aux activités mixtes.
  */
 const CIBLES = [
   { cle: 'dateEncaissement', libelle: 'Date d’encaissement *', indices: ['date', 'encaissement'] },
@@ -22,14 +24,29 @@ const CIBLES = [
   { cle: 'montant', libelle: 'Montant *', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
   { cle: 'libelle', libelle: 'Libellé', indices: ['libelle', 'description', 'objet', 'designation'] },
   { cle: 'modeReglement', libelle: 'Mode de règlement', indices: ['mode', 'paiement', 'reglement'] },
-  { cle: 'numeroFacture', libelle: 'Numéro de facture', indices: ['facture', 'reference'] }
+  { cle: 'numeroFacture', libelle: 'Numéro de facture', indices: ['facture', 'reference'] },
+  { cle: 'categorie', libelle: 'Catégorie (vente / prestation)', indices: ['categorie'] }
 ];
 const CIBLES_OBLIGATOIRES = ['dateEncaissement', 'client', 'montant'];
 
-/** Convertit un mode de règlement en texte libre vers un code du livre. */
-function devinerMode(texte) {
+/** Convertit une catégorie en texte libre vers un code du livre. */
+function devinerCategorie(texte) {
+  const t = normaliserTexte(texte);
+  if (t.includes('vente') || t.includes('march')) return 'ventes';
+  if (t.includes('prest') || t.includes('service')) return 'prestations';
+  return '';
+}
+
+/**
+ * Convertit un mode de règlement en texte libre vers un code du livre.
+ * Un libellé identique à un mode personnalisé de l'utilisateur est reconnu,
+ * puis les modes par défaut sont devinés par mots-clés.
+ */
+function devinerMode(texte, modesPersonnalises) {
   const t = normaliserTexte(texte);
   if (!t) return 'autre';
+  const perso = modesPersonnalises.find((m) => normaliserTexte(m.libelle) === t);
+  if (perso) return perso.code;
   if (t.includes('vir')) return 'virement';
   if (t.includes('carte') || t === 'cb' || t.includes('bancaire')) return 'carte';
   if (t.includes('esp') || t.includes('cash') || t.includes('liquide')) return 'especes';
@@ -40,6 +57,8 @@ function devinerMode(texte) {
 }
 
 export async function vueImport(conteneur) {
+  const estMixte = etat.parametres.typeActivite === 'mixte';
+  const cibles = CIBLES.filter((c) => c.cle !== 'categorie' || estMixte);
   let donneesCsv = null; // { entetes, lignes }
   let nomFichier = '';
 
@@ -126,7 +145,7 @@ export async function vueImport(conteneur) {
       `${nomFichier} : ${donneesCsv.lignes.length} ligne${donneesCsv.lignes.length > 1 ? 's' : ''}, ` +
       `${donneesCsv.entetes.length} colonnes détectées.`;
 
-    refs.grille.innerHTML = CIBLES.map((cible) => `
+    refs.grille.innerHTML = cibles.map((cible) => `
       <div class="champ">
         <label for="correspondance-${cible.cle}">${echapperHtml(cible.libelle)}</label>
         <select id="correspondance-${cible.cle}" data-cible="${cible.cle}">
@@ -135,7 +154,14 @@ export async function vueImport(conteneur) {
             `<option value="${i}" ${devinerColonne(cible) === i ? 'selected' : ''}>${echapperHtml(entete)}</option>`
           ).join('')}
         </select>
-      </div>`).join('');
+      </div>` ).join('') + (estMixte ? `
+      <div class="champ">
+        <label for="categorie-defaut">Catégorie par défaut (lignes sans catégorie)</label>
+        <select id="categorie-defaut">
+          <option value="prestations">Prestation de services</option>
+          <option value="ventes">Vente de marchandises</option>
+        </select>
+      </div>` : '');
   }
 
   /** Devine l'index de colonne correspondant à une cible d'après les en-têtes. */
@@ -163,6 +189,9 @@ export async function vueImport(conteneur) {
 
     const valeur = (rangee, cle) =>
       correspondance[cle] === undefined ? '' : (rangee[correspondance[cle]] ?? '').trim();
+    const categorieDefaut = estMixte
+      ? refs.grille.querySelector('#categorie-defaut').value
+      : '';
 
     return donneesCsv.lignes.map((rangee) => ({
       // Date convertie en ISO si possible ; sinon on transmet la valeur brute,
@@ -171,8 +200,11 @@ export async function vueImport(conteneur) {
       client: valeur(rangee, 'client'),
       montant: valeur(rangee, 'montant'),
       libelle: valeur(rangee, 'libelle'),
-      modeReglement: devinerMode(valeur(rangee, 'modeReglement')),
-      numeroFacture: valeur(rangee, 'numeroFacture')
+      modeReglement: devinerMode(valeur(rangee, 'modeReglement'), etat.parametres.modesPersonnalises),
+      numeroFacture: valeur(rangee, 'numeroFacture'),
+      categorie: estMixte
+        ? (devinerCategorie(valeur(rangee, 'categorie')) || categorieDefaut)
+        : ''
     }));
   }
 
@@ -222,6 +254,12 @@ export async function vueImport(conteneur) {
           ${rapport.erreurs.length > 15 ? `<li>… et ${rapport.erreurs.length - 15} autres.</li>` : ''}
         </ul>` : ''}
 
+      <p class="note-legale">
+        ${icone('info', { taille: 16 })}
+        <span>Une sauvegarde de vos données est créée automatiquement juste avant l’import :
+        en cas de problème, restaurez-la depuis les paramètres.</span>
+      </p>
+
       <div class="pied-dialogue" style="justify-content: flex-start;">
         <button type="button" class="btn btn-primaire" id="bouton-importer"
           ${rapport.valides + rapport.doublons.length === 0 ? 'disabled' : ''}>
@@ -233,17 +271,23 @@ export async function vueImport(conteneur) {
       const bouton = evenement.currentTarget;
       bouton.disabled = true;
       const importerDoublons = refs.etapeRapport.querySelector('#importer-doublons')?.checked ?? false;
+      // Tant que l'import est en cours, une fermeture de l'onglet demande confirmation.
+      const gardeFermeture = (e) => { e.preventDefault(); };
+      window.addEventListener('beforeunload', gardeFermeture);
       try {
         const resultat = await api.importerRecettes({ lignes, importerDoublons });
         toast(`${resultat.importees} recette${resultat.importees > 1 ? 's' : ''} importée${resultat.importees > 1 ? 's' : ''}.`);
         refs.etapeRapport.innerHTML = `
           <h2>Import terminé</h2>
           <p>${resultat.importees} recette${resultat.importees > 1 ? 's' : ''} ajoutée${resultat.importees > 1 ? 's' : ''} au livre.
-          ${resultat.erreurs.length > 0 ? `${resultat.erreurs.length} ligne${resultat.erreurs.length > 1 ? 's' : ''} en erreur ignorée${resultat.erreurs.length > 1 ? 's' : ''}.` : ''}</p>
+          ${resultat.erreurs.length > 0 ? `${resultat.erreurs.length} ligne${resultat.erreurs.length > 1 ? 's' : ''} en erreur ignorée${resultat.erreurs.length > 1 ? 's' : ''}.` : ''}
+          ${resultat.sauvegarde ? 'Une sauvegarde des données précédentes a été créée (voir les paramètres).' : ''}</p>
           <p><a class="btn btn-secondaire" href="#/recettes">${icone('recettes', { taille: 16 })}<span>Voir les recettes</span></a></p>`;
       } catch (erreur) {
         toast(erreur.message, 'erreur');
         bouton.disabled = false;
+      } finally {
+        window.removeEventListener('beforeunload', gardeFermeture);
       }
     });
   }

@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  totalRecettes, filtrerParPeriode, statistiquesTableauDeBord, bilanPeriode
+  totalRecettes, filtrerParPeriode, statistiquesTableauDeBord, bilanPeriode, caMensuel
 } from '../src/totaux.js';
 import { construireRegistre } from '../src/exports/registre.js';
 
@@ -45,7 +45,7 @@ test('filtrerParPeriode filtre par année, mois et trimestre', () => {
 });
 
 test('statistiquesTableauDeBord calcule le mois et l’année en cours', () => {
-  const stats = statistiquesTableauDeBord(RECETTES, new Date(2026, 0, 25));
+  const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 0, 25) });
   assert.equal(stats.caMois, 300.10);
   assert.equal(stats.caAnnee, 600.40);
   assert.equal(stats.nombreEncaissements, 5);
@@ -53,6 +53,46 @@ test('statistiquesTableauDeBord calcule le mois et l’année en cours', () => {
   assert.equal(stats.dernieresRecettes.length, 5);
   // Triées par date décroissante.
   assert.equal(stats.dernieresRecettes[0].dateEncaissement, '2026-07-02');
+  // Le graphique couvre l'année affichée, de janvier à décembre.
+  assert.equal(stats.caParMois.length, 12);
+  assert.deepEqual(stats.caParMois[0], { annee: 2026, mois: 1, total: 300.10 });
+  assert.deepEqual(stats.caParMois.at(-1), { annee: 2026, mois: 12, total: 0 });
+});
+
+test('statistiquesTableauDeBord sait revenir sur une année passée', () => {
+  const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16), annee: 2025 });
+  assert.equal(stats.annee, 2025);
+  assert.equal(stats.mois, 12); // année passée : décembre mis en avant
+  assert.equal(stats.caAnnee, 999);
+  assert.equal(stats.caMois, 999);
+  assert.equal(stats.nombreEncaissements, 1);
+  // Le graphique couvre janvier à décembre de l'année choisie.
+  assert.deepEqual(stats.caParMois[0], { annee: 2025, mois: 1, total: 0 });
+  assert.deepEqual(stats.caParMois.at(-1), { annee: 2025, mois: 12, total: 999 });
+  // Les dernières recettes sont celles de l'année choisie.
+  assert.ok(stats.dernieresRecettes.every((r) => r.dateEncaissement.startsWith('2025')));
+});
+
+test('statistiquesTableauDeBord ventile la part prestations et les non catégorisées', () => {
+  const recettes = [
+    recette('2026-01-10', 100, { categorie: 'prestations' }),
+    recette('2026-01-20', 200, { categorie: 'ventes' }),
+    recette('2026-02-01', 50)
+  ];
+  const stats = statistiquesTableauDeBord(recettes, { maintenant: new Date(2026, 6, 16) });
+  assert.equal(stats.caAnnee, 350);
+  assert.equal(stats.caAnneePrestations, 100);
+  assert.equal(stats.nombreNonCategorisees, 1);
+});
+
+test('caMensuel couvre les mois vides et franchit les années', () => {
+  const points = caMensuel(RECETTES, { maintenant: new Date(2026, 1, 10) }); // février 2026
+  assert.equal(points.length, 12);
+  assert.deepEqual(points[0], { annee: 2025, mois: 3, total: 0 });
+  assert.deepEqual(points.at(-2), { annee: 2026, mois: 1, total: 300.10 });
+  assert.deepEqual(points.at(-1), { annee: 2026, mois: 2, total: 0 });
+  // Décembre 2025 (999 €) est bien dans la fenêtre.
+  assert.equal(points.find((p) => p.annee === 2025 && p.mois === 12).total, 999);
 });
 
 test('bilanPeriode répond pour un mois, un trimestre et une année', () => {
@@ -68,6 +108,18 @@ test('bilanPeriode répond pour un mois, un trimestre et une année', () => {
   const annee = bilanPeriode(RECETTES, { annee: 2026, type: 'annee' });
   assert.equal(annee.chiffreAffaires, 600.40);
   assert.equal(annee.nombreEncaissements, 5);
+});
+
+test('bilanPeriode ventile ventes, prestations et non catégorisé', () => {
+  const recettes = [
+    recette('2026-01-10', 100, { categorie: 'prestations' }),
+    recette('2026-01-20', 200, { categorie: 'ventes' }),
+    recette('2026-02-01', 50)
+  ];
+  const bilan = bilanPeriode(recettes, { annee: 2026, type: 'annee' });
+  assert.deepEqual(bilan.ventes, { chiffreAffaires: 200, nombreEncaissements: 1 });
+  assert.deepEqual(bilan.prestations, { chiffreAffaires: 100, nombreEncaissements: 1 });
+  assert.deepEqual(bilan.nonCategorise, { chiffreAffaires: 50, nombreEncaissements: 1 });
 });
 
 test('construireRegistre trie chronologiquement et insère les totaux', () => {
