@@ -7,7 +7,7 @@
  *  - fins de ligne CRLF.
  */
 
-import { ENTETES_REGISTRE } from './registre.js';
+import { entetesRegistre, libelleCategorieCourt } from './registre.js';
 import { formaterDate } from '../partage/dates.js';
 import { libelleMode } from '../partage/constantes.js';
 
@@ -27,7 +27,9 @@ function montantCsv(montant) {
 
 /** Génère le contenu CSV complet (chaîne prête à envoyer ou écrire). */
 export function genererCsv(registre, parametres) {
-  const lignes = [ENTETES_REGISTRE.map(champ).join(SEPARATEUR)];
+  const entetes = entetesRegistre(registre.ventiler);
+  const vides = entetes.length - 3; // colonnes après « Montant »
+  const lignes = [entetes.map(champ).join(SEPARATEUR)];
 
   for (const ligne of registre.lignes) {
     if (ligne.type === 'recette') {
@@ -38,17 +40,13 @@ export function genererCsv(registre, parametres) {
         montantCsv(r.montant),
         champ(libelleMode(r.modeReglement, parametres.modesPersonnalises)),
         champ(r.numeroFacture),
+        ...(registre.ventiler ? [champ(libelleCategorieCourt(r.categorie))] : []),
         champ(r.libelle)
       ].join(SEPARATEUR));
     } else {
-      lignes.push([
-        champ(ligne.libelle),
-        '',
-        montantCsv(ligne.montant),
-        '',
-        '',
-        ''
-      ].join(SEPARATEUR));
+      // Total ou ventilation : libellé en première colonne, montant en troisième.
+      lignes.push([champ(ligne.libelle), '', montantCsv(ligne.montant), ...Array(vides).fill('')]
+        .join(SEPARATEUR));
     }
   }
 

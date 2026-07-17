@@ -29,13 +29,13 @@ télédéclaration.
   client, libellé, numéro de facture, montant et mode de règlement (CB, virement, espèces,
   chèque, PayPal, Stripe, autre, et vos modes de paiement personnalisés). Ajout, modification,
   suppression.
-- **Saisie assistée** : auto-complétion des libellés déjà utilisés, duplication d'une
-  recette en un clic pour les paiements récurrents, et avertissement non bloquant si une
-  recette très similaire existe déjà.
+- **Saisie assistée** : auto-complétion des libellés déjà utilisés, suggestion du prochain
+  numéro de facture, duplication d'une recette en un clic pour les paiements récurrents,
+  et avertissement non bloquant si une recette très similaire existe déjà pour éviter les doublons.
 - **Carnet de clients** : créez vos clients une fois, puis choisissez-les à la saisie d'une
   recette pour éviter les fautes de frappe. Un client professionnel peut être retrouvé automatiquement par
   son **SIREN ou SIRET** grâce à l'annuaire public des entreprises connecté à ce projet (le nom exact est récupéré pour vous directement). Pour les clients de type particulier, un simple nom de client suffit. La liste affiche le nombre de recettes et le chiffre d'affaires par client.
-- **Tableau principal** : tri par colonne, recherche libre (client, libellé, facture, montant), filtres par année, mois et mode de règlement.
+- **Tableau principal** : tri par colonne, sélection multiple (suppression ou reclassement groupé), recherche libre (client, libellé, facture, montant), filtres par année, mois, mode de règlement et catégorie.
 - **Numérotation des factures surveillée** : les doublons et les numéros manquants sont
   signalés, quelle que soit votre convention (« F001 », « FAC2026-001 »,
   « A-2026-0007 »…), sans jamais rien bloquer.
@@ -49,10 +49,13 @@ télédéclaration.
   **seuil de franchise en base de TVA** : montant restant, pourcentage atteint, et un
   avertissement à l'approche du seuil.
 - **Activité mixte** : chaque recette est classée vente ou prestation, le suivi des seuils
-  surveille aussi la part « prestations » (qui a ses propres plafonds) et le bilan URSSAF
-  ventile le chiffre d'affaires entre les deux, comme la déclaration le demande.
+  surveille aussi la part « prestations » (qui a ses propres plafonds), le bilan URSSAF
+  ventile le chiffre d'affaires entre les deux, comme la déclaration le demande, et les
+  exports distinguent aussi les deux (colonne Catégorie et sous-totaux « dont ventes /
+  dont prestations »).
 - **Déclaration URSSAF** : choisissez une année puis un mois, un trimestre ou l'année entière,
   l'application calcule le chiffre d'affaires encaissé et le nombre d'encaissements de la période.
+  Un rappel s'affiche sur le tableau de bord quand une période à déclarer s'achève.
   _Aucune connexion à l'URSSAF : c'est un simple calcul local._
 
 ### Échanges et sécurité des données
@@ -66,8 +69,8 @@ télédéclaration.
   l'intégrité du fichier de données est vérifiée, s'il est illisible, l'application propose
   de restaurer la dernière sauvegarde valide, sans jamais rien écraser.
 - **Paramètres** : identité de l'entreprise (reprise en tête des exports), type d'activité,
-  devise, format de date, modes de règlement personnalisés, et des options pour activer ou
-  désactiver chaque aide à la saisie.
+  périodicité de déclaration, devise, format de date, modes de règlement personnalisés, et
+  des options pour activer ou désactiver chaque aide à la saisie.
 
 ## Installation
 
@@ -95,8 +98,11 @@ C'est l'engagement central du projet :
 - **Tout tient dans un seul fichier** lisible : `data/livre-des-recettes.json` (recettes,
   clients et paramètres). Pas de base de données cachée, pas de stockage dans le navigateur :
   vous pouvez changer de navigateur (Firefox, Chrome, Edge…) sans rien perdre.
-- **Sauvegarde quotidienne automatique** dans `data/sauvegardes/` (30 jours glissants),
-  et écriture « atomique » : une coupure de courant ne corrompt jamais le fichier.
+- **Sauvegarde quotidienne automatique** dans `data/sauvegardes/` : tout est conservé
+  14 jours, puis une sauvegarde par semaine pendant 2 mois, puis une par mois pendant 1 an.
+  Écriture « atomique » : une coupure de courant ne corrompt jamais le fichier.
+- **Une seule instance à la fois** : un verrou empêche deux lancements simultanés (deux
+  fenêtres, ou deux ordinateurs partageant un dossier synchronisé) de s'écraser mutuellement.
 - **Changer d'ordinateur** = copier le dossier `data/` sur le nouveau poste. C'est tout.
 - **Dossier synchronisé** (Nextcloud, Drive, Dropbox…) : pointez la variable `LDR_DATA_DIR`
   vers votre dossier synchronisé (voir Configuration), et vos données vous suivent.
@@ -146,8 +152,9 @@ src/
   validation.js        Validation des recettes, clients et paramètres
   totaux.js            Calculs (totaux, CA mensuel, tableau de bord, bilan URSSAF)
   entreprises.js       Recherche d'entreprise par SIREN / SIRET (API publique)
+  verrou.js            Verrou d'instance (un seul lancement à la fois)
   partage/             Modules communs serveur + navigateur (servis sous /partage) :
-                       constantes, dates, montants, texte, doublons, seuils, factures
+                       constantes, dates, montants, texte, doublons, seuils, factures, filtres
   routes/              API REST (recettes, clients, exports, urssaf, sauvegardes, parametres)
   exports/             Générateurs PDF, Excel, CSV du registre
 public/                Interface (index.html, css, js/vues, icônes, historique)
@@ -155,7 +162,7 @@ tests/                 Tests node:test (npm test)
 ```
 
 ```bash
-npm test   # 92 tests : unités + API en conditions réelles
+npm test   # 109 tests : unités + API en conditions réelles
 ```
 
 ## Crédits

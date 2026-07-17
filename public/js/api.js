@@ -31,9 +31,8 @@ function chaineRequete(params) {
 
 export const api = {
   // Recettes
-  listerRecettes: (filtres) => requete(`/api/recettes${chaineRequete(filtres)}`),
+  listerRecettes: () => requete('/api/recettes'),
   listerAnnees: () => requete('/api/recettes/annees'),
-  listerLibelles: () => requete('/api/recettes/libelles'),
   creerRecette: (recette) => requete('/api/recettes', { methode: 'POST', corps: recette }),
   modifierRecette: (id, recette) => requete(`/api/recettes/${id}`, { methode: 'PUT', corps: recette }),
   supprimerRecette: (id) => requete(`/api/recettes/${id}`, { methode: 'DELETE' }),

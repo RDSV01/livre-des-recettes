@@ -73,43 +73,21 @@ test('POST /api/recettes refuse une recette invalide avec le détail', async () 
   assert.ok(erreurs.montant);
 });
 
-test('GET /api/recettes filtre et recherche', async () => {
+test('GET /api/recettes renvoie tout, trié par date décroissante', async () => {
   await appeler('/api/recettes', {
     methode: 'POST',
     corps: { ...RECETTE, client: 'SARL Bâtiment Plus', dateEncaissement: '2025-03-01', montant: 800, modeReglement: 'virement', numeroFacture: 'FAC-002' }
   });
 
-  let corps = await (await appeler('/api/recettes?annee=2026')).json();
-  assert.equal(corps.recettes.length, 1);
-  assert.equal(corps.recettes[0].client, 'Époux Lefèvre');
-
-  // Recherche insensible aux accents.
-  corps = await (await appeler('/api/recettes?q=epoux')).json();
-  assert.equal(corps.recettes.length, 1);
-
-  // Recherche par montant.
-  corps = await (await appeler('/api/recettes?q=120,50')).json();
-  assert.equal(corps.recettes.length, 1);
-
-  // Filtre par mode.
-  corps = await (await appeler('/api/recettes?mode=virement')).json();
-  assert.equal(corps.recettes.length, 1);
-  assert.equal(corps.recettes[0].modeReglement, 'virement');
+  const { recettes } = await (await appeler('/api/recettes')).json();
+  assert.equal(recettes.length, 2);
+  assert.equal(recettes[0].dateEncaissement, '2026-07-10');
+  assert.equal(recettes[1].dateEncaissement, '2025-03-01');
 });
 
 test('GET /api/recettes/annees liste les années décroissantes', async () => {
   const { annees } = await (await appeler('/api/recettes/annees')).json();
   assert.deepEqual(annees, [2026, 2025]);
-});
-
-test('GET /api/recettes/libelles dédoublonne et trie par fréquence', async () => {
-  await appeler('/api/recettes', { methode: 'POST', corps: { ...RECETTE, numeroFacture: 'LIB-1', libelle: 'cours de piano' } });
-  await appeler('/api/recettes', { methode: 'POST', corps: { ...RECETTE, numeroFacture: 'LIB-2', libelle: 'Accordage' } });
-  const { libelles } = await (await appeler('/api/recettes/libelles')).json();
-  // « Cours de piano » (3 occurrences, casse mélangée) devant « Accordage ».
-  assert.equal(libelles[0], 'Cours de piano');
-  assert.equal(libelles.filter((l) => l.toLowerCase() === 'cours de piano').length, 1);
-  assert.ok(libelles.includes('Accordage'));
 });
 
 test('PUT et DELETE fonctionnent et signalent les identifiants inconnus', async () => {
@@ -146,8 +124,8 @@ test('un import réel crée une sauvegarde automatique restaurable', async () =>
     corps: { fichier: rapport.sauvegarde }
   });
   assert.equal(restauration.status, 200);
-  const { recettes } = await (await appeler('/api/recettes?q=SAUV-1')).json();
-  assert.equal(recettes.length, 0);
+  const { recettes } = await (await appeler('/api/recettes')).json();
+  assert.equal(recettes.filter((r) => r.numeroFacture === 'SAUV-1').length, 0);
 });
 
 test('la restauration refuse un nom de fichier invalide', async () => {
@@ -200,11 +178,11 @@ test('la liste des clients porte le nombre de recettes et le CA par client', asy
 });
 
 test('CRUD des clients et refus des doublons', async () => {
-  const creation = await appeler('/api/clients', { methode: 'POST', corps: { nom: 'Café des Arts', siret: '12345678900012' } });
+  const creation = await appeler('/api/clients', { methode: 'POST', corps: { nom: 'Café des Arts', siret: '12345678200010' } });
   assert.equal(creation.status, 201);
   const { client } = await creation.json();
   assert.equal(client.nom, 'Café des Arts');
-  assert.equal(client.siret, '12345678900012');
+  assert.equal(client.siret, '12345678200010');
 
   // Doublon (même nom) refusé.
   assert.equal((await appeler('/api/clients', { methode: 'POST', corps: { nom: 'café des arts' } })).status, 409);
@@ -290,11 +268,11 @@ test('les exports exigent une année valide', async () => {
 test('PUT /api/parametres enregistre et valide', async () => {
   const bon = await appeler('/api/parametres', {
     methode: 'PUT',
-    corps: { nomEntreprise: 'Ma micro', siren: '123 456 789', typeActivite: 'prestations', devise: 'EUR', formatDate: 'JJ/MM/AAAA' }
+    corps: { nomEntreprise: 'Ma micro', siren: '123 456 782', typeActivite: 'prestations', devise: 'EUR', formatDate: 'JJ/MM/AAAA' }
   });
   assert.equal(bon.status, 200);
   const { parametres } = await bon.json();
-  assert.equal(parametres.siren, '123456789');
+  assert.equal(parametres.siren, '123456782');
   assert.equal(parametres.typeActivite, 'prestations');
 
   const mauvais = await appeler('/api/parametres', { methode: 'PUT', corps: { siren: '12' } });
@@ -310,14 +288,14 @@ test('un mode personnalisé se crée, sert dans une recette, et ne peut plus êt
   const mode = creation.parametres.modesPersonnalises[0];
   assert.equal(mode.libelle, 'Lydia');
 
-  // Une recette peut l'utiliser ; le filtre par mode la retrouve.
+  // Une recette peut l'utiliser.
   const recette = await appeler('/api/recettes', {
     methode: 'POST',
     corps: { ...RECETTE, client: 'Client Lydia', numeroFacture: 'LYD-1', modeReglement: mode.code }
   });
   assert.equal(recette.status, 201);
-  const filtre = await (await appeler(`/api/recettes?mode=${mode.code}`)).json();
-  assert.equal(filtre.recettes.length, 1);
+  const { recettes } = await (await appeler('/api/recettes')).json();
+  assert.equal(recettes.filter((r) => r.modeReglement === mode.code).length, 1);
 
   // L'export CSV affiche le libellé du mode personnalisé.
   const csv = new TextDecoder('utf-8').decode(
@@ -338,7 +316,7 @@ test('un mode personnalisé se crée, sert dans une recette, et ne peut plus êt
   assert.equal(renommage.status, 200);
 });
 
-test('activité mixte : catégorie obligatoire et bilan URSSAF ventilé', async () => {
+test('activité mixte : bilan URSSAF ventilé et exports avec catégorie', async () => {
   const { parametres } = await (await appeler('/api/parametres')).json();
   const bascule = await appeler('/api/parametres', {
     methode: 'PUT',
@@ -346,15 +324,6 @@ test('activité mixte : catégorie obligatoire et bilan URSSAF ventilé', async 
   });
   assert.equal(bascule.status, 200);
 
-  // Sans catégorie : refusé, avec le message sur le bon champ.
-  const refus = await appeler('/api/recettes', {
-    methode: 'POST',
-    corps: { ...RECETTE, client: 'Client mixte', numeroFacture: 'MIX-1' }
-  });
-  assert.equal(refus.status, 400);
-  assert.ok((await refus.json()).erreurs.categorie);
-
-  // Avec catégorie : accepté, et le bilan URSSAF ventile.
   assert.equal((await appeler('/api/recettes', {
     methode: 'POST',
     corps: { ...RECETTE, client: 'Client mixte', numeroFacture: 'MIX-2', montant: 300, categorie: 'ventes' }
@@ -376,8 +345,37 @@ test('activité mixte : catégorie obligatoire et bilan URSSAF ventilé', async 
   assert.ok(stats.caAnneePrestations >= 200);
   assert.ok(stats.nombreNonCategorisees >= 1);
 
-  // Retour à une activité simple pour ne pas contraindre les tests suivants.
+  // L'export CSV distingue les deux : colonne Catégorie et lignes « dont … ».
+  const csv = new TextDecoder('utf-8').decode(
+    await (await appeler('/api/exports/csv?annee=2026')).arrayBuffer()
+  );
+  assert.match(csv, /;Catégorie;/);
+  assert.match(csv, /;Vente;/);
+  assert.match(csv, /dont ventes de marchandises/);
+  assert.match(csv, /dont prestations de services/);
+  assert.match(csv, /dont non catégorisé/);
+
+  // Retour à une activité simple : l'export redevient un registre à 6 colonnes.
   await appeler('/api/parametres', { methode: 'PUT', corps: { ...parametres, typeActivite: 'prestations' } });
+  const csvSimple = new TextDecoder('utf-8').decode(
+    await (await appeler('/api/exports/csv?annee=2026')).arrayBuffer()
+  );
+  assert.doesNotMatch(csvSimple, /Catégorie/);
+  assert.doesNotMatch(csvSimple, /dont ventes/);
+});
+
+test('la recherche SIRET refuse une clé de contrôle invalide sans appel réseau', async () => {
+  const reponse = await appeler('/api/clients/recherche-siret?siret=123456789');
+  assert.equal(reponse.status, 400);
+  assert.match((await reponse.json()).erreur, /clé de contrôle/);
+});
+
+test('GET /api/systeme signale la première utilisation, puis plus', async () => {
+  // La base de test contient déjà recettes et paramètres : ce n'est plus un
+  // premier lancement.
+  const systeme = await (await appeler('/api/systeme')).json();
+  assert.equal(systeme.premierLancement, false);
+  assert.ok(systeme.version);
 });
 
 test('GET /api/sauvegarde renvoie le fichier de données complet', async () => {

@@ -9,31 +9,59 @@
  * Colonnes du registre, dans l'ordre demandé par l'administration :
  * date de réception du paiement, client, montant, mode de règlement,
  * numéro de facture, libellé.
+ *
+ * Pour une activité mixte, le registre est « ventilé » : une colonne
+ * Catégorie s'ajoute avant le libellé, et chaque total est suivi de lignes
+ * « dont ventes / dont prestations » (la déclaration URSSAF distingue les
+ * deux chiffres d'affaires).
  */
 
 import { filtrerParPeriode, totalRecettes, comparerParDateAsc } from '../totaux.js';
 import { moisDe, nomMois } from '../partage/dates.js';
 
-/** En-têtes légaux du registre, communs aux trois formats d'export. */
-export const ENTETES_REGISTRE = [
-  'Date de réception du paiement',
-  'Client',
-  'Montant',
-  'Mode de règlement',
-  'Numéro de facture',
-  'Libellé'
-];
+/** En-têtes du registre, communs aux trois formats d'export. */
+export function entetesRegistre(ventiler) {
+  return [
+    'Date de réception du paiement',
+    'Client',
+    'Montant',
+    'Mode de règlement',
+    'Numéro de facture',
+    ...(ventiler ? ['Catégorie'] : []),
+    'Libellé'
+  ];
+}
+
+/** Valeur courte de la colonne Catégorie. */
+export function libelleCategorieCourt(code) {
+  return code === 'ventes' ? 'Vente' : code === 'prestations' ? 'Prestation' : '';
+}
+
+/** Lignes « dont … » insérées sous un total quand le registre est ventilé. */
+function ventilation(recettes) {
+  const total = (filtre) => totalRecettes(recettes.filter(filtre));
+  const lignes = [
+    { type: 'ventilation', libelle: 'dont ventes de marchandises', montant: total((r) => r.categorie === 'ventes') },
+    { type: 'ventilation', libelle: 'dont prestations de services', montant: total((r) => r.categorie === 'prestations') }
+  ];
+  const nonCategorise = total((r) => !r.categorie);
+  if (nonCategorise > 0) {
+    lignes.push({ type: 'ventilation', libelle: 'dont non catégorisé', montant: nonCategorise });
+  }
+  return lignes;
+}
 
 /**
  * Construit les lignes du registre pour une année, éventuellement limitée
  * à un mois.
  *
- * @returns {{ titre: string, lignes: Array, nombre: number, total: number }}
- *   `lignes` mêle deux formes :
+ * @returns {{ titre: string, lignes: Array, nombre: number, total: number, ventiler: boolean }}
+ *   `lignes` mêle trois formes :
  *   - `{ type: 'recette', recette }`
  *   - `{ type: 'total', libelle, montant, final }` (final = total annuel)
+ *   - `{ type: 'ventilation', libelle, montant }` (activité mixte uniquement)
  */
-export function construireRegistre(recettes, { annee, mois }) {
+export function construireRegistre(recettes, { annee, mois }, { ventiler = false } = {}) {
   const selection = filtrerParPeriode(recettes, { annee, mois })
     .sort(comparerParDateAsc);
 
@@ -52,6 +80,7 @@ export function construireRegistre(recettes, { annee, mois }) {
       montant: totalRecettes(duMois),
       final: false
     });
+    if (ventiler) lignes.push(...ventilation(duMois));
   }
 
   if (!mois && selection.length > 0) {
@@ -61,13 +90,15 @@ export function construireRegistre(recettes, { annee, mois }) {
       montant: totalRecettes(selection),
       final: true
     });
+    if (ventiler) lignes.push(...ventilation(selection));
   }
 
   return {
     titre: titrePeriode({ annee, mois }),
     lignes,
     nombre: selection.length,
-    total: totalRecettes(selection)
+    total: totalRecettes(selection),
+    ventiler
   };
 }
 

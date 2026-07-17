@@ -211,6 +211,10 @@ chargerEtat()
     document.getElementById('version-app').textContent = `Version ${etat.systeme.version}`;
     if (etat.systeme.corruption) {
       afficherEcranRestauration(etat.systeme.corruption);
+    } else if (etat.systeme.premierLancement && !window.location.hash) {
+      // Première utilisation : direction les Paramètres pour bien démarrer
+      // (le changement d'ancre déclenche l'affichage de la vue).
+      window.location.hash = '#/parametres';
     } else {
       afficherVue();
     }

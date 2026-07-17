@@ -5,12 +5,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  estDateIso, formaterDate, analyserDateSouple, trimestreDe
+  estDateIso, formaterDate, analyserDateSouple, trimestreDe, dernierePeriodeEchue
 } from '../src/partage/dates.js';
 import { analyserMontant, sommeMontants, enCentimes } from '../src/partage/montants.js';
 import { normaliserTexte } from '../src/partage/texte.js';
 import { estDoublon, chercherSimilaire } from '../src/partage/doublons.js';
 import { bilanSeuils, SEUILS } from '../src/partage/seuils.js';
+import { filtrerRecettes, libellesFrequents } from '../src/partage/filtres.js';
 
 test('estDateIso accepte les dates réelles et refuse le reste', () => {
   assert.equal(estDateIso('2026-07-15'), true);
@@ -69,6 +70,46 @@ test('normaliserTexte ignore casse, accents et espaces superflus', () => {
   assert.equal(normaliserTexte('  Boulangerie   Dupré '), 'boulangerie dupre');
   assert.equal(normaliserTexte('CRÈME brûlée'), 'creme brulee');
   assert.equal(normaliserTexte(null), '');
+});
+
+test('dernierePeriodeEchue renvoie la dernière période complète', () => {
+  const juillet = new Date(2026, 6, 16);
+  assert.deepEqual(dernierePeriodeEchue('mois', juillet), { id: '2026-06', libelle: 'juin 2026' });
+  assert.deepEqual(dernierePeriodeEchue('trimestre', juillet), { id: '2026-T2', libelle: '2e trimestre 2026' });
+  // Janvier : la période précédente est sur l'année d'avant.
+  const janvier = new Date(2026, 0, 5);
+  assert.deepEqual(dernierePeriodeEchue('mois', janvier), { id: '2025-12', libelle: 'décembre 2025' });
+  assert.deepEqual(dernierePeriodeEchue('trimestre', janvier), { id: '2025-T4', libelle: '4e trimestre 2025' });
+  assert.equal(dernierePeriodeEchue('', juillet), null);
+});
+
+// ---- Filtrage des recettes (côté navigateur) ---------------------------------
+
+const RECETTES_FILTRE = [
+  { dateEncaissement: '2026-07-10', client: 'Époux Lefèvre', libelle: 'Cours de piano', numeroFacture: 'F-1', montant: 120.5, modeReglement: 'cheque', categorie: 'prestations' },
+  { dateEncaissement: '2026-03-01', client: 'SARL Bâtiment', libelle: 'Site', numeroFacture: 'F-2', montant: 800, modeReglement: 'virement', categorie: 'ventes' },
+  { dateEncaissement: '2025-03-01', client: 'Autre', libelle: '', numeroFacture: '', montant: 50, modeReglement: 'especes' }
+];
+
+test('filtrerRecettes croise année, mois, mode, catégorie et recherche', () => {
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { annee: '2026' }).length, 2);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { annee: 2026, mois: 7 }).length, 1);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { mode: 'virement' }).length, 1);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { categorie: 'ventes' }).length, 1);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { categorie: 'aucune' })[0].client, 'Autre');
+  // Recherche insensible aux accents, et par montant exact.
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { q: 'epoux' }).length, 1);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { q: '120,50' }).length, 1);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, { q: 'introuvable' }).length, 0);
+  assert.equal(filtrerRecettes(RECETTES_FILTRE, {}).length, 3);
+});
+
+test('libellesFrequents dédoublonne et trie par fréquence puis alphabet', () => {
+  const libelles = libellesFrequents([
+    { libelle: 'cours de piano' }, { libelle: 'Cours de piano' },
+    { libelle: 'Accordage' }, { libelle: '' }
+  ]);
+  assert.deepEqual(libelles, ['cours de piano', 'Accordage']);
 });
 
 // ---- Doublons et similarité ------------------------------------------------

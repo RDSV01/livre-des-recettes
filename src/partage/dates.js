@@ -84,3 +84,27 @@ export function moisDe(iso) {
 export function trimestreDe(mois) {
   return Math.ceil(mois / 3);
 }
+
+/**
+ * Dernière période de déclaration URSSAF entièrement écoulée : le mois
+ * précédent en déclaration mensuelle, le trimestre précédent en trimestrielle.
+ * Retourne `{ id, libelle }` (id : « 2026-06 » ou « 2026-T2 »), ou `null`
+ * si la périodicité n'est pas renseignée.
+ */
+export function dernierePeriodeEchue(periodicite, maintenant = new Date()) {
+  const annee = maintenant.getFullYear();
+  const mois = maintenant.getMonth() + 1;
+
+  if (periodicite === 'mois') {
+    const m = mois === 1 ? 12 : mois - 1;
+    const a = mois === 1 ? annee - 1 : annee;
+    return { id: `${a}-${String(m).padStart(2, '0')}`, libelle: `${nomMois(m)} ${a}` };
+  }
+  if (periodicite === 'trimestre') {
+    const trimestreCourant = trimestreDe(mois);
+    const t = trimestreCourant === 1 ? 4 : trimestreCourant - 1;
+    const a = trimestreCourant === 1 ? annee - 1 : annee;
+    return { id: `${a}-T${t}`, libelle: `${t}${t === 1 ? 'er' : 'e'} trimestre ${a}` };
+  }
+  return null;
+}

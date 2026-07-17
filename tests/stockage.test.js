@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { creerStockage } from '../src/stockage.js';
+import { creerStockage, sauvegardesObsoletes } from '../src/stockage.js';
 
 function dossierTemporaire() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-test-'));
@@ -129,6 +129,23 @@ test('les sauvegardes se listent et les noms hostiles sont refusés', (t) => {
   assert.throws(() => stockage.restaurerSauvegarde('livre-des-recettes-9999-01-01.json'), /introuvable/);
 });
 
+test('la rotation garde tout 14 jours, puis une par semaine, puis une par mois', () => {
+  const aujourdHui = '2026-07-16';
+  const dates = [
+    '2026-07-15', '2026-07-02',               // moins de 14 jours : gardées
+    '2026-06-22', '2026-06-24', '2026-06-26', // même semaine ISO : seule la plus récente reste
+    '2026-06-15', '2026-06-17',               // autre semaine : la plus récente reste
+    '2026-02-03', '2026-02-20',               // au-delà de 2 mois : une par mois
+    '2025-05-10'                              // plus d'un an : supprimée
+  ];
+  const supprimees = sauvegardesObsoletes(dates, aujourdHui);
+  assert.deepEqual(supprimees.sort(), ['2025-05-10', '2026-02-03', '2026-06-15', '2026-06-22', '2026-06-24'].sort());
+});
+
+test('la rotation ne touche à rien pendant les 14 premiers jours', () => {
+  assert.deepEqual(sauvegardesObsoletes(['2026-07-16', '2026-07-10', '2026-07-03'], '2026-07-16'), []);
+});
+
 test('l’import en lot n’écrit qu’une fois et retourne les copies', (t) => {
   const dossier = dossierTemporaire();
   t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
@@ -148,7 +165,7 @@ test('cycle complet des clients, triés par nom et persistés', (t) => {
   assert.deepEqual(stockage.listerClients(), []);
 
   const zoe = stockage.ajouterClient({ nom: 'Zoé Studio', siret: '' });
-  stockage.ajouterClient({ nom: 'Atelier Alpha', siret: '12345678900012' });
+  stockage.ajouterClient({ nom: 'Atelier Alpha', siret: '12345678200010' });
   assert.ok(zoe.id);
 
   // Tri alphabétique insensible à la casse et aux accents.

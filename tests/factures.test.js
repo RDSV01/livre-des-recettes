@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyserNumerotation } from '../src/partage/factures.js';
+import { analyserNumerotation, suggererNumeroSuivant } from '../src/partage/factures.js';
 
 /** Fabrique une liste de recettes à partir de numéros de facture. */
 const recettes = (...numeros) => numeros.map((numeroFacture) => ({ numeroFacture }));
@@ -69,4 +69,39 @@ test('les factures vides sont ignorées', () => {
 test('plusieurs trous dans une même série sont tous listés', () => {
   const { manquants } = analyserNumerotation(recettes('X-1', 'X-3', 'X-6'));
   assert.deepEqual(manquants[0].numeros, ['X-2', 'X-4', 'X-5']);
+});
+
+// ---- Suggestion du prochain numéro ---------------------------------------------
+
+/** Fabrique avec date de saisie, pour choisir la série la plus récente. */
+const saisie = (numeroFacture, creeLe) => ({ numeroFacture, creeLe });
+
+test('suggererNumeroSuivant incrémente la série de la dernière saisie', () => {
+  const suggestion = suggererNumeroSuivant([
+    saisie('FAC-2026-017', '2026-07-01T10:00:00Z'),
+    saisie('FAC-2026-018', '2026-07-02T10:00:00Z'),
+    saisie('DEVIS-99', '2026-01-01T10:00:00Z') // série plus ancienne : ignorée
+  ]);
+  assert.equal(suggestion, 'FAC-2026-019');
+});
+
+test('suggererNumeroSuivant respecte le remplissage par zéros', () => {
+  assert.equal(suggererNumeroSuivant([
+    saisie('F001', '2026-01-01T10:00:00Z'),
+    saisie('F009', '2026-01-02T10:00:00Z')
+  ]), 'F010');
+});
+
+test('suggererNumeroSuivant reprend le maximum de la série, pas la dernière saisie', () => {
+  assert.equal(suggererNumeroSuivant([
+    saisie('A-50', '2026-01-02T10:00:00Z'),
+    saisie('A-49', '2026-01-03T10:00:00Z') // saisie après coup, mais 50 existe
+  ]), 'A-51');
+});
+
+test('suggererNumeroSuivant vaut null sans numéro exploitable', () => {
+  assert.equal(suggererNumeroSuivant([]), null);
+  assert.equal(suggererNumeroSuivant([saisie('', '2026-01-01T10:00:00Z')]), null);
+  // Sans partie numérique finale, rien à incrémenter.
+  assert.equal(suggererNumeroSuivant([saisie('CLIENT-X', '2026-01-01T10:00:00Z')]), null);
 });

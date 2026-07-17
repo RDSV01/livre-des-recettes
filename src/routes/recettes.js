@@ -9,92 +9,32 @@
 import express from 'express';
 import { validerRecette } from '../validation.js';
 import { estDoublon } from '../partage/doublons.js';
-import { comparerParDateDesc, filtrerParPeriode } from '../totaux.js';
-import { normaliserTexte } from '../partage/texte.js';
-import { analyserMontant, enCentimes } from '../partage/montants.js';
+import { comparerParDateDesc } from '../totaux.js';
 import { anneeDe } from '../partage/dates.js';
 
 const IMPORT_MAX_LIGNES = 10_000;
 
-/** Entier positif d'un paramètre de requête, ou `undefined`. */
-function entier(valeur) {
-  const n = Number.parseInt(valeur, 10);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
-}
-
-/**
- * Une recette correspond-elle à la recherche libre ?
- * On cherche dans le client, le libellé et le numéro de facture (sans tenir
- * compte de la casse ni des accents) ; si la saisie ressemble à un montant,
- * on cherche aussi l'égalité exacte du montant.
- */
-function correspondRecherche(recette, recherche) {
-  const aiguille = normaliserTexte(recherche);
-  const botteDeFoin = [recette.client, recette.libelle, recette.numeroFacture]
-    .map(normaliserTexte)
-    .join(' | ');
-  if (botteDeFoin.includes(aiguille)) return true;
-
-  const montant = analyserMontant(recherche);
-  return montant !== null && enCentimes(montant) === enCentimes(recette.montant);
-}
-
 export function routesRecettes(stockage) {
   const routeur = express.Router();
 
-  /** Contexte de validation courant : modes personnalisés et type d'activité. */
-  const contexteValidation = () => {
-    const { modesPersonnalises, typeActivite } = stockage.obtenirParametres();
-    return { modesPersonnalises, typeActivite };
-  };
+  /** Modes personnalisés courants, à passer à la validation. */
+  const modesPersonnalises = () => stockage.obtenirParametres().modesPersonnalises;
 
-  // Liste filtrée : GET /api/recettes?annee=2026&mois=7&mode=virement&q=dupont
+  // Liste complète, triée par date décroissante. Le filtrage et la recherche
+  // se font côté navigateur (`partage/filtres.js`) : une seule requête suffit.
   routeur.get('/', (req, res) => {
-    let recettes = filtrerParPeriode(stockage.listerRecettes(), {
-      annee: entier(req.query.annee),
-      mois: entier(req.query.mois)
-    });
-    if (req.query.mode) {
-      recettes = recettes.filter((r) => r.modeReglement === req.query.mode);
-    }
-    const recherche = String(req.query.q ?? '').trim();
-    if (recherche) {
-      recettes = recettes.filter((r) => correspondRecherche(r, recherche));
-    }
-    recettes.sort(comparerParDateDesc);
-    res.json({ recettes });
+    res.json({ recettes: stockage.listerRecettes().sort(comparerParDateDesc) });
   });
 
-  // Années présentes dans le livre (pour les filtres et les exports).
+  // Années présentes dans le livre (pour les exports, l'URSSAF, le tableau de bord).
   routeur.get('/annees', (req, res) => {
     const annees = [...new Set(stockage.listerRecettes().map((r) => anneeDe(r.dateEncaissement)))]
       .sort((a, b) => b - a);
     res.json({ annees });
   });
 
-  /**
-   * Libellés déjà utilisés, pour l'auto-complétion à la saisie :
-   * sans doublon (insensible à la casse), du plus fréquent au moins fréquent
-   * puis par ordre alphabétique.
-   */
-  routeur.get('/libelles', (req, res) => {
-    const frequences = new Map();
-    for (const recette of stockage.listerRecettes()) {
-      const libelle = String(recette.libelle ?? '').trim();
-      if (!libelle) continue;
-      const cle = normaliserTexte(libelle);
-      const entree = frequences.get(cle) ?? { libelle, total: 0 };
-      entree.total += 1;
-      frequences.set(cle, entree);
-    }
-    const libelles = [...frequences.values()]
-      .sort((a, b) => b.total - a.total || a.libelle.localeCompare(b.libelle, 'fr'))
-      .map((e) => e.libelle);
-    res.json({ libelles });
-  });
-
   routeur.post('/', (req, res) => {
-    const { erreurs, valeurs } = validerRecette(req.body, contexteValidation());
+    const { erreurs, valeurs } = validerRecette(req.body, modesPersonnalises());
     if (erreurs) return res.status(400).json({ erreurs });
     res.status(201).json({ recette: stockage.ajouterRecette(valeurs) });
   });
@@ -115,14 +55,14 @@ export function routesRecettes(stockage) {
       return res.status(400).json({ erreur: `Import limité à ${IMPORT_MAX_LIGNES} lignes à la fois.` });
     }
 
-    const contexte = contexteValidation();
+    const modes = modesPersonnalises();
     const existantes = stockage.listerRecettes();
     const valides = [];
     const doublons = [];
     const erreurs = [];
 
     lignes.forEach((entree, index) => {
-      const resultat = validerRecette(entree, contexte);
+      const resultat = validerRecette(entree, modes);
       if (resultat.erreurs) {
         erreurs.push({ ligne: index + 1, erreurs: resultat.erreurs });
         return;
@@ -162,7 +102,7 @@ export function routesRecettes(stockage) {
   });
 
   routeur.put('/:id', (req, res) => {
-    const { erreurs, valeurs } = validerRecette(req.body, contexteValidation());
+    const { erreurs, valeurs } = validerRecette(req.body, modesPersonnalises());
     if (erreurs) return res.status(400).json({ erreurs });
     const recette = stockage.modifierRecette(req.params.id, valeurs);
     if (!recette) return res.status(404).json({ erreur: 'Recette introuvable.' });

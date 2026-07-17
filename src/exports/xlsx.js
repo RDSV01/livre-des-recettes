@@ -2,19 +2,19 @@
  * Export Excel (.xlsx) du registre, généré avec ExcelJS.
  *
  * La feuille reprend les colonnes légales, ajoute un bloc d'identité de
- * l'entreprise en tête, met les totaux mensuels et annuel en évidence et
- * fige la ligne d'en-tête pour faciliter la lecture.
+ * l'entreprise en tête, met les totaux mensuels et annuel en évidence
+ * (ventilation ventes / prestations en italique pour une activité mixte)
+ * et fige la ligne d'en-tête pour faciliter la lecture.
  */
 
 import ExcelJS from 'exceljs';
-import { ENTETES_REGISTRE } from './registre.js';
+import { entetesRegistre, libelleCategorieCourt } from './registre.js';
 import { formaterDate } from '../partage/dates.js';
 import { libelleMode } from '../partage/constantes.js';
 import { symboleDevise } from '../partage/montants.js';
 
 const COULEUR_ENTETE = 'FFE9EDF5';
 const COULEUR_TOTAL = 'FFF3F5FA';
-const LARGEURS_COLONNES = [24, 30, 14, 20, 20, 45];
 
 /** Génère le classeur ; l'appelant l'écrit où il veut (`classeur.xlsx.write(...)`). */
 export async function genererXlsx(registre, parametres) {
@@ -22,8 +22,10 @@ export async function genererXlsx(registre, parametres) {
   classeur.creator = 'Livre des recettes';
   classeur.created = new Date();
 
+  const entetes = entetesRegistre(registre.ventiler);
   const feuille = classeur.addWorksheet('Livre des recettes');
-  feuille.columns = LARGEURS_COLONNES.map((largeur) => ({ width: largeur }));
+  const largeurs = [24, 30, 14, 20, 20, ...(registre.ventiler ? [14] : []), 45];
+  feuille.columns = largeurs.map((largeur) => ({ width: largeur }));
 
   // ---- Bloc d'identité -----------------------------------------------------
   if (parametres.nomEntreprise) {
@@ -47,7 +49,7 @@ export async function genererXlsx(registre, parametres) {
   feuille.addRow([]);
 
   // ---- En-tête du tableau --------------------------------------------------
-  const enTete = feuille.addRow(ENTETES_REGISTRE);
+  const enTete = feuille.addRow(entetes);
   enTete.eachCell((cellule) => {
     cellule.font = { bold: true, size: 10 };
     cellule.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COULEUR_ENTETE } };
@@ -57,6 +59,7 @@ export async function genererXlsx(registre, parametres) {
 
   // ---- Lignes du registre --------------------------------------------------
   const formatMontant = `#,##0.00 "${symboleDevise(parametres.devise)}"`;
+  const completer = (valeurs) => valeurs.concat(Array(entetes.length - valeurs.length).fill(''));
 
   for (const ligne of registre.lignes) {
     if (ligne.type === 'recette') {
@@ -67,18 +70,24 @@ export async function genererXlsx(registre, parametres) {
         r.montant,
         libelleMode(r.modeReglement, parametres.modesPersonnalises),
         r.numeroFacture,
+        ...(registre.ventiler ? [libelleCategorieCourt(r.categorie)] : []),
         r.libelle
       ]);
       rangee.getCell(3).numFmt = formatMontant;
-    } else {
-      const rangee = feuille.addRow([ligne.libelle, '', ligne.montant, '', '', '']);
+    } else if (ligne.type === 'total') {
+      const rangee = feuille.addRow(completer([ligne.libelle, '', ligne.montant]));
       rangee.font = { bold: true };
       rangee.getCell(3).numFmt = formatMontant;
       rangee.eachCell({ includeEmpty: true }, (cellule, colonne) => {
-        if (colonne <= ENTETES_REGISTRE.length) {
+        if (colonne <= entetes.length) {
           cellule.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COULEUR_TOTAL } };
         }
       });
+    } else {
+      // Ventilation « dont … » : discrète, en italique.
+      const rangee = feuille.addRow(completer([ligne.libelle, '', ligne.montant]));
+      rangee.font = { italic: true, size: 10 };
+      rangee.getCell(3).numFmt = formatMontant;
     }
   }
 

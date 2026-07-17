@@ -11,6 +11,7 @@
  */
 
 import PDFDocument from 'pdfkit';
+import { libelleCategorieCourt } from './registre.js';
 import { formaterDate } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
 import { libelleMode } from '../partage/constantes.js';
@@ -24,16 +25,31 @@ const COULEUR_FOND_ENTETE = '#e9edf5';
 const COULEUR_FOND_TOTAL = '#f3f5fa';
 const COULEUR_BORDURE = '#d7dbe4';
 
-/** Colonnes du tableau (l'ordre suit le registre légal). Total : 760 pt. */
-const COLONNES = [
-  { titre: 'Date', largeur: 70 },
-  { titre: 'Client', largeur: 145, align: 'left' },
-  { titre: 'Montant', largeur: 85, align: 'right' },
-  { titre: 'Mode de règlement', largeur: 105 },
-  { titre: 'N° de facture', largeur: 100 },
-  { titre: 'Libellé', largeur: 255 }
-];
-const LARGEUR_TABLEAU = COLONNES.reduce((acc, c) => acc + c.largeur, 0);
+/**
+ * Colonnes du tableau (l'ordre suit le registre légal), pour un total de
+ * 760 pt. La colonne Catégorie n'apparaît que pour un registre ventilé
+ * (activité mixte).
+ */
+function colonnesRegistre(ventiler) {
+  return ventiler
+    ? [
+      { titre: 'Date', largeur: 70 },
+      { titre: 'Client', largeur: 125 },
+      { titre: 'Montant', largeur: 80, align: 'right' },
+      { titre: 'Mode de règlement', largeur: 95 },
+      { titre: 'N° de facture', largeur: 90 },
+      { titre: 'Catégorie', largeur: 75 },
+      { titre: 'Libellé', largeur: 225 }
+    ]
+    : [
+      { titre: 'Date', largeur: 70 },
+      { titre: 'Client', largeur: 145 },
+      { titre: 'Montant', largeur: 85, align: 'right' },
+      { titre: 'Mode de règlement', largeur: 105 },
+      { titre: 'N° de facture', largeur: 100 },
+      { titre: 'Libellé', largeur: 255 }
+    ];
+}
 
 /** Remplace les caractères hors encodage WinAnsi par des équivalents sûrs. */
 function texteSur(texte) {
@@ -45,6 +61,9 @@ function texteSur(texte) {
  * Le flux est clôturé par PDFKit à la fin de la génération.
  */
 export function genererPdf(registre, parametres, flux) {
+  const COLONNES = colonnesRegistre(registre.ventiler);
+  const LARGEUR_TABLEAU = COLONNES.reduce((acc, c) => acc + c.largeur, 0);
+
   const doc = new PDFDocument({
     size: 'A4',
     layout: 'landscape',
@@ -136,21 +155,24 @@ export function genererPdf(registre, parametres, flux) {
   }
 
   /**
-   * Dessine une ligne de total : le libellé s'étale sur les colonnes Date et
-   * Client (la colonne Date seule est trop étroite), le montant s'aligne
-   * avec la colonne Montant.
+   * Dessine une ligne de total (gras sur fond grisé) ou de ventilation
+   * « dont … » (italique, en retrait) : le libellé s'étale sur les colonnes
+   * Date et Client, le montant s'aligne avec la colonne Montant.
    */
-  function ligneTotal(libelle, montant) {
-    doc.font('Helvetica-Bold').fontSize(TAILLE_TEXTE);
-    const largeurLibelle = COLONNES[0].largeur + COLONNES[1].largeur - REMPLISSAGE_CELLULE * 2;
+  function ligneTotal(libelle, montant, { ventilation = false } = {}) {
+    doc.font(ventilation ? 'Helvetica-Oblique' : 'Helvetica-Bold').fontSize(TAILLE_TEXTE);
+    const retrait = ventilation ? 14 : 0;
+    const largeurLibelle = COLONNES[0].largeur + COLONNES[1].largeur - REMPLISSAGE_CELLULE * 2 - retrait;
     const hauteur = Math.max(16, doc.heightOfString(libelle, { width: largeurLibelle })) +
       REMPLISSAGE_CELLULE * 2;
 
     assurerPlace(hauteur);
     const y = doc.y;
-    doc.rect(MARGE, y, LARGEUR_TABLEAU, hauteur).fill(COULEUR_FOND_TOTAL);
+    if (!ventilation) {
+      doc.rect(MARGE, y, LARGEUR_TABLEAU, hauteur).fill(COULEUR_FOND_TOTAL);
+    }
     doc.fillColor(COULEUR_TEXTE);
-    doc.text(libelle, MARGE + REMPLISSAGE_CELLULE, y + REMPLISSAGE_CELLULE, { width: largeurLibelle });
+    doc.text(libelle, MARGE + REMPLISSAGE_CELLULE + retrait, y + REMPLISSAGE_CELLULE, { width: largeurLibelle });
     doc.text(
       texteSur(formaterMontant(montant, parametres.devise)),
       MARGE + COLONNES[0].largeur + COLONNES[1].largeur + REMPLISSAGE_CELLULE,
@@ -177,10 +199,11 @@ export function genererPdf(registre, parametres, flux) {
           texteSur(formaterMontant(r.montant, parametres.devise)),
           texteSur(libelleMode(r.modeReglement, parametres.modesPersonnalises)),
           texteSur(r.numeroFacture),
+          ...(registre.ventiler ? [libelleCategorieCourt(r.categorie)] : []),
           texteSur(r.libelle)
         ]);
       } else {
-        ligneTotal(ligne.libelle, ligne.montant);
+        ligneTotal(ligne.libelle, ligne.montant, { ventilation: ligne.type === 'ventilation' });
       }
     }
   }

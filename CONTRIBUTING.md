@@ -64,9 +64,10 @@ Prérequis : Node.js >= 18. Les données de développement vivent dans `data/`
 - **Registre légal** : les exports se limitent aux six colonnes officielles
   (date, client, libellé, facture, mode de règlement, montant). La seule donnée
   interne supplémentaire d'une recette est sa catégorie vente / prestation
-  (suivi des seuils et ventilation URSSAF des activités mixtes) ; elle
-  n'apparaît jamais dans les exports. N'ajoutez pas d'autre champ « pour faire
-  joli » : cela alourdirait un outil qui se veut minimal.
+  (suivi des seuils et ventilation URSSAF), elle n'apparaît dans les exports
+  que pour les activités mixtes (colonne Catégorie et sous-totaux). N'ajoutez
+  pas d'autre champ « pour faire joli » : cela alourdirait un outil qui se veut
+  minimal.
 - **Seuils légaux** (plafond micro, franchise de TVA) : uniquement dans
   `src/partage/seuils.js`, avec leur année de validité. Aucune valeur de seuil
   en dur ailleurs.

@@ -5,6 +5,24 @@ application locale, légère et simple. Chaque évolution est jugée à cette au
 
 ## Déjà livré
 
+### v1.2
+
+- Exports ventilés pour les activités mixtes : colonne Catégorie et sous-totaux
+  « dont ventes / dont prestations » sous chaque total.
+- Sélection multiple dans les recettes : suppression et reclassement groupés
+  (annulables), filtre « non catégorisées ».
+- Vérification de la clé de contrôle des SIREN / SIRET (fautes de frappe
+  détectées avant tout appel à l'annuaire).
+- Suggestion du prochain numéro de facture, dans la série de l'utilisateur.
+- Rappel de déclaration URSSAF sur le tableau de bord, selon la
+  périodicité choisie.
+- Première utilisation guidée : l'application s'ouvre sur les paramètres.
+- Garde-fou avant d'abandonner un formulaire de recette.
+- Sauvegardes conservées un an (quotidiennes 14 jours, puis hebdomadaires
+  2 mois, puis mensuelles), verrou contre les doubles lancements.
+- Chargement des recettes en une seule requête, affichage progressif au-delà
+  de 200 lignes.
+
 ### v1.1
 
 - Suivi des seuils sur le tableau de bord : plafond micro-entrepreneur et franchise en base de TVA,

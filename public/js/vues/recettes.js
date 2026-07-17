@@ -1,17 +1,24 @@
 /**
  * Vue « Recettes » : tableau principal du livre, recherche, filtres, tri par
- * colonne, colonnes redimensionnables, et formulaire d'ajout / modification.
+ * colonne, sélection multiple et formulaire d'ajout / modification.
+ *
+ * La liste complète est chargée une seule fois puis filtrée en mémoire
+ * (`partage/filtres.js`) : aucune requête au serveur à chaque frappe.
+ * Au-delà de 200 lignes, l'affichage est progressif (« Afficher plus »).
  *
  * Aides à la saisie :
  *  - choix du client dans un menu (ou nouveau client par SIRET / nom) ;
  *  - auto-complétion des libellés déjà utilisés ;
+ *  - suggestion du prochain numéro de facture (série reconnue) ;
  *  - montant toléré sous toutes ses écritures (« 12,5 » devient 12,50) ;
  *  - avertissement non bloquant si une recette très similaire existe déjà ;
  *  - duplication d'une recette en un clic (paiements récurrents), la date
  *    étant remise à aujourd'hui ;
- *  - catégorie vente / prestation demandée quand l'activité est mixte ;
+ *  - catégorie vente / prestation demandée quand l'activité est mixte, avec
+ *    reclassement groupé via la sélection multiple ;
+ *  - garde-fou avant d'abandonner un formulaire modifié ;
  *  - signalement discret des anomalies de numérotation des factures ;
- *  - chaque ajout / modification / suppression est annulable (Ctrl+Z).
+ *  - chaque action (y compris groupée) est annulable (Ctrl+Z).
  */
 
 import { api } from '../api.js';
@@ -23,13 +30,15 @@ import {
 import { icone } from '../icones.js';
 import { enregistrerAction } from '../historique.js';
 import { formaterMontant, sommeMontants, analyserMontant, enCentimes } from '/partage/montants.js';
-import { formaterDate, aujourdHuiIso, NOMS_MOIS } from '/partage/dates.js';
+import { formaterDate, aujourdHuiIso, anneeDe, NOMS_MOIS } from '/partage/dates.js';
 import { MODES_REGLEMENT, CATEGORIES_RECETTE, libelleMode } from '/partage/constantes.js';
 import { normaliserTexte } from '/partage/texte.js';
 import { chercherSimilaire } from '/partage/doublons.js';
-import { analyserNumerotation } from '/partage/factures.js';
+import { analyserNumerotation, suggererNumeroSuivant } from '/partage/factures.js';
+import { filtrerRecettes, libellesFrequents } from '/partage/filtres.js';
 
 const OPTION_NOUVEAU = '__nouveau__';
+const LIMITE_AFFICHAGE = 200;
 
 /** Un identifiant d'entreprise : SIREN (9 chiffres) ou SIRET (14 chiffres). */
 const estIdentifiant = (valeur) => /^\d{9}$|^\d{14}$/.test(valeur);
@@ -65,16 +74,19 @@ export async function vueRecettes(conteneur, params) {
   const { devise, formatDate, modesPersonnalises } = etat.parametres;
   const modes = MODES_REGLEMENT.concat(modesPersonnalises);
   const estMixte = etat.parametres.typeActivite === 'mixte';
-  const filtres = { q: '', annee: '', mois: '', mode: '' };
+  const filtres = { q: '', annee: '', mois: '', mode: '', categorie: '' };
   const tri = { colonne: 'date', sens: 'desc' };
-  let recettes = [];       // liste filtrée, affichée dans le tableau
-  let toutes = [];         // liste complète (anomalies, détection de similarité)
-  let clients = [];
-  let libelles = [];       // libellés existants, pour les suggestions à la saisie
-  let enEdition = null;    // recette en cours de modification, ou null pour un ajout
-  let siretResolu = null;  // { requete, siret, nom } mémorisé après une recherche réussie
-  let dejaAverti = false;  // l'avertissement « recette similaire » a déjà été montré
-  let categorieSource = ''; // catégorie conservée quand le champ n'est pas affiché
+  const selection = new Set(); // identifiants des recettes cochées
+  let toutes = [];             // liste complète, source de tout le reste
+  let affichees = [];          // liste filtrée et triée (avant pagination)
+  let idsVisibles = [];        // identifiants des lignes réellement affichées
+  let libelles = [];           // libellés existants, pour les suggestions
+  let montrerTout = false;     // affichage au-delà de LIMITE_AFFICHAGE
+  let enEdition = null;        // recette en cours de modification, ou null
+  let siretResolu = null;      // { requete, siret, nom } après une recherche réussie
+  let dejaAverti = false;      // avertissement « recette similaire » déjà montré
+  let categorieSource = '';    // catégorie conservée quand le champ n'est pas affiché
+  let instantaneInitial = '';  // état du formulaire à l'ouverture (garde-fou)
 
   conteneur.innerHTML = gabarit();
 
@@ -83,12 +95,17 @@ export async function vueRecettes(conteneur, params) {
     annee: conteneur.querySelector('#filtre-annee'),
     mois: conteneur.querySelector('#filtre-mois'),
     mode: conteneur.querySelector('#filtre-mode'),
+    categorie: conteneur.querySelector('#filtre-categorie'),
     reinitialiser: conteneur.querySelector('#reinitialiser-filtres'),
     resume: conteneur.querySelector('#resume-filtre'),
     anomalies: conteneur.querySelector('#zone-anomalies'),
+    barreSelection: conteneur.querySelector('#barre-selection'),
+    compteSelection: conteneur.querySelector('#compte-selection'),
+    toutSelectionner: conteneur.querySelector('#tout-selectionner'),
     entetes: conteneur.querySelector('#table-recettes thead'),
     corps: conteneur.querySelector('#corps-recettes'),
     suggestions: conteneur.querySelector('#suggestions-libelle'),
+    suggestionFacture: conteneur.querySelector('#suggestion-facture'),
     dialogue: conteneur.querySelector('#dialogue-recette'),
     formulaire: conteneur.querySelector('#formulaire-recette'),
     titreDialogue: conteneur.querySelector('#titre-dialogue-recette'),
@@ -99,25 +116,32 @@ export async function vueRecettes(conteneur, params) {
     avertissement: conteneur.querySelector('#avertissement-similaire'),
     enregistrer: conteneur.querySelector('#enregistrer-recette')
   };
+  let clients = [];
 
   // ---- Filtres ---------------------------------------------------------------
+  const changerFiltres = () => {
+    montrerTout = false;
+    selection.clear();
+    rendreTableau();
+  };
   refs.recherche.addEventListener('input', differer(() => {
     filtres.q = refs.recherche.value.trim();
-    charger();
+    changerFiltres();
   }));
-  for (const nom of ['annee', 'mois', 'mode']) {
-    refs[nom].addEventListener('change', () => {
+  for (const nom of ['annee', 'mois', 'mode', 'categorie']) {
+    refs[nom]?.addEventListener('change', () => {
       filtres[nom] = refs[nom].value;
-      charger();
+      changerFiltres();
     });
   }
   refs.reinitialiser.addEventListener('click', () => {
-    Object.assign(filtres, { q: '', annee: '', mois: '', mode: '' });
+    Object.assign(filtres, { q: '', annee: '', mois: '', mode: '', categorie: '' });
     refs.recherche.value = '';
     refs.annee.value = '';
     refs.mois.value = '';
     refs.mode.value = '';
-    charger();
+    if (refs.categorie) refs.categorie.value = '';
+    changerFiltres();
   });
 
   // ---- Tri par colonne ---------------------------------------------------------
@@ -142,11 +166,111 @@ export async function vueRecettes(conteneur, params) {
     });
   }
 
-  // ---- Actions du tableau (délégation d'événements) ---------------------------
+  // ---- Sélection multiple --------------------------------------------------------
+  refs.corps.addEventListener('change', (evenement) => {
+    const case_ = evenement.target.closest('input[data-selection]');
+    if (!case_) return;
+    if (case_.checked) selection.add(case_.dataset.selection);
+    else selection.delete(case_.dataset.selection);
+    majSelection();
+  });
+
+  refs.toutSelectionner.addEventListener('change', () => {
+    if (refs.toutSelectionner.checked) {
+      idsVisibles.forEach((id) => selection.add(id));
+    } else {
+      idsVisibles.forEach((id) => selection.delete(id));
+    }
+    refs.corps.querySelectorAll('input[data-selection]').forEach((c) => {
+      c.checked = selection.has(c.dataset.selection);
+    });
+    majSelection();
+  });
+
+  function majSelection() {
+    const nombre = selection.size;
+    refs.barreSelection.hidden = nombre === 0;
+    refs.compteSelection.textContent = `${nombre} recette${nombre > 1 ? 's' : ''} sélectionnée${nombre > 1 ? 's' : ''}`;
+    refs.toutSelectionner.checked = idsVisibles.length > 0 && idsVisibles.every((id) => selection.has(id));
+  }
+
+  const recettesSelectionnees = () => toutes.filter((r) => selection.has(r.id));
+
+  conteneur.querySelector('#deselectionner').addEventListener('click', () => {
+    selection.clear();
+    refs.corps.querySelectorAll('input[data-selection]').forEach((c) => { c.checked = false; });
+    majSelection();
+  });
+
+  conteneur.querySelector('#supprimer-selection').addEventListener('click', async () => {
+    const cibles = recettesSelectionnees();
+    if (cibles.length === 0) return;
+    const total = sommeMontants(cibles.map((r) => r.montant));
+    const accord = await confirmer({
+      titre: `Supprimer ${cibles.length} recette${cibles.length > 1 ? 's' : ''} ?`,
+      message: `Total : ${formaterMontant(total, devise)}. Ctrl+Z permet d'annuler.`
+    });
+    if (!accord) return;
+    try {
+      for (const recette of cibles) await api.supprimerRecette(recette.id);
+      const donnees = cibles.map(champsRecette);
+      let ids = cibles.map((r) => r.id);
+      enregistrerAction({
+        annuler: async () => {
+          ids = [];
+          for (const d of donnees) ids.push((await api.creerRecette(d)).recette.id);
+        },
+        retablir: async () => { for (const id of ids) await api.supprimerRecette(id); }
+      });
+      toast(`${cibles.length} recette${cibles.length > 1 ? 's' : ''} supprimée${cibles.length > 1 ? 's' : ''}.`);
+      selection.clear();
+      await rafraichir();
+    } catch (erreur) {
+      toast(erreur.message, 'erreur');
+    }
+  });
+
+  // Reclassement groupé (activité mixte) : vente ou prestation.
+  conteneur.querySelectorAll('[data-classer]').forEach((bouton) => {
+    bouton.addEventListener('click', async () => {
+      const categorie = bouton.dataset.classer;
+      const cibles = recettesSelectionnees().filter((r) => r.categorie !== categorie);
+      if (cibles.length === 0) {
+        toast('Les recettes sélectionnées sont déjà dans cette catégorie.');
+        return;
+      }
+      try {
+        const changements = cibles.map((r) => ({
+          id: r.id,
+          avant: champsRecette(r),
+          apres: { ...champsRecette(r), categorie }
+        }));
+        for (const c of changements) await api.modifierRecette(c.id, c.apres);
+        enregistrerAction({
+          annuler: async () => { for (const c of changements) await api.modifierRecette(c.id, c.avant); },
+          retablir: async () => { for (const c of changements) await api.modifierRecette(c.id, c.apres); }
+        });
+        toast(`${cibles.length} recette${cibles.length > 1 ? 's' : ''} reclassée${cibles.length > 1 ? 's' : ''}.`);
+        selection.clear();
+        await rafraichir();
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
+    });
+  });
+
+  // ---- Actions par ligne (délégation d'événements) -----------------------------
   refs.corps.addEventListener('click', async (evenement) => {
     const bouton = evenement.target.closest('[data-action]');
     if (!bouton) return;
-    const recette = recettes.find((r) => r.id === bouton.dataset.id);
+
+    if (bouton.dataset.action === 'afficher-plus') {
+      montrerTout = true;
+      rendreTableau();
+      return;
+    }
+
+    const recette = toutes.find((r) => r.id === bouton.dataset.id);
     if (!recette) return;
 
     if (bouton.dataset.action === 'modifier') {
@@ -250,12 +374,46 @@ export async function vueRecettes(conteneur, params) {
 
   // ---- Formulaire -------------------------------------------------------------
   conteneur.querySelector('#nouvelle-recette').addEventListener('click', () => ouvrirFormulaire());
-  conteneur.querySelector('#annuler-recette').addEventListener('click', () => refs.dialogue.close());
+
+  // Garde-fou : abandonner un formulaire modifié demande confirmation.
+  const lireInstantane = () => {
+    const f = refs.formulaire;
+    return JSON.stringify([
+      f.dateEncaissement.value, refs.clientSelect.value, refs.clientNouveau.value,
+      f.montant.value, f.modeReglement.value, f.numeroFacture.value, f.libelle.value,
+      estMixte ? f.categorie.value : ''
+    ]);
+  };
+  async function fermerFormulaire() {
+    if (lireInstantane() !== instantaneInitial) {
+      const accord = await confirmer({
+        titre: 'Abandonner cette saisie ?',
+        message: 'Les informations du formulaire seront perdues.',
+        boutonOk: 'Abandonner'
+      });
+      if (!accord) return;
+    }
+    refs.dialogue.close();
+  }
+  conteneur.querySelector('#annuler-recette').addEventListener('click', fermerFormulaire);
+  refs.dialogue.addEventListener('cancel', (evenement) => {
+    evenement.preventDefault();
+    fermerFormulaire();
+  });
 
   // « 12,5 » devient « 12,50 » dès que l'on quitte le champ montant.
   refs.formulaire.montant.addEventListener('blur', () => {
     const brut = refs.formulaire.montant.value.trim();
     if (brut) refs.formulaire.montant.value = formaterChampMontant(brut);
+  });
+
+  // Suggestion du prochain numéro de facture : un clic la reprend.
+  refs.suggestionFacture.addEventListener('click', () => {
+    refs.formulaire.numeroFacture.value = refs.suggestionFacture.dataset.valeur;
+    refs.suggestionFacture.hidden = true;
+  });
+  refs.formulaire.numeroFacture.addEventListener('input', () => {
+    refs.suggestionFacture.hidden = true;
   });
 
   // ---- Suggestions de libellé (liste maison, sans composant natif) --------------
@@ -320,10 +478,19 @@ export async function vueRecettes(conteneur, params) {
     return fermer;
   }
 
+  // ---- Enregistrement -----------------------------------------------------------
   refs.formulaire.addEventListener('submit', async (evenement) => {
     evenement.preventDefault();
     effacerErreursFormulaire(refs.formulaire);
     const f = refs.formulaire;
+
+    // Activité mixte : la catégorie est exigée à la saisie.
+    if (estMixte && !f.categorie.value) {
+      return afficherErreursFormulaire(f, {
+        categorie: 'Précisez s’il s’agit d’une vente ou d’une prestation.'
+      });
+    }
+
     let client;
     try {
       client = await resoudreClient();
@@ -396,8 +563,7 @@ export async function vueRecettes(conteneur, params) {
 
   /**
    * Ouvre le formulaire : vide (ajout), prérempli pour modification, ou
-   * prérempli depuis un `modele` (reprise de la dernière recette, avec la
-   * date remise à aujourd'hui).
+   * prérempli depuis un `modele` (duplication, avec la date du jour).
    */
   function ouvrirFormulaire(recette = null, modele = null) {
     enEdition = recette;
@@ -419,6 +585,14 @@ export async function vueRecettes(conteneur, params) {
     categorieSource = source?.categorie ?? '';
     if (estMixte) f.categorie.value = categorieSource;
 
+    // Suggestion du prochain numéro de facture, pour une nouvelle recette.
+    const suggestion = recette ? null : suggererNumeroSuivant(toutes);
+    refs.suggestionFacture.hidden = !suggestion;
+    if (suggestion) {
+      refs.suggestionFacture.dataset.valeur = suggestion;
+      refs.suggestionFacture.textContent = `Suggestion : ${suggestion}`;
+    }
+
     // Client : préselectionne l'existant si le nom correspond, sinon « Nouveau ».
     remplirSelectClients();
     refs.clientResolu.hidden = true;
@@ -433,6 +607,7 @@ export async function vueRecettes(conteneur, params) {
       if (source) refs.clientNouveau.value = source.client;
     }
 
+    instantaneInitial = lireInstantane();
     refs.dialogue.showModal();
     f.dateEncaissement.focus();
   }
@@ -447,30 +622,13 @@ export async function vueRecettes(conteneur, params) {
   }
 
   // ---- Chargement des données ---------------------------------------------------
-  async function charger() {
-    const reponse = await api.listerRecettes(filtres);
-    recettes = reponse.recettes;
-    rendreTableau();
-  }
-
-  /** Recharge la liste complète : anomalies et détection de similarité. */
-  async function chargerTout() {
-    const reponse = await api.listerRecettes({});
+  async function chargerRecettes() {
+    const reponse = await api.listerRecettes();
     toutes = reponse.recettes;
+    libelles = libellesFrequents(toutes);
+    rendreAnnees();
     rendreAnomalies();
-  }
-
-  async function chargerAnnees() {
-    const { annees } = await api.listerAnnees();
-    const valeurActuelle = filtres.annee;
-    refs.annee.innerHTML = '<option value="">Toutes</option>' +
-      annees.map((a) => `<option value="${a}">${a}</option>`).join('');
-    refs.annee.value = annees.includes(Number(valeurActuelle)) ? valeurActuelle : '';
-  }
-
-  async function chargerLibelles() {
-    const reponse = await api.listerLibelles();
-    libelles = reponse.libelles;
+    rendreTableau();
   }
 
   async function chargerClients() {
@@ -480,7 +638,15 @@ export async function vueRecettes(conteneur, params) {
 
   /** Tout recharger après une écriture (création, modification, suppression). */
   function rafraichir() {
-    return Promise.all([charger(), chargerAnnees(), chargerTout(), chargerLibelles(), chargerClients()]);
+    return Promise.all([chargerRecettes(), chargerClients()]);
+  }
+
+  function rendreAnnees() {
+    const annees = [...new Set(toutes.map((r) => anneeDe(r.dateEncaissement)))].sort((a, b) => b - a);
+    refs.annee.innerHTML = '<option value="">Toutes</option>' +
+      annees.map((a) => `<option value="${a}">${a}</option>`).join('');
+    refs.annee.value = annees.includes(Number(filtres.annee)) ? filtres.annee : '';
+    filtres.annee = refs.annee.value;
   }
 
   function rendreAnomalies() {
@@ -516,32 +682,40 @@ export async function vueRecettes(conteneur, params) {
   }
 
   function rendreTableau() {
-    const total = sommeMontants(recettes.map((r) => r.montant));
-    refs.resume.textContent = recettes.length === 0
-      ? 'Aucune recette ne correspond.'
-      : `${recettes.length} recette${recettes.length > 1 ? 's' : ''} (${formaterMontant(total, devise)})`;
-
-    rendreIndicateursTri();
-
-    if (recettes.length === 0) {
-      refs.corps.innerHTML = `
-        <tr class="ligne-vide"><td colspan="7">
-          Aucune recette à afficher. Ajoutez-en une avec « Nouvelle recette ».
-        </td></tr>`;
-      return;
-    }
-
     const cle = CLES_TRI[tri.colonne];
     const facteur = tri.sens === 'asc' ? 1 : -1;
-    const triees = [...recettes].sort((a, b) => {
+    affichees = filtrerRecettes(toutes, filtres).sort((a, b) => {
       const va = cle(a, modesPersonnalises);
       const vb = cle(b, modesPersonnalises);
       const ordre = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'fr');
       return ordre * facteur;
     });
 
-    refs.corps.innerHTML = triees.map((r) => `
+    const total = sommeMontants(affichees.map((r) => r.montant));
+    refs.resume.textContent = affichees.length === 0
+      ? 'Aucune recette ne correspond.'
+      : `${affichees.length} recette${affichees.length > 1 ? 's' : ''} (${formaterMontant(total, devise)})`;
+
+    rendreIndicateursTri();
+
+    if (affichees.length === 0) {
+      idsVisibles = [];
+      refs.corps.innerHTML = `
+        <tr class="ligne-vide"><td colspan="8">
+          Aucune recette à afficher. Ajoutez-en une avec « Nouvelle recette ».
+        </td></tr>`;
+      majSelection();
+      return;
+    }
+
+    const visibles = montrerTout ? affichees : affichees.slice(0, LIMITE_AFFICHAGE);
+    idsVisibles = visibles.map((r) => r.id);
+    const restantes = affichees.length - visibles.length;
+
+    refs.corps.innerHTML = visibles.map((r) => `
       <tr>
+        <td class="col-case"><input type="checkbox" data-selection="${r.id}"
+          ${selection.has(r.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
         <td>${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
         <td>${echapperHtml(r.client)}</td>
         <td>${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">-</span>'}</td>
@@ -553,12 +727,22 @@ export async function vueRecettes(conteneur, params) {
           <button type="button" class="btn-icone" data-action="modifier" data-id="${r.id}" title="Modifier" aria-label="Modifier">${icone('crayon', { taille: 16 })}</button>
           <button type="button" class="btn-icone danger" data-action="supprimer" data-id="${r.id}" title="Supprimer" aria-label="Supprimer">${icone('corbeille', { taille: 16 })}</button>
         </td>
-      </tr>`).join('');
+      </tr>`).join('') + (restantes > 0 ? `
+      <tr class="ligne-vide"><td colspan="8">
+        <button type="button" class="btn btn-discret" data-action="afficher-plus">
+          Afficher les ${restantes} recette${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''}
+        </button>
+      </td></tr>` : '');
+
+    majSelection();
   }
 
   function gabarit() {
     const optionsModes = modes
       .map((m) => `<option value="${echapperHtml(m.code)}">${echapperHtml(m.libelle)}</option>`)
+      .join('');
+    const optionsCategories = CATEGORIES_RECETTE
+      .map((c) => `<option value="${c.code}">${c.libelle}</option>`)
       .join('');
     const enTete = (cleTri, libelle, classe = '') =>
       `<th class="triable ${classe}" data-tri="${cleTri}">${libelle}<span class="indicateur-tri"></span></th>`;
@@ -596,20 +780,40 @@ export async function vueRecettes(conteneur, params) {
               ${optionsModes}
             </select>
           </div>
+          ${estMixte ? `
+          <div class="champ">
+            <label for="filtre-categorie">Catégorie</label>
+            <select id="filtre-categorie">
+              <option value="">Toutes</option>
+              ${optionsCategories}
+              <option value="aucune">Non catégorisées</option>
+            </select>
+          </div>` : ''}
           <button type="button" class="btn btn-secondaire" id="reinitialiser-filtres">${icone('reinitialiser', { taille: 16 })}<span>Réinitialiser</span></button>
         </div>
 
         <div id="zone-anomalies"></div>
+
+        <div class="barre-selection" id="barre-selection" hidden>
+          <span id="compte-selection"></span>
+          ${estMixte ? `
+            <button type="button" class="btn btn-secondaire" data-classer="ventes">Classer en ventes</button>
+            <button type="button" class="btn btn-secondaire" data-classer="prestations">Classer en prestations</button>` : ''}
+          <button type="button" class="btn btn-danger" id="supprimer-selection">${icone('corbeille', { taille: 16 })}<span>Supprimer</span></button>
+          <button type="button" class="btn btn-discret" id="deselectionner">Tout désélectionner</button>
+        </div>
+
         <p class="resume-filtre" id="resume-filtre"></p>
 
         <table id="table-recettes">
           <colgroup>
-            <col style="width: 12%"><col style="width: 17%"><col style="width: 23%">
-            <col style="width: 14%"><col style="width: 12%"><col style="width: 11%">
-            <col style="width: 11%">
+            <col style="width: 4%"><col style="width: 11%"><col style="width: 16%">
+            <col style="width: 22%"><col style="width: 13%"><col style="width: 12%">
+            <col style="width: 11%"><col style="width: 11%">
           </colgroup>
           <thead>
             <tr>
+              <th class="col-case"><input type="checkbox" id="tout-selectionner" aria-label="Tout sélectionner"></th>
               ${enTete('date', 'Encaissé le')}
               ${enTete('client', 'Client')}
               ${enTete('libelle', 'Libellé')}
@@ -659,6 +863,7 @@ export async function vueRecettes(conteneur, params) {
             <div class="champ" data-champ="numeroFacture">
               <label for="recette-facture">Numéro de facture</label>
               <input type="text" id="recette-facture" name="numeroFacture" placeholder="FAC-2026-001 (facultatif)">
+              <button type="button" class="lien-suggestion" id="suggestion-facture" hidden></button>
               <span class="erreur-champ"></span>
             </div>
             ${estMixte ? `
@@ -666,7 +871,7 @@ export async function vueRecettes(conteneur, params) {
               <label for="recette-categorie">Catégorie *</label>
               <select id="recette-categorie" name="categorie">
                 <option value="">Choisir…</option>
-                ${CATEGORIES_RECETTE.map((c) => `<option value="${c.code}">${c.libelle}</option>`).join('')}
+                ${optionsCategories}
               </select>
               <span class="indication">Activité mixte : la part « prestations » a ses propres plafonds, et la déclaration URSSAF distingue les deux.</span>
               <span class="erreur-champ"></span>
@@ -690,7 +895,7 @@ export async function vueRecettes(conteneur, params) {
       </dialog>`;
   }
 
-  await Promise.all([chargerAnnees(), chargerTout(), chargerLibelles(), chargerClients(), charger()]);
+  await Promise.all([chargerRecettes(), chargerClients()]);
 
   // Arrivée depuis « Nouvelle recette » du tableau de bord.
   if (params?.get('nouvelle')) ouvrirFormulaire();

@@ -26,6 +26,29 @@ function texte(valeur) {
 }
 
 /**
+ * Vérifie la clé de contrôle d'un SIREN (9 chiffres) ou d'un SIRET
+ * (14 chiffres) : algorithme de Luhn, qui détecte la quasi-totalité des
+ * fautes de frappe. Exception historique : les établissements de La Poste
+ * (SIREN 356000000) sont aussi acceptés quand la somme simple de leurs
+ * chiffres est un multiple de 5.
+ */
+export function cleSirenValide(chiffres) {
+  let somme = 0;
+  for (let i = 0; i < chiffres.length; i += 1) {
+    // En partant de la droite, un chiffre sur deux est doublé.
+    let n = Number(chiffres[chiffres.length - 1 - i]);
+    if (i % 2 === 1) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    somme += n;
+  }
+  if (somme % 10 === 0) return true;
+  return chiffres.startsWith('356000000') &&
+    [...chiffres].reduce((s, c) => s + Number(c), 0) % 5 === 0;
+}
+
+/**
  * Valide et normalise une recette.
  *
  * Le livre des recettes exporté ne comporte que les six colonnes légales :
@@ -34,16 +57,14 @@ function texte(valeur) {
  * obligatoires ; le libellé et la facture restent facultatifs.
  *
  * Une recette porte en plus une catégorie interne (vente / prestation),
- * obligatoire pour les activités mixtes : elle alimente le suivi des seuils
- * et le bilan URSSAF, sans jamais apparaître dans les exports.
+ * facultative : elle alimente le suivi des seuils et le bilan URSSAF des
+ * activités mixtes (le formulaire la rend alors obligatoire à la saisie),
+ * et la ventilation de leurs exports.
  *
- * @param {object} [contexte]
- * @param {Array<{code: string}>} [contexte.modesPersonnalises] modes ajoutés
- *   par l'utilisateur, acceptés en plus des modes par défaut.
- * @param {string} [contexte.typeActivite] type d'activité des paramètres :
- *   « mixte » rend la catégorie obligatoire.
+ * @param {Array<{code: string}>} [modesPersonnalises] modes ajoutés par
+ *   l'utilisateur dans les paramètres, acceptés en plus des modes par défaut.
  */
-export function validerRecette(entree, { modesPersonnalises = [], typeActivite = '' } = {}) {
+export function validerRecette(entree, modesPersonnalises = []) {
   const e = entree ?? {};
   const erreurs = {};
 
@@ -84,8 +105,6 @@ export function validerRecette(entree, { modesPersonnalises = [], typeActivite =
   const categorie = texte(e.categorie);
   if (categorie && !CATEGORIES_RECETTE.some((c) => c.code === categorie)) {
     erreurs.categorie = 'Catégorie inconnue (vente ou prestation).';
-  } else if (typeActivite === 'mixte' && !categorie) {
-    erreurs.categorie = 'Activité mixte : précisez s’il s’agit d’une vente ou d’une prestation.';
   }
 
   if (Object.keys(erreurs).length > 0) {
@@ -121,11 +140,13 @@ export function validerClient(entree) {
     erreurs.nom = `Le nom dépasse ${LONGUEUR_MAX} caractères.`;
   }
 
-  // SIRET facultatif ; s'il est renseigné, on vérifie le format (14 chiffres).
-  // Les espaces de présentation sont tolérés et retirés.
+  // SIRET facultatif ; s'il est renseigné, on vérifie le format (14 chiffres)
+  // puis la clé de contrôle. Les espaces de présentation sont tolérés.
   const siret = texte(e.siret).replace(/\s/g, '');
   if (siret && !/^\d{14}$/.test(siret)) {
     erreurs.siret = 'Un SIRET comporte exactement 14 chiffres.';
+  } else if (siret && !cleSirenValide(siret)) {
+    erreurs.siret = 'Ce SIRET ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.';
   }
 
   if (Object.keys(erreurs).length > 0) {
@@ -192,19 +213,33 @@ export function validerParametres(entree) {
   if (activite.length > LONGUEUR_MAX) erreurs.activite = 'Activité trop longue.';
 
   // SIREN / SIRET : facultatifs ; s'ils sont renseignés, on vérifie le format
-  // (9 et 14 chiffres). Les espaces de présentation sont tolérés et retirés.
+  // (9 et 14 chiffres) puis la clé de contrôle. Les espaces sont tolérés.
   const siren = texte(e.siren).replace(/\s/g, '');
   if (siren && !/^\d{9}$/.test(siren)) {
     erreurs.siren = 'Un SIREN comporte exactement 9 chiffres.';
+  } else if (siren && !cleSirenValide(siren)) {
+    erreurs.siren = 'Ce SIREN ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.';
   }
   const siret = texte(e.siret).replace(/\s/g, '');
   if (siret && !/^\d{14}$/.test(siret)) {
     erreurs.siret = 'Un SIRET comporte exactement 14 chiffres.';
+  } else if (siret && !cleSirenValide(siret)) {
+    erreurs.siret = 'Ce SIRET ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.';
   }
 
   const typeActivite = texte(e.typeActivite);
   if (!TYPES_ACTIVITE.some((t) => t.code === typeActivite)) {
     erreurs.typeActivite = 'Type d’activité inconnu.';
+  }
+
+  const periodiciteUrssaf = texte(e.periodiciteUrssaf);
+  if (!['', 'mois', 'trimestre'].includes(periodiciteUrssaf)) {
+    erreurs.periodiciteUrssaf = 'Périodicité inconnue (mensuelle ou trimestrielle).';
+  }
+  // Identifiant de période posé par le bouton « C'est fait » du tableau de bord.
+  const dernierePeriodeDeclaree = texte(e.dernierePeriodeDeclaree);
+  if (dernierePeriodeDeclaree && !/^\d{4}-(0[1-9]|1[0-2]|T[1-4])$/.test(dernierePeriodeDeclaree)) {
+    erreurs.dernierePeriodeDeclaree = 'Période déclarée invalide.';
   }
 
   const devise = texte(e.devise) || 'EUR';
@@ -230,6 +265,7 @@ export function validerParametres(entree) {
     valeurs: {
       nomEntreprise, siren, siret, adresse, activite, typeActivite,
       devise, formatDate, modesPersonnalises: modes.valeurs,
+      periodiciteUrssaf, dernierePeriodeDeclaree,
       alertesNumerotation: booleen(e.alertesNumerotation, true),
       alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
       suiviSeuils: booleen(e.suiviSeuils, true)

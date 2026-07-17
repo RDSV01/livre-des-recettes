@@ -155,3 +155,33 @@ test('construireRegistre pour un seul mois : total mensuel uniquement', () => {
   assert.equal(totaux.length, 1);
   assert.equal(totaux[0].libelle, 'Total janvier 2026');
 });
+
+test('un registre ventilé ajoute les lignes « dont … » sous chaque total', () => {
+  const recettesMixte = [
+    recette('2026-01-10', 100, { categorie: 'prestations' }),
+    recette('2026-01-20', 200, { categorie: 'ventes' }),
+    recette('2026-01-25', 50) // non catégorisée
+  ];
+  const registre = construireRegistre(recettesMixte, { annee: 2026 }, { ventiler: true });
+  assert.equal(registre.ventiler, true);
+
+  const ventilations = registre.lignes.filter((l) => l.type === 'ventilation');
+  // Trois lignes après le total de janvier, trois après le total annuel.
+  assert.equal(ventilations.length, 6);
+  assert.deepEqual(
+    ventilations.slice(0, 3).map((l) => [l.libelle, l.montant]),
+    [
+      ['dont ventes de marchandises', 200],
+      ['dont prestations de services', 100],
+      ['dont non catégorisé', 50]
+    ]
+  );
+
+  // Sans recette non catégorisée, la ligne correspondante disparaît.
+  const registrePropre = construireRegistre(recettesMixte.slice(0, 2), { annee: 2026 }, { ventiler: true });
+  assert.equal(registrePropre.lignes.filter((l) => l.libelle === 'dont non catégorisé').length, 0);
+
+  // Sans ventilation demandée : aucun « dont … ».
+  const registreSimple = construireRegistre(recettesMixte, { annee: 2026 });
+  assert.equal(registreSimple.lignes.filter((l) => l.type === 'ventilation').length, 0);
+});

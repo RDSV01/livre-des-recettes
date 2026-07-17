@@ -31,11 +31,48 @@ import { PARAMETRES_DEFAUT } from './partage/constantes.js';
 
 const NOM_FICHIER = 'livre-des-recettes.json';
 const DOSSIER_SAUVEGARDES = 'sauvegardes';
-const SAUVEGARDES_QUOTIDIENNES_CONSERVEES = 30;
 const SAUVEGARDES_ETIQUETEES_CONSERVEES = 10;
+
+// Rotation des sauvegardes quotidiennes : tout est gardé 14 jours, puis une
+// par semaine pendant 2 mois, puis une par mois pendant 1 an.
+const ROTATION_QUOTIDIENNE_JOURS = 14;
+const ROTATION_HEBDOMADAIRE_JOURS = 62;
+const ROTATION_MENSUELLE_JOURS = 366;
 
 /** Nom de fichier accepté pour une sauvegarde (borne toute traversée de chemin). */
 const MOTIF_SAUVEGARDE = /^livre-des-recettes-[A-Za-z0-9-]+\.json$/;
+
+/**
+ * Applique la rotation aux dates (`AAAA-MM-JJ`) des sauvegardes quotidiennes
+ * et retourne celles à SUPPRIMER. Fonction pure, exportée pour les tests.
+ */
+export function sauvegardesObsoletes(dates, aujourdHui) {
+  const reference = Date.parse(`${aujourdHui}T00:00:00Z`);
+  const jour = 24 * 60 * 60 * 1000;
+
+  // Représentante conservée par période : la plus récente de chaque semaine
+  // ISO (clé = lundi de la semaine) et de chaque mois.
+  const gardees = new Set();
+  const parCle = new Map();
+  const retenir = (cle, date) => {
+    if (!parCle.has(cle) || date > parCle.get(cle)) parCle.set(cle, date);
+  };
+  for (const date of dates) {
+    const age = (reference - Date.parse(`${date}T00:00:00Z`)) / jour;
+    if (age <= ROTATION_QUOTIDIENNE_JOURS) {
+      gardees.add(date);
+    } else if (age <= ROTATION_HEBDOMADAIRE_JOURS) {
+      const d = new Date(`${date}T00:00:00Z`);
+      const lundi = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * jour);
+      retenir(`semaine-${lundi.toISOString().slice(0, 10)}`, date);
+    } else if (age <= ROTATION_MENSUELLE_JOURS) {
+      retenir(`mois-${date.slice(0, 7)}`, date);
+    }
+    // au-delà d'un an : supprimée
+  }
+  for (const date of parCle.values()) gardees.add(date);
+  return dates.filter((date) => !gardees.has(date));
+}
 
 /** Vérifie qu'un objet a bien la forme attendue du fichier de données. */
 export function estDonneesValides(objet) {
@@ -124,7 +161,15 @@ export function creerStockage(dossierDonnees) {
     const cible = path.join(dossierSauvegardes, `livre-des-recettes-${jour}.json`);
     if (fs.existsSync(cible)) return;
     fs.copyFileSync(cheminFichier, cible);
-    purger(/^livre-des-recettes-\d{4}-\d{2}-\d{2}\.json$/, SAUVEGARDES_QUOTIDIENNES_CONSERVEES);
+
+    // Rotation : quotidiennes 14 jours, hebdomadaires 2 mois, mensuelles 1 an.
+    const motifQuotidien = /^livre-des-recettes-(\d{4}-\d{2}-\d{2})\.json$/;
+    const dates = fs.readdirSync(dossierSauvegardes)
+      .map((f) => motifQuotidien.exec(f)?.[1])
+      .filter(Boolean);
+    for (const date of sauvegardesObsoletes(dates, jour)) {
+      fs.unlinkSync(path.join(dossierSauvegardes, `livre-des-recettes-${date}.json`));
+    }
   }
 
   const horodatage = () => new Date().toISOString();

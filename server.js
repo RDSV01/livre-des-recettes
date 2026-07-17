@@ -12,11 +12,23 @@
  */
 
 import { exec } from 'node:child_process';
-import { creerApp, VERSION } from './src/app.js';
+import { creerApp, VERSION, DOSSIER_DONNEES_DEFAUT } from './src/app.js';
+import { acquerirVerrou } from './src/verrou.js';
 
 const port = Number(process.env.PORT) || 3000;
+const dossierDonnees = process.env.LDR_DATA_DIR || DOSSIER_DONNEES_DEFAUT;
 
-const app = creerApp({ dossierDonnees: process.env.LDR_DATA_DIR || undefined });
+// Une seule instance à la fois sur un même dossier de données : deux
+// applications qui écriraient en parallèle s'écraseraient mutuellement.
+try {
+  acquerirVerrou(dossierDonnees);
+} catch (erreur) {
+  if (erreur.code !== 'VERROU') throw erreur;
+  console.error(erreur.message);
+  process.exit(1);
+}
+
+const app = creerApp({ dossierDonnees });
 
 const serveur = app.listen(port, '127.0.0.1', () => {
   const adresse = `http://localhost:${port}`;

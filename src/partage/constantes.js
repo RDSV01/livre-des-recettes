@@ -54,6 +54,10 @@ export const PARAMETRES_DEFAUT = {
   devise: 'EUR',
   formatDate: 'JJ/MM/AAAA',
   modesPersonnalises: [],
+  // Rappel de déclaration URSSAF : périodicité choisie et dernière période
+  // marquée « déclarée » depuis le tableau de bord (« 2026-06 », « 2026-T2 »).
+  periodiciteUrssaf: '',
+  dernierePeriodeDeclaree: '',
   // Options d'interface, désactivables dans les paramètres.
   alertesNumerotation: true,
   alerteRecetteSimilaire: true,

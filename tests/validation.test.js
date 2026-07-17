@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validerRecette, validerClient, validerParametres } from '../src/validation.js';
+import { validerRecette, validerClient, validerParametres, cleSirenValide } from '../src/validation.js';
 
 const RECETTE_VALIDE = {
   dateEncaissement: '2026-07-15',
@@ -59,21 +59,14 @@ test('un mode de règlement inconnu est refusé', () => {
 test('un mode personnalisé déclaré dans les paramètres est accepté', () => {
   const modesPersonnalises = [{ code: 'perso-a1b2c3d4', libelle: 'Lydia' }];
   assert.ok(validerRecette({ ...RECETTE_VALIDE, modeReglement: 'perso-a1b2c3d4' }).erreurs.modeReglement);
-  assert.equal(validerRecette({ ...RECETTE_VALIDE, modeReglement: 'perso-a1b2c3d4' }, { modesPersonnalises }).erreurs, null);
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, modeReglement: 'perso-a1b2c3d4' }, modesPersonnalises).erreurs, null);
 });
 
-test('la catégorie est libre en activité simple, obligatoire en activité mixte', () => {
-  // Activité simple : catégorie facultative, mais contrôlée si fournie.
+test('la catégorie est facultative mais contrôlée', () => {
   assert.equal(validerRecette(RECETTE_VALIDE).valeurs.categorie, '');
   assert.equal(validerRecette({ ...RECETTE_VALIDE, categorie: 'ventes' }).valeurs.categorie, 'ventes');
+  assert.equal(validerRecette({ ...RECETTE_VALIDE, categorie: 'prestations' }).valeurs.categorie, 'prestations');
   assert.ok(validerRecette({ ...RECETTE_VALIDE, categorie: 'troc' }).erreurs.categorie);
-
-  // Activité mixte : la catégorie devient obligatoire.
-  assert.ok(validerRecette(RECETTE_VALIDE, { typeActivite: 'mixte' }).erreurs.categorie);
-  assert.equal(
-    validerRecette({ ...RECETTE_VALIDE, categorie: 'prestations' }, { typeActivite: 'mixte' }).erreurs,
-    null
-  );
 });
 
 test('le montant accepte les écritures relâchées (« 12,5 » vaut 12,50)', () => {
@@ -101,12 +94,33 @@ test('les options d’interface sont des booléens, activées par défaut', () =
   assert.equal(desactive.suiviSeuils, false);
 });
 
+// ---- Clé de contrôle SIREN / SIRET ---------------------------------------------
+
+test('cleSirenValide détecte les fautes de frappe (Luhn)', () => {
+  assert.equal(cleSirenValide('123456782'), true);
+  assert.equal(cleSirenValide('123456789'), false);
+  assert.equal(cleSirenValide('12345678200010'), true);
+  assert.equal(cleSirenValide('12345678200011'), false);
+});
+
+test('cleSirenValide accepte l’exception historique de La Poste', () => {
+  assert.equal(cleSirenValide('356000000'), true);
+  // Siège (clé de Luhn valide) et établissement (somme des chiffres multiple de 5).
+  assert.equal(cleSirenValide('35600000000048'), true);
+  assert.equal(cleSirenValide('35600000009075'), true);
+});
+
+test('un SIREN ou SIRET à clé invalide est refusé avec un message clair', () => {
+  assert.match(validerParametres({ siren: '123456789' }).erreurs.siren, /clé de contrôle/);
+  assert.match(validerClient({ nom: 'X', siret: '12345678900012' }).erreurs.siret, /clé de contrôle/);
+});
+
 // ---- Clients ------------------------------------------------------------------
 
 test('un client valide se limite au nom et au SIRET', () => {
-  const { erreurs, valeurs } = validerClient({ nom: '  Café des Arts ', siret: '123 456 789 00012', adresse: 'ignorée' });
+  const { erreurs, valeurs } = validerClient({ nom: '  Café des Arts ', siret: '123 456 782 00010', adresse: 'ignorée' });
   assert.equal(erreurs, null);
-  assert.deepEqual(valeurs, { nom: 'Café des Arts', siret: '12345678900012' });
+  assert.deepEqual(valeurs, { nom: 'Café des Arts', siret: '12345678200010' });
 });
 
 test('le nom du client est obligatoire', () => {
@@ -123,19 +137,30 @@ test('un SIRET client mal formé est refusé, mais il reste facultatif', () => {
 test('le SIREN et le SIRET sont vérifiés quand ils sont renseignés', () => {
   assert.ok(validerParametres({ siren: '123' }).erreurs.siren);
   assert.ok(validerParametres({ siret: '123' }).erreurs.siret);
-  assert.equal(validerParametres({ siren: '123 456 789', siret: '123 456 789 00012' }).erreurs, null);
+  assert.equal(validerParametres({ siren: '123 456 782', siret: '123 456 782 00010' }).erreurs, null);
   assert.equal(validerParametres({}).erreurs, null);
 });
 
 test('les espaces de présentation du SIREN sont retirés', () => {
-  const { valeurs } = validerParametres({ siren: '123 456 789' });
-  assert.equal(valeurs.siren, '123456789');
+  const { valeurs } = validerParametres({ siren: '123 456 782' });
+  assert.equal(valeurs.siren, '123456782');
 });
 
 test('le type d’activité est contrôlé', () => {
   assert.equal(validerParametres({ typeActivite: 'prestations' }).erreurs, null);
   assert.equal(validerParametres({ typeActivite: '' }).erreurs, null);
   assert.ok(validerParametres({ typeActivite: 'artisanat' }).erreurs.typeActivite);
+});
+
+test('la périodicité URSSAF et la période déclarée sont contrôlées', () => {
+  assert.equal(validerParametres({ periodiciteUrssaf: 'mois' }).erreurs, null);
+  assert.equal(validerParametres({ periodiciteUrssaf: 'trimestre' }).erreurs, null);
+  assert.ok(validerParametres({ periodiciteUrssaf: 'semaine' }).erreurs.periodiciteUrssaf);
+
+  assert.equal(validerParametres({ dernierePeriodeDeclaree: '2026-06' }).erreurs, null);
+  assert.equal(validerParametres({ dernierePeriodeDeclaree: '2026-T2' }).erreurs, null);
+  assert.ok(validerParametres({ dernierePeriodeDeclaree: '2026-13' }).erreurs.dernierePeriodeDeclaree);
+  assert.ok(validerParametres({ dernierePeriodeDeclaree: 'juin' }).erreurs.dernierePeriodeDeclaree);
 });
 
 test('les modes personnalisés reçoivent un code stable et refusent les doublons', () => {

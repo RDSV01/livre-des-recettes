@@ -35,21 +35,32 @@ function lirePeriode(req, res) {
 export function routesExports(stockage) {
   const routeur = express.Router();
 
+  /** Registre de la période, ventilé ventes / prestations en activité mixte. */
+  const registrePour = (periode) => {
+    const parametres = stockage.obtenirParametres();
+    return {
+      parametres,
+      registre: construireRegistre(stockage.listerRecettes(), periode, {
+        ventiler: parametres.typeActivite === 'mixte'
+      })
+    };
+  };
+
   routeur.get('/csv', (req, res) => {
     const periode = lirePeriode(req, res);
     if (!periode) return;
-    const registre = construireRegistre(stockage.listerRecettes(), periode);
+    const { registre, parametres } = registrePour(periode);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${nomFichierExport(periode)}.csv"`);
-    res.send(genererCsv(registre, stockage.obtenirParametres()));
+    res.send(genererCsv(registre, parametres));
   });
 
   routeur.get('/xlsx', async (req, res, next) => {
     try {
       const periode = lirePeriode(req, res);
       if (!periode) return;
-      const registre = construireRegistre(stockage.listerRecettes(), periode);
-      const classeur = await genererXlsx(registre, stockage.obtenirParametres());
+      const { registre, parametres } = registrePour(periode);
+      const classeur = await genererXlsx(registre, parametres);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${nomFichierExport(periode)}.xlsx"`);
       await classeur.xlsx.write(res);
@@ -62,10 +73,10 @@ export function routesExports(stockage) {
   routeur.get('/pdf', (req, res) => {
     const periode = lirePeriode(req, res);
     if (!periode) return;
-    const registre = construireRegistre(stockage.listerRecettes(), periode);
+    const { registre, parametres } = registrePour(periode);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nomFichierExport(periode)}.pdf"`);
-    genererPdf(registre, stockage.obtenirParametres(), res);
+    genererPdf(registre, parametres, res);
   });
 
   return routeur;

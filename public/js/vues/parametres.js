@@ -25,6 +25,15 @@ export async function vueParametres(conteneur) {
       </div>
     </header>
 
+    ${etat.systeme.premierLancement ? `
+    <div class="carte" id="carte-bienvenue">
+      <h2>Bienvenue !</h2>
+      <p>Avant votre première recette, prenez une minute pour renseigner votre entreprise :
+      ces informations apparaissent en tête de vos exports, le type d’activité active le
+      suivi de vos plafonds et de la franchise de TVA, et la périodicité de déclaration
+      active un rappel discret sur le tableau de bord.</p>
+    </div>` : ''}
+
     <form class="carte" id="formulaire-parametres" novalidate>
       <h2>Mon entreprise</h2>
       <div class="grille-formulaire">
@@ -56,7 +65,7 @@ export async function vueParametres(conteneur) {
           <input type="text" id="param-adresse" name="adresse" value="${echapperHtml(p.adresse)}">
           <span class="erreur-champ"></span>
         </div>
-        <div class="champ pleine-largeur" data-champ="typeActivite">
+        <div class="champ" data-champ="typeActivite">
           <label for="param-type-activite">Type d’activité (pour le suivi des seuils)</label>
           <select id="param-type-activite" name="typeActivite">
             ${TYPES_ACTIVITE.map((t) =>
@@ -64,6 +73,16 @@ export async function vueParametres(conteneur) {
             ).join('')}
           </select>
           <span class="indication">Détermine le plafond micro-entrepreneur et le seuil de franchise de TVA affichés sur le tableau de bord.</span>
+          <span class="erreur-champ"></span>
+        </div>
+        <div class="champ" data-champ="periodiciteUrssaf">
+          <label for="param-periodicite">Déclaration URSSAF</label>
+          <select id="param-periodicite" name="periodiciteUrssaf">
+            <option value="" ${p.periodiciteUrssaf === '' ? 'selected' : ''}>Non renseignée</option>
+            <option value="mois" ${p.periodiciteUrssaf === 'mois' ? 'selected' : ''}>Mensuelle</option>
+            <option value="trimestre" ${p.periodiciteUrssaf === 'trimestre' ? 'selected' : ''}>Trimestrielle</option>
+          </select>
+          <span class="indication">Active un rappel discret sur le tableau de bord quand une période à déclarer est écoulée.</span>
           <span class="erreur-champ"></span>
         </div>
         <div class="champ" data-champ="devise">
@@ -130,7 +149,8 @@ export async function vueParametres(conteneur) {
       </p>
       <ul>
         <li>Une sauvegarde automatique est créée chaque jour, avant chaque import CSV
-          et avant chaque restauration (voir la liste ci-dessous).</li>
+          et avant chaque restauration. Conservation : tout pendant 14 jours, puis une
+          par semaine pendant 2 mois, puis une par mois pendant 1 an.</li>
         <li>Pour changer d’ordinateur ou vous protéger d’une panne : copiez le dossier
           <code class="chemin">data</code> (clé USB, dossier synchronisé…), c’est tout.</li>
       </ul>
@@ -180,6 +200,8 @@ export async function vueParametres(conteneur) {
     for (const option of ['alertesNumerotation', 'alerteRecetteSimilaire', 'suiviSeuils']) {
       donnees[option] = formulaire[option].checked;
     }
+    // Posée par le bouton « C'est fait » du tableau de bord : conservée telle quelle.
+    donnees.dernierePeriodeDeclaree = etat.parametres.dernierePeriodeDeclaree;
     try {
       const reponse = await api.enregistrerParametres(donnees);
       definirParametres(reponse.parametres);
@@ -188,6 +210,9 @@ export async function vueParametres(conteneur) {
       for (const mode of reponse.parametres.modesPersonnalises) {
         listeModes.appendChild(ligneMode(mode));
       }
+      // Fin de la première mise en route : la carte de bienvenue disparaît.
+      etat.systeme.premierLancement = false;
+      conteneur.querySelector('#carte-bienvenue')?.remove();
       toast('Paramètres enregistrés.');
     } catch (erreur) {
       if (erreur.erreurs) {

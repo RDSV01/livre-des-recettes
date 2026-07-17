@@ -340,6 +340,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 
 .champ.invalide input, .champ.invalide select, .champ.invalide textarea { border-color: var(--danger); }
 
+/* Suggestion cliquable sous un champ (prochain numéro de facture). */
+.lien-suggestion {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.lien-suggestion:hover { text-decoration: underline; }
+
 .erreur-champ { font-size: 12.5px; color: var(--danger); min-height: 0; }
 
 .grille-formulaire { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 16px; }
@@ -403,6 +416,30 @@ td.actions .btn-icone { vertical-align: middle; }
 th.triable { cursor: pointer; user-select: none; }
 th.triable:hover { color: var(--texte); }
 th.triable .icone { margin-left: 4px; }
+
+/* Colonne des cases de sélection multiple. */
+.col-case { text-align: center; }
+.col-case input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  vertical-align: middle;
+}
+
+/* Barre d'actions groupées, visible quand des recettes sont cochées. */
+.barre-selection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--accent-doux);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  font-size: 13.5px;
+}
+.barre-selection span:first-child { font-weight: 600; margin-right: auto; }
 
 /* ---- Badges -------------------------------------------------------------- */
 
@@ -516,6 +553,23 @@ dialog::backdrop { background: rgba(2, 6, 23, 0.55); }
 .compteur.ok strong { color: var(--succes); }
 .compteur.attention strong { color: var(--alerte); }
 .compteur.erreur strong { color: var(--danger); }
+
+/* ---- Bandeau de rappel (déclaration URSSAF) -------------------------------- */
+
+.bandeau-rappel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  background: var(--accent-doux);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  font-size: 13.5px;
+}
+.bandeau-rappel > .icone { color: var(--accent); }
+.bandeau-rappel > span { margin-right: auto; }
 
 /* ---- Jauges de seuils ------------------------------------------------------ */
 

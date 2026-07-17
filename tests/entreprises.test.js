@@ -32,7 +32,7 @@ test('extraireEntreprise retombe sur le SIRET du siège pour un SIREN', () => {
 });
 
 test('extraireEntreprise renvoie null sans résultat', () => {
-  assert.equal(extraireEntreprise({ results: [] }, '12345678900012'), null);
+  assert.equal(extraireEntreprise({ results: [] }, '12345678200010'), null);
   assert.equal(extraireEntreprise({}, ''), null);
 });
 

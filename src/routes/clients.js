@@ -8,7 +8,7 @@
  */
 
 import express from 'express';
-import { validerClient } from '../validation.js';
+import { validerClient, cleSirenValide } from '../validation.js';
 import { rechercherEntreprise } from '../entreprises.js';
 import { normaliserTexte } from '../partage/texte.js';
 import { enCentimes, enEuros } from '../partage/montants.js';
@@ -51,6 +51,11 @@ export function routesClients(stockage) {
     const siret = String(req.query.siret ?? '').replace(/\s/g, '');
     if (!/^\d{9}$|^\d{14}$/.test(siret)) {
       return res.status(400).json({ erreur: 'SIRET (14 chiffres) ou SIREN (9 chiffres) attendu.' });
+    }
+    // Clé de contrôle vérifiée avant tout appel réseau : une faute de frappe
+    // est signalée immédiatement, sans interroger l'annuaire pour rien.
+    if (!cleSirenValide(siret)) {
+      return res.status(400).json({ erreur: 'Ce numéro ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.' });
     }
     try {
       const entreprise = await rechercherEntreprise(siret);

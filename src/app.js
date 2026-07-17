@@ -31,8 +31,11 @@ export const VERSION = JSON.parse(
   fs.readFileSync(path.join(RACINE, 'package.json'), 'utf8')
 ).version;
 
+/** Dossier de données par défaut (aussi utilisé par le verrou d'instance). */
+export const DOSSIER_DONNEES_DEFAUT = path.join(RACINE, 'data');
+
 export function creerApp({ dossierDonnees } = {}) {
-  const dossier = dossierDonnees ?? path.join(RACINE, 'data');
+  const dossier = dossierDonnees ?? DOSSIER_DONNEES_DEFAUT;
   const stockage = creerStockage(dossier);
 
   const app = express();
@@ -57,10 +60,15 @@ export function creerApp({ dossierDonnees } = {}) {
   });
 
   app.get('/api/systeme', (req, res) => {
+    const parametres = stockage.obtenirParametres();
     res.json({
       version: VERSION,
       fichierDonnees: stockage.cheminFichier,
-      corruption: stockage.corruption()
+      corruption: stockage.corruption(),
+      // Première utilisation : l'interface dirige alors vers les Paramètres.
+      premierLancement: stockage.listerRecettes().length === 0 &&
+        stockage.listerClients().length === 0 &&
+        !parametres.nomEntreprise && !parametres.typeActivite
     });
   });
 

@@ -88,3 +88,29 @@ export function analyserNumerotation(recettes) {
 
   return { doublons, manquants };
 }
+
+/**
+ * Suggère le prochain numéro de facture : reprend la série de la dernière
+ * recette saisie (préfixe identique), incrémente le plus grand numéro de
+ * cette série et respecte son remplissage par zéros.
+ * Retourne `null` si aucune recette ne porte de numéro exploitable.
+ */
+export function suggererNumeroSuivant(recettes) {
+  const numerotees = recettes.filter((r) => MOTIF_NUMERO.test(String(r.numeroFacture ?? '').trim()));
+  if (numerotees.length === 0) return null;
+
+  const derniere = numerotees.reduce((a, b) => (String(b.creeLe) > String(a.creeLe) ? b : a));
+  const [, prefixe] = MOTIF_NUMERO.exec(derniere.numeroFacture.trim());
+  const clePrefixe = normaliserTexte(prefixe);
+
+  let maximum = 0;
+  const longueurs = new Set();
+  for (const recette of numerotees) {
+    const [, autrePrefixe, chiffres] = MOTIF_NUMERO.exec(recette.numeroFacture.trim());
+    if (normaliserTexte(autrePrefixe) !== clePrefixe) continue;
+    maximum = Math.max(maximum, Number.parseInt(chiffres, 10));
+    longueurs.add(chiffres.length);
+  }
+  const longueur = longueurs.size === 1 ? [...longueurs][0] : 0;
+  return `${prefixe}${String(maximum + 1).padStart(longueur, '0')}`;
+}

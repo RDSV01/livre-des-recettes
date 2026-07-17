@@ -8,11 +8,11 @@
  */
 
 import { api } from '../api.js';
-import { etat } from '../etat.js';
-import { echapperHtml } from '../ui.js';
+import { etat, definirParametres } from '../etat.js';
+import { echapperHtml, toast } from '../ui.js';
 import { icone } from '../icones.js';
 import { formaterMontant } from '/partage/montants.js';
-import { formaterDate, nomMois } from '/partage/dates.js';
+import { formaterDate, nomMois, dernierePeriodeEchue } from '/partage/dates.js';
 import { bilanSeuils, ANNEE_SEUILS } from '/partage/seuils.js';
 
 /** Abréviations françaises des mois, pour l'axe du graphique. */
@@ -206,6 +206,26 @@ function carteSeuils(stats, devise) {
     </p>`;
 }
 
+/**
+ * Rappel discret de déclaration URSSAF : affiché quand une période est
+ * entièrement écoulée et n'a pas été marquée « déclarée » via le bouton
+ * « C'est fait » (mémorisé dans les paramètres).
+ */
+function bandeauRappelUrssaf() {
+  const p = etat.parametres;
+  const periode = dernierePeriodeEchue(p.periodiciteUrssaf);
+  if (!periode || periode.id === p.dernierePeriodeDeclaree) return '';
+  return `
+    <div class="bandeau-rappel">
+      ${icone('urssaf', { taille: 18 })}
+      <span>Déclaration URSSAF de ${echapperHtml(periode.libelle)} : pensez à la faire si ce n’est pas déjà fait.</span>
+      <a class="btn btn-discret" href="#/urssaf">Voir le montant</a>
+      <button type="button" class="btn btn-discret" id="declaration-faite" data-periode="${periode.id}">
+        ${icone('cercle-valide', { taille: 16 })}<span>C’est fait</span>
+      </button>
+    </div>`;
+}
+
 export async function vueTableauDeBord(conteneur) {
   const { annees } = await api.listerAnnees();
   const anneesDisponibles = annees.length > 0 ? annees : [new Date().getFullYear()];
@@ -248,6 +268,8 @@ export async function vueTableauDeBord(conteneur) {
           <a class="btn btn-primaire" href="#/recettes?nouvelle=1">${icone('plus', { taille: 16 })}<span>Nouvelle recette</span></a>
         </div>
       </header>
+
+      ${bandeauRappelUrssaf()}
 
       <section class="grille-stats">
         ${cartes.map((carte) => `
@@ -304,6 +326,21 @@ export async function vueTableauDeBord(conteneur) {
     conteneur.querySelector('#annee-tableau')?.addEventListener('change', (evenement) => {
       anneeChoisie = Number(evenement.target.value);
       rendre();
+    });
+
+    // « C'est fait » : mémorise la période déclarée, le rappel disparaît.
+    conteneur.querySelector('#declaration-faite')?.addEventListener('click', async (evenement) => {
+      try {
+        const reponse = await api.enregistrerParametres({
+          ...etat.parametres,
+          dernierePeriodeDeclaree: evenement.currentTarget.dataset.periode
+        });
+        definirParametres(reponse.parametres);
+        toast('Déclaration marquée comme faite.');
+        rendre();
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
     });
   }
 
