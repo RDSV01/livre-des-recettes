@@ -38,9 +38,17 @@ export const api = {
   supprimerRecette: (id) => requete(`/api/recettes/${id}`, { methode: 'DELETE' }),
   importerRecettes: (demande) => requete('/api/recettes/import', { methode: 'POST', corps: demande }),
 
+  // Achats
+  listerAchats: () => requete('/api/achats'),
+  listerAnneesAchats: () => requete('/api/achats/annees'),
+  creerAchat: (achat) => requete('/api/achats', { methode: 'POST', corps: achat }),
+  modifierAchat: (id, achat) => requete(`/api/achats/${id}`, { methode: 'PUT', corps: achat }),
+  supprimerAchat: (id) => requete(`/api/achats/${id}`, { methode: 'DELETE' }),
+
   // Sauvegardes
   listerSauvegardes: () => requete('/api/sauvegardes'),
   restaurerSauvegarde: (fichier) => requete('/api/sauvegardes/restaurer', { methode: 'POST', corps: { fichier } }),
+  repartirDeZero: () => requete('/api/sauvegardes/repartir-de-zero', { methode: 'POST', corps: {} }),
 
   // Clients
   listerClients: () => requete('/api/clients'),
@@ -56,10 +64,17 @@ export const api = {
   // Paramètres et système
   obtenirParametres: () => requete('/api/parametres'),
   enregistrerParametres: (parametres) => requete('/api/parametres', { methode: 'PUT', corps: parametres }),
-  systeme: () => requete('/api/systeme')
+  systeme: () => requete('/api/systeme'),
+
+  // Mise à jour de l'application
+  miseAJour: () => requete('/api/maj'),
+  appliquerMiseAJour: () => requete('/api/maj/appliquer', { methode: 'POST', corps: {} })
 };
 
-/** URL de téléchargement d'un export du registre (`format` : pdf, xlsx, csv). */
-export function urlExport(format, periode) {
-  return `/api/exports/${format}${chaineRequete(periode)}`;
+/**
+ * URL de téléchargement d'un export (`format` : pdf, xlsx, csv).
+ * `registre` vaut `''` pour le livre des recettes, `/achats` pour les achats.
+ */
+export function urlExport(format, periode, registre = '') {
+  return `/api/exports${registre}/${format}${chaineRequete(periode)}`;
 }

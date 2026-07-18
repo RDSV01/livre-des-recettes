@@ -1,5 +1,5 @@
 /**
- * Export PDF du registre, généré avec PDFKit.
+ * Export PDF d'un registre (recettes ou achats), généré avec PDFKit.
  *
  * Mise en page : A4 paysage, en-tête d'identité sur la première page,
  * tableau avec en-tête répété à chaque saut de page, totaux mensuels et
@@ -11,10 +11,8 @@
  */
 
 import PDFDocument from 'pdfkit';
-import { libelleCategorieCourt } from './registre.js';
 import { formaterDate } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
-import { libelleMode } from '../partage/constantes.js';
 
 const MARGE = 40;
 const TAILLE_TEXTE = 9;
@@ -26,34 +24,19 @@ const COULEUR_FOND_TOTAL = '#f3f5fa';
 const COULEUR_BORDURE = '#d7dbe4';
 
 /**
- * Colonnes du tableau (l'ordre suit le registre légal), pour un total de
- * 760 pt. La colonne Catégorie n'apparaît que pour un registre ventilé
- * (activité mixte).
+ * Espaces produits par `Intl.NumberFormat` (« 1 500,00 € ») que l'encodage
+ * WinAnsi ne connaît pas : insécable étroite, insécable, fine, tabulaire.
+ *
+ * Ils sont écrits en séquences d'échappement et non en caractères, qui sont
+ * invisibles à la relecture : remplacés un jour par de simples espaces, un
+ * montant s'imprimerait « 1/500,00 € » (PDFKit ne garde alors que l'octet de
+ * poids faible de U+202F, qui est celui de « / »).
  */
-function colonnesRegistre(ventiler) {
-  return ventiler
-    ? [
-      { titre: 'Date', largeur: 70 },
-      { titre: 'Client', largeur: 125 },
-      { titre: 'Montant', largeur: 80, align: 'right' },
-      { titre: 'Mode de règlement', largeur: 95 },
-      { titre: 'N° de facture', largeur: 90 },
-      { titre: 'Catégorie', largeur: 75 },
-      { titre: 'Libellé', largeur: 225 }
-    ]
-    : [
-      { titre: 'Date', largeur: 70 },
-      { titre: 'Client', largeur: 145 },
-      { titre: 'Montant', largeur: 85, align: 'right' },
-      { titre: 'Mode de règlement', largeur: 105 },
-      { titre: 'N° de facture', largeur: 100 },
-      { titre: 'Libellé', largeur: 255 }
-    ];
-}
+const ESPACES_HORS_WINANSI = /[\u202F\u00A0\u2009\u2007]/g;
 
 /** Remplace les caractères hors encodage WinAnsi par des équivalents sûrs. */
-function texteSur(texte) {
-  return String(texte ?? '').replace(/[  ]/g, ' ');
+export function texteSur(texte) {
+  return String(texte ?? '').replace(ESPACES_HORS_WINANSI, ' ');
 }
 
 /**
@@ -61,19 +44,25 @@ function texteSur(texte) {
  * Le flux est clôturé par PDFKit à la fin de la génération.
  */
 export function genererPdf(registre, parametres, flux) {
-  const COLONNES = colonnesRegistre(registre.ventiler);
-  const LARGEUR_TABLEAU = COLONNES.reduce((acc, c) => acc + c.largeur, 0);
+  const COLONNES = registre.colonnes;
+  const LARGEUR_TABLEAU = COLONNES.reduce((acc, c) => acc + c.largeurPdf, 0);
+  const INDEX_MONTANT = COLONNES.findIndex((c) => c.montant);
+  // Le libellé d'un total s'étale sur les colonnes qui précèdent le montant.
+  const DEBUT_MONTANT = COLONNES.slice(0, INDEX_MONTANT).reduce((acc, c) => acc + c.largeurPdf, 0);
 
+  const titreComplet = `${registre.titreDocument} - ${registre.titrePeriode}`;
   const doc = new PDFDocument({
     size: 'A4',
     layout: 'landscape',
     margin: MARGE,
     bufferPages: true,
-    info: { Title: `Livre des recettes - ${registre.titre}`, Author: parametres.nomEntreprise || 'Livre des recettes' }
+    info: { Title: titreComplet, Author: parametres.nomEntreprise || 'Livre des recettes' }
   });
   doc.pipe(flux);
 
   const basDePage = () => doc.page.height - MARGE - 15;
+  const largeurCellule = (colonne) => colonne.largeurPdf - REMPLISSAGE_CELLULE * 2;
+  const alignement = (colonne) => (colonne.montant ? 'right' : 'left');
 
   function enTeteDocument() {
     if (parametres.nomEntreprise) {
@@ -91,10 +80,9 @@ export function genererPdf(registre, parametres, flux) {
         .text(texteSur(identite), { width: LARGEUR_TABLEAU });
     }
     doc.moveDown(0.8);
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(COULEUR_TEXTE)
-      .text(`Livre des recettes - ${registre.titre}`);
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(COULEUR_TEXTE).text(titreComplet);
     const sousTitre = `Édité le ${formaterDate(new Date().toISOString().slice(0, 10), parametres.formatDate)}` +
-      `  ·  ${registre.nombre} encaissement${registre.nombre > 1 ? 's' : ''}` +
+      `  ·  ${registre.resume}` +
       `  ·  total ${texteSur(formaterMontant(registre.total, parametres.devise))}`;
     doc.font('Helvetica').fontSize(9).fillColor(COULEUR_SECONDAIRE).text(texteSur(sousTitre));
     doc.moveDown(0.8);
@@ -106,11 +94,11 @@ export function genererPdf(registre, parametres, flux) {
     doc.font('Helvetica-Bold').fontSize(TAILLE_TEXTE).fillColor(COULEUR_TEXTE);
     let x = MARGE;
     for (const colonne of COLONNES) {
-      doc.text(colonne.titre, x + REMPLISSAGE_CELLULE, y + 6, {
-        width: colonne.largeur - REMPLISSAGE_CELLULE * 2,
-        align: colonne.align ?? 'left'
+      doc.text(colonne.titrePdf ?? colonne.titre, x + REMPLISSAGE_CELLULE, y + 6, {
+        width: largeurCellule(colonne),
+        align: alignement(colonne)
       });
-      x += colonne.largeur;
+      x += colonne.largeurPdf;
     }
     doc.y = y + 22;
   }
@@ -131,11 +119,11 @@ export function genererPdf(registre, parametres, flux) {
     doc.y = y + hauteur;
   }
 
-  /** Dessine une ligne de recette ; `cellules` suit l'ordre de COLONNES. */
+  /** Dessine une ligne du registre ; `cellules` suit l'ordre de COLONNES. */
   function ligneTableau(cellules) {
     doc.font('Helvetica').fontSize(TAILLE_TEXTE);
     const hauteur = Math.max(16, ...cellules.map((texte, i) =>
-      doc.heightOfString(texte || ' ', { width: COLONNES[i].largeur - REMPLISSAGE_CELLULE * 2 })
+      doc.heightOfString(texte || ' ', { width: largeurCellule(COLONNES[i]) })
     )) + REMPLISSAGE_CELLULE * 2;
 
     assurerPlace(hauteur);
@@ -146,10 +134,10 @@ export function genererPdf(registre, parametres, flux) {
     let x = MARGE;
     cellules.forEach((texte, i) => {
       doc.text(texte, x + REMPLISSAGE_CELLULE, y + REMPLISSAGE_CELLULE, {
-        width: COLONNES[i].largeur - REMPLISSAGE_CELLULE * 2,
-        align: COLONNES[i].align ?? 'left'
+        width: largeurCellule(COLONNES[i]),
+        align: alignement(COLONNES[i])
       });
-      x += COLONNES[i].largeur;
+      x += COLONNES[i].largeurPdf;
     });
     cloreLigne(y, hauteur);
   }
@@ -157,12 +145,12 @@ export function genererPdf(registre, parametres, flux) {
   /**
    * Dessine une ligne de total (gras sur fond grisé) ou de ventilation
    * « dont … » (italique, en retrait) : le libellé s'étale sur les colonnes
-   * Date et Client, le montant s'aligne avec la colonne Montant.
+   * qui précèdent le montant, lequel s'aligne avec sa colonne.
    */
   function ligneTotal(libelle, montant, { ventilation = false } = {}) {
     doc.font(ventilation ? 'Helvetica-Oblique' : 'Helvetica-Bold').fontSize(TAILLE_TEXTE);
     const retrait = ventilation ? 14 : 0;
-    const largeurLibelle = COLONNES[0].largeur + COLONNES[1].largeur - REMPLISSAGE_CELLULE * 2 - retrait;
+    const largeurLibelle = DEBUT_MONTANT - REMPLISSAGE_CELLULE * 2 - retrait;
     const hauteur = Math.max(16, doc.heightOfString(libelle, { width: largeurLibelle })) +
       REMPLISSAGE_CELLULE * 2;
 
@@ -175,9 +163,9 @@ export function genererPdf(registre, parametres, flux) {
     doc.text(libelle, MARGE + REMPLISSAGE_CELLULE + retrait, y + REMPLISSAGE_CELLULE, { width: largeurLibelle });
     doc.text(
       texteSur(formaterMontant(montant, parametres.devise)),
-      MARGE + COLONNES[0].largeur + COLONNES[1].largeur + REMPLISSAGE_CELLULE,
+      MARGE + DEBUT_MONTANT + REMPLISSAGE_CELLULE,
       y + REMPLISSAGE_CELLULE,
-      { width: COLONNES[2].largeur - REMPLISSAGE_CELLULE * 2, align: 'right' }
+      { width: largeurCellule(COLONNES[INDEX_MONTANT]), align: 'right' }
     );
     cloreLigne(y, hauteur);
   }
@@ -187,21 +175,16 @@ export function genererPdf(registre, parametres, flux) {
 
   if (registre.lignes.length === 0) {
     doc.font('Helvetica').fontSize(10).fillColor(COULEUR_SECONDAIRE)
-      .text('Aucune recette sur la période.', MARGE, doc.y);
+      .text(registre.messageVide, MARGE, doc.y);
   } else {
     enTeteTableau();
     for (const ligne of registre.lignes) {
-      if (ligne.type === 'recette') {
-        const r = ligne.recette;
-        ligneTableau([
-          formaterDate(r.dateEncaissement, parametres.formatDate),
-          texteSur(r.client),
-          texteSur(formaterMontant(r.montant, parametres.devise)),
-          texteSur(libelleMode(r.modeReglement, parametres.modesPersonnalises)),
-          texteSur(r.numeroFacture),
-          ...(registre.ventiler ? [libelleCategorieCourt(r.categorie)] : []),
-          texteSur(r.libelle)
-        ]);
+      if (ligne.type === 'element') {
+        ligneTableau(COLONNES.map((colonne) => (
+          colonne.montant
+            ? texteSur(formaterMontant(ligne.element.montant, parametres.devise))
+            : texteSur(colonne.valeur(ligne.element, parametres))
+        )));
       } else {
         ligneTotal(ligne.libelle, ligne.montant, { ventilation: ligne.type === 'ventilation' });
       }

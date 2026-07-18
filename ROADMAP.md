@@ -1,9 +1,28 @@
 # Roadmap
 
-La boussole du projet : **une seule mission** (le livre des recettes), une
-application locale, légère et simple. Chaque évolution est jugée à cette aune.
+La boussole du projet : **une seule mission** (les registres obligatoires du
+micro-entrepreneur), une application locale, légère et simple. Chaque évolution
+est jugée à cette aune.
 
 ## Déjà livré
+
+### v1.3
+
+- Registre des achats : date du règlement, fournisseur, référence de la facture
+  ou du justificatif, mode de paiement et montant, avec exports PDF, Excel et
+  CSV. Les deux registres exigibles en cas de contrôle sont désormais couverts.
+- Exécutable autonome : un fichier à télécharger et à lancer, sans installer
+  Node.js, sans fenêtre de console ni installation.
+- Mise à jour en un clic : l'application annonce les nouvelles versions
+  publiées, les installe et redémarre. Vérification des MAJ désactivable.
+- Activités mixtes : colonne Catégorie dans les recettes, chiffre d'affaires du
+  mois et de l'année par activité, et un graphique par activité.
+- Données rangées dans « Documents / Livre des recettes » : l'exécutable ne
+  laisse plus rien à côté de lui, et les paramètres indiquent les chemins exacts
+  du fichier de données et des sauvegardes.
+- Sauvegardes déplacées hors du dossier de données, avec une copie de secours
+  tenue à jour à chaque saisie : supprimer ce dossier ne fait plus rien perdre,
+  l'application le détecte et propose de tout reconstituer.
 
 ### v1.2
 
@@ -55,13 +74,11 @@ application locale, légère et simple. Chaque évolution est jugée à cette au
 
 ## Prochaines versions (par ordre de priorité pressenti)
 
-- [ ] **Registre des achats** (obligatoire pour les activités d'achat / vente de
-      marchandises) : de façon chronologique, la date du règlement, le fournisseur,
-      la référence de la facture ou du justificatif, le mode de paiement et le
-      montant de l'achat. Avec le livre des recettes, les deux registres exigibles
-      en cas de contrôle seraient ainsi couverts.
-- [ ] **Exécutables autonomes** (Windows / macOS / Linux) pour installer sans
-      Node.js (probablement via `node --experimental-sea` ou pkg).
+- [ ] **Import CSV des achats**, sur le modèle de l'import des recettes
+      (correspondance des colonnes, détection des doublons, rapport avant import).
+- [ ] **Gestion multi entreprises**
+- [ ] **Total des achats dans le tableau de bord**
+- [ ] **Loader de chargement**
 
 ## À l'étude (pas engagé)
 
@@ -71,7 +88,7 @@ application locale, légère et simple. Chaque évolution est jugée à cette au
 
 ## Jamais (hors périmètre, voir CONTRIBUTING.md)
 
-- Facturation, devis, comptabilité générale, registre des achats ;
+- Facturation, devis, comptabilité générale ;
 - Télédéclaration ou connexion à l'URSSAF ;
 - Version hébergée / SaaS, comptes utilisateurs ;
 - Frameworks front ou étape de build.

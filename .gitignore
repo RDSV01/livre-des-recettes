@@ -8,6 +8,10 @@ data/
 .env
 .env.*
 
+# Exécutables construits localement (npm run construire:exe)
+dist/
+scripts/actifs-generes.mjs
+
 # Journaux et fichiers temporaires
 *.log
 npm-debug.log*

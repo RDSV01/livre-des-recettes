@@ -9,7 +9,7 @@
 import express from 'express';
 import { validerRecette } from '../validation.js';
 import { estDoublon } from '../partage/doublons.js';
-import { comparerParDateDesc } from '../totaux.js';
+import { parDateDesc } from '../totaux.js';
 import { anneeDe } from '../partage/dates.js';
 
 const IMPORT_MAX_LIGNES = 10_000;
@@ -23,7 +23,7 @@ export function routesRecettes(stockage) {
   // Liste complète, triée par date décroissante. Le filtrage et la recherche
   // se font côté navigateur (`partage/filtres.js`) : une seule requête suffit.
   routeur.get('/', (req, res) => {
-    res.json({ recettes: stockage.listerRecettes().sort(comparerParDateDesc) });
+    res.json({ recettes: stockage.listerRecettes().sort(parDateDesc('dateEncaissement')) });
   });
 
   // Années présentes dans le livre (pour les exports, l'URSSAF, le tableau de bord).

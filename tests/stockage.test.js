@@ -14,6 +14,20 @@ function dossierTemporaire() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-test-'));
 }
 
+/**
+ * Dossier de données et dossier de sauvegardes séparés, comme en vrai :
+ * les sauvegardes vivent hors du dossier de données pour lui survivre.
+ */
+function environnement(t) {
+  const donnees = dossierTemporaire();
+  const sauvegardes = dossierTemporaire();
+  t.after(() => {
+    fs.rmSync(donnees, { recursive: true, force: true });
+    fs.rmSync(sauvegardes, { recursive: true, force: true });
+  });
+  return { donnees, sauvegardes, ouvrir: () => creerStockage(donnees, { dossierSauvegardes: sauvegardes }) };
+}
+
 const CHAMPS = {
   dateEncaissement: '2026-07-15',
   client: 'Client test',
@@ -23,11 +37,29 @@ const CHAMPS = {
   modeReglement: 'carte'
 };
 
-test('cycle complet : ajout, modification, suppression', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+test('un dossier de sauvegardes inaccessible n’empêche pas d’enregistrer', (t) => {
+  // Lecteur réseau absent, disque plein, antivirus : le filet de sécurité ne
+  // doit jamais bloquer l'obligation première, tenir le registre. Ici la
+  // place du dossier est occupée par un fichier, donc toute copie y échoue.
+  const donnees = dossierTemporaire();
+  const sauvegardes = path.join(dossierTemporaire(), 'occupe');
+  fs.writeFileSync(sauvegardes, 'un fichier, pas un dossier');
+  t.after(() => fs.rmSync(donnees, { recursive: true, force: true }));
 
-  const stockage = creerStockage(dossier);
+  const stockage = creerStockage(donnees, { dossierSauvegardes: sauvegardes });
+  stockage.ajouterRecette(CHAMPS);
+  stockage.ajouterRecette({ ...CHAMPS, montant: 250 });
+
+  // Le fichier de données, lui, a bien tout reçu.
+  const ecrit = JSON.parse(fs.readFileSync(path.join(donnees, 'livre-des-recettes.json'), 'utf8'));
+  assert.equal(ecrit.recettes.length, 2);
+  assert.equal(stockage.listerRecettes().length, 2, 'mémoire et disque restent d’accord');
+});
+
+test('cycle complet : ajout, modification, suppression', (t) => {
+  const { ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
   assert.deepEqual(stockage.listerRecettes(), []);
 
   const creee = stockage.ajouterRecette(CHAMPS);
@@ -46,41 +78,39 @@ test('cycle complet : ajout, modification, suppression', (t) => {
 });
 
 test('les données survivent à une réouverture (persistance fichier)', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { donnees: dossier, ouvrir } = environnement(t);
 
-  const premier = creerStockage(dossier);
+  const premier = ouvrir();
   premier.ajouterRecette(CHAMPS);
   premier.modifierParametres({ nomEntreprise: 'Ma micro' });
 
   // Nouvelle « session » sur le même dossier.
-  const second = creerStockage(dossier);
+  const second = ouvrir();
   assert.equal(second.listerRecettes().length, 1);
   assert.equal(second.listerRecettes()[0].client, 'Client test');
   assert.equal(second.obtenirParametres().nomEntreprise, 'Ma micro');
 });
 
 test('une sauvegarde quotidienne est créée avant modification', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { sauvegardes: dossierSauvegardes, ouvrir } = environnement(t);
 
-  const stockage = creerStockage(dossier);
+  const stockage = ouvrir();
   stockage.ajouterRecette(CHAMPS);  // première écriture : rien à sauvegarder
   stockage.ajouterRecette(CHAMPS);  // le fichier existe : sauvegarde du jour créée
 
-  const sauvegardes = fs.readdirSync(path.join(dossier, 'sauvegardes'));
-  assert.equal(sauvegardes.length, 1);
-  assert.match(sauvegardes[0], /^livre-des-recettes-\d{4}-\d{2}-\d{2}\.json$/);
+  const fichiers = fs.readdirSync(dossierSauvegardes);
+  const quotidiennes = fichiers.filter((f) => /^livre-des-recettes-\d{4}-\d{2}-\d{2}\.json$/.test(f));
+  assert.equal(quotidiennes.length, 1, 'une seule sauvegarde par jour');
+  assert.ok(fichiers.includes('livre-des-recettes-copie-de-secours.json'), 'plus la copie de secours');
 });
 
 test('un fichier corrompu passe en lecture seule au lieu d’être écrasé', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { donnees: dossier, ouvrir } = environnement(t);
 
   const contenuCorrompu = '{ pas du json';
   fs.writeFileSync(path.join(dossier, 'livre-des-recettes.json'), contenuCorrompu, 'utf8');
 
-  const stockage = creerStockage(dossier);
+  const stockage = ouvrir();
   assert.match(stockage.corruption(), /illisible/);
   assert.deepEqual(stockage.listerRecettes(), []);
 
@@ -90,18 +120,17 @@ test('un fichier corrompu passe en lecture seule au lieu d’être écrasé', (t
 });
 
 test('après corruption, restaurer une sauvegarde remet tout en état', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { donnees: dossier, ouvrir } = environnement(t);
 
   // Vie normale : une recette, puis une sauvegarde étiquetée.
-  const sain = creerStockage(dossier);
+  const sain = ouvrir();
   sain.ajouterRecette(CHAMPS);
   const nomSauvegarde = sain.creerSauvegarde('avant-import');
   assert.match(nomSauvegarde, /avant-import\.json$/);
 
   // Corruption du fichier, puis restauration.
   fs.writeFileSync(path.join(dossier, 'livre-des-recettes.json'), '###', 'utf8');
-  const abime = creerStockage(dossier);
+  const abime = ouvrir();
   assert.ok(abime.corruption());
   const resume = abime.restaurerSauvegarde(nomSauvegarde);
   assert.equal(resume.recettes, 1);
@@ -112,10 +141,9 @@ test('après corruption, restaurer une sauvegarde remet tout en état', (t) => {
 });
 
 test('les sauvegardes se listent et les noms hostiles sont refusés', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { ouvrir } = environnement(t);
 
-  const stockage = creerStockage(dossier);
+  const stockage = ouvrir();
   stockage.ajouterRecette(CHAMPS);
   stockage.creerSauvegarde('avant-import');
 
@@ -127,6 +155,106 @@ test('les sauvegardes se listent et les noms hostiles sont refusés', (t) => {
 
   assert.throws(() => stockage.restaurerSauvegarde('../../secrets.json'), /invalide/);
   assert.throws(() => stockage.restaurerSauvegarde('livre-des-recettes-9999-01-01.json'), /introuvable/);
+});
+
+test('les sauvegardes survivent à la suppression du dossier de données', (t) => {
+  const { donnees: dossier, sauvegardes: dossierSauvegardes, ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
+  stockage.ajouterRecette(CHAMPS);
+  const copie = stockage.creerSauvegarde('avant-import');
+
+  // L'utilisateur efface tout son dossier de données.
+  fs.rmSync(dossier, { recursive: true, force: true });
+  assert.equal(fs.existsSync(dossier), false);
+  assert.ok(fs.existsSync(path.join(dossierSauvegardes, copie)), 'la copie est ailleurs, donc intacte');
+
+  // Au démarrage suivant, l'application le remarque au lieu de croire à une
+  // première utilisation.
+  const apres = ouvrir();
+  assert.equal(apres.donneesAbsentes(), true);
+  assert.ok(apres.listerSauvegardes().some((s) => s.fichier === copie));
+});
+
+test('la copie de secours suit chaque écriture, hors du dossier de données', (t) => {
+  const { donnees: dossier, sauvegardes: dossierSauvegardes, ouvrir } = environnement(t);
+  const secours = path.join(dossierSauvegardes, 'livre-des-recettes-copie-de-secours.json');
+
+  const stockage = ouvrir();
+  stockage.ajouterRecette(CHAMPS);
+  assert.ok(fs.existsSync(secours), 'la copie existe dès la première écriture');
+  assert.equal(JSON.parse(fs.readFileSync(secours, 'utf8')).recettes.length, 1);
+
+  stockage.ajouterRecette({ ...CHAMPS, montant: 250 });
+  assert.equal(JSON.parse(fs.readFileSync(secours, 'utf8')).recettes.length, 2, 'elle suit la dernière saisie');
+
+  // Suppression du dossier de données : la copie garde l'état le plus récent,
+  // là où une sauvegarde quotidienne s'arrêterait au début de la journée.
+  fs.rmSync(dossier, { recursive: true, force: true });
+  const apres = ouvrir();
+  assert.equal(apres.donneesAbsentes(), true);
+  const resume = apres.restaurerSauvegarde('livre-des-recettes-copie-de-secours.json');
+  assert.equal(resume.recettes, 2, 'rien n’est perdu, pas même la dernière saisie');
+});
+
+test('repartir de zéro met d’abord la copie de secours de côté', (t) => {
+  const { donnees: dossier, ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
+  stockage.ajouterRecette(CHAMPS);
+  fs.rmSync(dossier, { recursive: true, force: true });
+
+  const apres = ouvrir();
+  apres.repartirDeZero();
+
+  const misesDeCote = apres.listerSauvegardes().filter((s) => s.fichier.includes('avant-remise-a-zero'));
+  assert.equal(misesDeCote.length, 1, 'le dernier état connu reste restaurable');
+  assert.equal(apres.restaurerSauvegarde(misesDeCote[0].fichier).recettes, 1);
+});
+
+test('une première utilisation n’est pas confondue avec une disparition', (t) => {
+  const { ouvrir } = environnement(t);
+  // Ni fichier ni sauvegarde : c'est un vrai premier lancement.
+  assert.equal(ouvrir().donneesAbsentes(), false);
+});
+
+test('restaurer après une disparition recrée le dossier et le fichier', (t) => {
+  const { donnees: dossier, ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
+  stockage.ajouterRecette(CHAMPS);
+  const copie = stockage.creerSauvegarde('avant-import');
+  fs.rmSync(dossier, { recursive: true, force: true });
+
+  const apres = ouvrir();
+  assert.equal(apres.donneesAbsentes(), true);
+  const resume = apres.restaurerSauvegarde(copie);
+
+  assert.equal(resume.recettes, 1);
+  assert.equal(apres.donneesAbsentes(), false);
+  assert.ok(fs.existsSync(path.join(dossier, 'livre-des-recettes.json')), 'le fichier est reconstitué');
+  assert.equal(apres.listerRecettes().length, 1);
+});
+
+test('repartir de zéro recrée un fichier vide sans toucher aux sauvegardes', (t) => {
+  const { donnees: dossier, ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
+  stockage.ajouterRecette(CHAMPS);
+  stockage.creerSauvegarde('avant-import');
+  fs.rmSync(dossier, { recursive: true, force: true });
+
+  const apres = ouvrir();
+  assert.equal(apres.donneesAbsentes(), true);
+  apres.repartirDeZero();
+
+  assert.equal(apres.donneesAbsentes(), false);
+  assert.equal(apres.listerRecettes().length, 0);
+  assert.ok(fs.existsSync(path.join(dossier, 'livre-des-recettes.json')));
+  assert.ok(
+    apres.listerSauvegardes().some((s) => s.fichier.includes('avant-import')),
+    'les sauvegardes d’avant restent proposables'
+  );
 });
 
 test('la rotation garde tout 14 jours, puis une par semaine, puis une par mois', () => {
@@ -147,10 +275,9 @@ test('la rotation ne touche à rien pendant les 14 premiers jours', () => {
 });
 
 test('l’import en lot n’écrit qu’une fois et retourne les copies', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { ouvrir } = environnement(t);
 
-  const stockage = creerStockage(dossier);
+  const stockage = ouvrir();
   const creees = stockage.ajouterRecettes([CHAMPS, { ...CHAMPS, montant: 50 }]);
   assert.equal(creees.length, 2);
   assert.notEqual(creees[0].id, creees[1].id);
@@ -158,10 +285,9 @@ test('l’import en lot n’écrit qu’une fois et retourne les copies', (t) =>
 });
 
 test('cycle complet des clients, triés par nom et persistés', (t) => {
-  const dossier = dossierTemporaire();
-  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  const { ouvrir } = environnement(t);
 
-  const stockage = creerStockage(dossier);
+  const stockage = ouvrir();
   assert.deepEqual(stockage.listerClients(), []);
 
   const zoe = stockage.ajouterClient({ nom: 'Zoé Studio', siret: '' });
@@ -179,6 +305,6 @@ test('cycle complet des clients, triés par nom et persistés', (t) => {
   assert.equal(stockage.supprimerClient('inconnu'), false);
 
   // Persistance après réouverture.
-  const second = creerStockage(dossier);
+  const second = ouvrir();
   assert.deepEqual(second.listerClients().map((c) => c.nom), ['Atelier Alpha']);
 });

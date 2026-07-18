@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validerRecette, validerClient, validerParametres, cleSirenValide } from '../src/validation.js';
+import { validerRecette, validerAchat, validerClient, validerParametres, cleSirenValide } from '../src/validation.js';
 
 const RECETTE_VALIDE = {
   dateEncaissement: '2026-07-15',
@@ -113,6 +113,52 @@ test('cleSirenValide accepte l’exception historique de La Poste', () => {
 test('un SIREN ou SIRET à clé invalide est refusé avec un message clair', () => {
   assert.match(validerParametres({ siren: '123456789' }).erreurs.siren, /clé de contrôle/);
   assert.match(validerClient({ nom: 'X', siret: '12345678900012' }).erreurs.siret, /clé de contrôle/);
+});
+
+// ---- Achats -------------------------------------------------------------------
+
+const ACHAT = {
+  dateReglement: '2026-07-08',
+  fournisseur: 'Métro',
+  referenceFacture: 'A-14',
+  montant: '89,90',
+  modeReglement: 'carte'
+};
+
+test('un achat valide se limite aux cinq colonnes légales', () => {
+  const { erreurs, valeurs } = validerAchat({ ...ACHAT, fournisseur: '  Métro  ', tva: 20 });
+  assert.equal(erreurs, null);
+  assert.deepEqual(valeurs, {
+    dateReglement: '2026-07-08',
+    fournisseur: 'Métro',
+    referenceFacture: 'A-14',
+    montant: 89.9,
+    modeReglement: 'carte'
+  });
+});
+
+test('date, fournisseur, montant et mode de paiement sont obligatoires', () => {
+  const { erreurs } = validerAchat({ dateReglement: '', fournisseur: '', montant: '', modeReglement: '' });
+  assert.ok(erreurs.dateReglement);
+  assert.ok(erreurs.fournisseur);
+  assert.ok(erreurs.montant);
+  assert.ok(erreurs.modeReglement);
+});
+
+test('la référence du justificatif reste facultative', () => {
+  const { erreurs, valeurs } = validerAchat({ ...ACHAT, referenceFacture: '' });
+  assert.equal(erreurs, null);
+  assert.equal(valeurs.referenceFacture, '');
+});
+
+test('un montant nul ou négatif est refusé, un mode personnalisé est accepté', () => {
+  assert.ok(validerAchat({ ...ACHAT, montant: '0' }).erreurs.montant);
+  assert.ok(validerAchat({ ...ACHAT, montant: '-10' }).erreurs.montant);
+  assert.ok(validerAchat({ ...ACHAT, modeReglement: 'perso-1234abcd' }).erreurs.modeReglement);
+  assert.equal(
+    validerAchat({ ...ACHAT, modeReglement: 'perso-1234abcd' }, [{ code: 'perso-1234abcd' }]).erreurs,
+    null
+  );
 });
 
 // ---- Clients ------------------------------------------------------------------

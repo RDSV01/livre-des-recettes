@@ -125,6 +125,69 @@ export function validerRecette(entree, modesPersonnalises = []) {
 }
 
 /**
+ * Valide et normalise un achat du registre des achats.
+ *
+ * Cinq colonnes légales : date du règlement, fournisseur, référence de la
+ * facture ou du justificatif, mode de paiement, montant. Seule la référence
+ * est facultative (un petit achat n'a pas toujours de pièce numérotée).
+ *
+ * @param {Array<{code: string}>} [modesPersonnalises] modes ajoutés par
+ *   l'utilisateur dans les paramètres, acceptés en plus des modes par défaut.
+ */
+export function validerAchat(entree, modesPersonnalises = []) {
+  const e = entree ?? {};
+  const erreurs = {};
+
+  const dateReglement = texte(e.dateReglement);
+  if (!dateReglement) {
+    erreurs.dateReglement = 'La date du règlement est obligatoire.';
+  } else if (!estDateIso(dateReglement)) {
+    erreurs.dateReglement = 'Date invalide (format attendu : AAAA-MM-JJ).';
+  }
+
+  const fournisseur = texte(e.fournisseur);
+  if (!fournisseur) {
+    erreurs.fournisseur = 'Le nom du fournisseur est obligatoire.';
+  } else if (fournisseur.length > LONGUEUR_MAX) {
+    erreurs.fournisseur = `Le nom du fournisseur dépasse ${LONGUEUR_MAX} caractères.`;
+  }
+
+  const montant = analyserMontant(e.montant);
+  if (montant === null) {
+    erreurs.montant = 'Le montant de l’achat est obligatoire et doit être un nombre.';
+  } else if (montant <= 0) {
+    erreurs.montant = 'Le montant doit être strictement positif.';
+  } else if (montant > MONTANT_MAX) {
+    erreurs.montant = 'Le montant est invraisemblablement élevé.';
+  }
+
+  const modeReglement = texte(e.modeReglement);
+  if (!MODES_REGLEMENT.some((m) => m.code === modeReglement) &&
+      !modesPersonnalises.some((m) => m.code === modeReglement)) {
+    erreurs.modeReglement = 'Mode de paiement inconnu.';
+  }
+
+  const referenceFacture = texte(e.referenceFacture);
+  if (referenceFacture.length > 100) {
+    erreurs.referenceFacture = 'La référence dépasse 100 caractères.';
+  }
+
+  if (Object.keys(erreurs).length > 0) {
+    return { erreurs, valeurs: null };
+  }
+  return {
+    erreurs: null,
+    valeurs: {
+      dateReglement,
+      fournisseur,
+      referenceFacture,
+      montant: Math.round(montant * 100) / 100,
+      modeReglement
+    }
+  };
+}
+
+/**
  * Valide et normalise une fiche client.
  * Le livre des recettes n'a besoin que du nom ; le SIRET est facultatif et
  * sert à la recherche automatique. Aucune autre donnée n'est demandée.
@@ -268,7 +331,8 @@ export function validerParametres(entree) {
       periodiciteUrssaf, dernierePeriodeDeclaree,
       alertesNumerotation: booleen(e.alertesNumerotation, true),
       alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
-      suiviSeuils: booleen(e.suiviSeuils, true)
+      suiviSeuils: booleen(e.suiviSeuils, true),
+      verifierMisesAJour: booleen(e.verifierMisesAJour, true)
     }
   };
 }

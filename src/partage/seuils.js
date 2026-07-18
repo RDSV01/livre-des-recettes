@@ -18,6 +18,16 @@ import { enCentimes, enEuros } from './montants.js';
 export const ANNEE_SEUILS = '2026-2028';
 
 /**
+ * Ces seuils valent-ils pour cette année ? Le tableau de bord se consulte
+ * année par année : mesurer un exercice passé avec les seuils d'aujourd'hui
+ * donnerait un résultat faux, l'interface doit pouvoir le signaler.
+ */
+export function seuilsValentPour(annee) {
+  const [debut, fin] = ANNEE_SEUILS.split('-').map(Number);
+  return annee >= debut && annee <= fin;
+}
+
+/**
  * Seuils par type d'activité.
  *  - `plafondMicro` : chiffre d'affaires annuel maximal du régime micro ;
  *  - `franchiseTva` : seuil de la franchise en base de TVA ;

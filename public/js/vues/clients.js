@@ -157,7 +157,7 @@ export async function vueClients(conteneur) {
       <header class="entete-vue">
         <div>
           <h1>Clients</h1>
-          <p>Votre carnet de clients, pour saisir vos recettes sans faute de frappe.</p>
+          <p>Votre carnet de clients.</p>
         </div>
         <button type="button" class="btn btn-primaire" id="nouveau-client">${icone('plus', { taille: 16 })}<span>Nouveau client</span></button>
       </header>

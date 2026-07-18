@@ -455,6 +455,10 @@ th.triable .icone { margin-left: 4px; }
   white-space: nowrap;
 }
 
+/* Vente ou prestation : deux teintes pour distinguer d'un coup d'œil. */
+.badge.categorie-ventes { background: var(--accent-doux); color: var(--accent); }
+.badge.categorie-prestations { background: var(--succes-doux); color: var(--succes); }
+
 /* ---- État vide ----------------------------------------------------------- */
 
 .etat-vide { text-align: center; padding: 42px 20px; color: var(--texte-secondaire); }
@@ -478,6 +482,38 @@ dialog::backdrop { background: rgba(2, 6, 23, 0.55); }
 .corps-dialogue { padding: 24px; }
 .corps-dialogue h2 { margin-bottom: 18px; }
 .pied-dialogue { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
+/* Boutons d'accès aux dossiers, repliés les uns sous les autres si besoin. */
+.actions-donnees { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Modale d'attente : aucune action possible tant que l'opération dure. */
+.dialogue-attente { width: min(440px, calc(100vw - 32px)); }
+.etat-attente { color: var(--texte-secondaire); }
+
+.barre-attente {
+  margin-top: 18px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent-doux);
+  overflow: hidden;
+}
+.barre-attente span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: attente 1.2s ease-in-out infinite;
+}
+
+@keyframes attente {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barre-attente span { animation: none; width: 100%; }
+}
 
 /* ---- Toasts -------------------------------------------------------------- */
 
@@ -630,7 +666,9 @@ dialog::backdrop { background: rgba(2, 6, 23, 0.55); }
   display: grid;
   grid-template-columns: 3fr 2fr;
   gap: 16px;
-  align-items: stretch;
+  /* Chaque carte s'arrête à son contenu : étirée, celle du graphique laissait
+     un grand vide sous les barres pour s'aligner sur les jauges. */
+  align-items: start;
 }
 .grille-deux > .carte { margin-bottom: 20px; }
 

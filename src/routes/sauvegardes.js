@@ -15,6 +15,16 @@ export function routesSauvegardes(stockage) {
     res.json({ sauvegardes: stockage.listerSauvegardes() });
   });
 
+  /**
+   * Repart d'un livre vide après une disparition du fichier de données :
+   * l'utilisateur préfère ignorer les sauvegardes proposées. Le fichier est
+   * recréé pour que la question ne soit plus posée au démarrage suivant.
+   */
+  routeur.post('/repartir-de-zero', (req, res) => {
+    stockage.repartirDeZero();
+    res.json({ recommence: true });
+  });
+
   // POST /api/sauvegardes/restaurer { fichier: "livre-des-recettes-....json" }
   routeur.post('/restaurer', (req, res) => {
     const fichier = String(req.body?.fichier ?? '');

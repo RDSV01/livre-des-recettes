@@ -1,36 +1,44 @@
 /**
  * Persistance du livre des recettes.
  *
- * Toutes les données vivent dans UN SEUL fichier JSON lisible :
- * `data/livre-des-recettes.json`. Ce choix est volontaire :
+ * Toutes les données vivent dans UN SEUL fichier JSON lisible,
+ * `livre-des-recettes.json`, rangé dans « Documents/Livre des recettes »
+ * (voir `emplacements.js`). Ce choix est volontaire :
  *
  *  - aucune base de données à installer, l'application reste ultra légère ;
  *  - sauvegarder = copier un fichier ; changer de PC = copier un fichier ;
  *  - le fichier reste lisible par un humain (et par un tableur au besoin).
  *
- * Le fichier contient les recettes, la liste des clients (aide à la saisie)
- * et les paramètres de l'entreprise.
+ * Le fichier contient les deux registres (recettes et achats), la liste des
+ * clients (aide à la saisie) et les paramètres de l'entreprise.
  *
  * Garanties contre la perte de données :
  *  - écriture atomique (fichier temporaire puis renommage) : une coupure en
  *    pleine écriture ne corrompt jamais le fichier existant ;
- *  - une sauvegarde quotidienne automatique est conservée dans
- *    `data/sauvegardes/` (30 jours glissants), plus une sauvegarde étiquetée
- *    avant chaque opération sensible (import, restauration) ;
+ *  - une sauvegarde quotidienne automatique est conservée HORS du dossier de
+ *    données (voir `emplacements.js`), plus une sauvegarde étiquetée avant
+ *    chaque opération sensible (import, restauration). Supprimer le dossier
+ *    de données ne détruit donc pas les copies ;
  *  - toute écriture qui échoue est annulée en mémoire : mémoire et fichier ne
  *    divergent jamais ;
  *  - au démarrage, le fichier est vérifié : s'il est corrompu, l'application
  *    démarre en lecture seule et propose de restaurer une sauvegarde, sans
- *    JAMAIS écraser le fichier abîmé.
+ *    JAMAIS écraser le fichier abîmé ;
+ *  - s'il a purement disparu alors que des sauvegardes existent, l'application
+ *    le signale et propose de le reconstituer.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { PARAMETRES_DEFAUT } from './partage/constantes.js';
+import { dossierSauvegardesParDefaut } from './emplacements.js';
 
 const NOM_FICHIER = 'livre-des-recettes.json';
-const DOSSIER_SAUVEGARDES = 'sauvegardes';
+// Copie tenue à jour à chaque écriture, hors du dossier de données : une
+// suppression de celui-ci ne fait alors perdre aucune saisie, pas même
+// celles du jour (les autres copies sont quotidiennes).
+const NOM_COPIE_DE_SECOURS = 'livre-des-recettes-copie-de-secours.json';
 const SAUVEGARDES_ETIQUETEES_CONSERVEES = 10;
 
 // Rotation des sauvegardes quotidiennes : tout est gardé 14 jours, puis une
@@ -75,11 +83,12 @@ export function sauvegardesObsoletes(dates, aujourdHui) {
 }
 
 /** Vérifie qu'un objet a bien la forme attendue du fichier de données. */
-export function estDonneesValides(objet) {
+function estDonneesValides(objet) {
   return objet !== null &&
     typeof objet === 'object' &&
     !Array.isArray(objet) &&
     (objet.recettes === undefined || Array.isArray(objet.recettes)) &&
+    (objet.achats === undefined || Array.isArray(objet.achats)) &&
     (objet.clients === undefined || Array.isArray(objet.clients)) &&
     (objet.parametres === undefined ||
       (typeof objet.parametres === 'object' && objet.parametres !== null && !Array.isArray(objet.parametres)));
@@ -89,15 +98,50 @@ export function estDonneesValides(objet) {
  * Crée le stockage adossé au dossier donné (créé au besoin).
  * Le contenu est chargé en mémoire une fois : le volume d'un livre des
  * recettes (quelques milliers de lignes au plus) le permet largement.
+ *
+ * @param {string} dossierDonnees dossier du fichier de données.
+ * @param {object} [options]
+ * @param {string} [options.dossierSauvegardes] où ranger les sauvegardes
+ *   automatiques (par défaut : hors du dossier de données, voir
+ *   `emplacements.js`). Les tests s'en servent pour rester isolés.
  */
-export function creerStockage(dossierDonnees) {
+export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauvegardesParDefaut(dossierDonnees) } = {}) {
   const cheminFichier = path.join(dossierDonnees, NOM_FICHIER);
-  const dossierSauvegardes = path.join(dossierDonnees, DOSSIER_SAUVEGARDES);
 
   /** Message d'erreur si le fichier est corrompu, sinon `null`. */
   let corruption = null;
 
+  // Un fichier absent alors que des sauvegardes existent n'est pas une
+  // première utilisation : c'est une disparition, et elle se répare.
+  const fichierAbsent = !fs.existsSync(cheminFichier);
   let donnees = charger();
+  let disparition = fichierAbsent && sauvegardes().length > 0;
+
+  /**
+   * Sauvegardes présentes, de la plus récente à la plus ancienne.
+   *
+   * Un dossier illisible ne doit pas empêcher l'application de démarrer ni de
+   * répondre : sans copies consultables, il reste toujours le fichier de
+   * données. La liste vide dit exactement cela.
+   */
+  function sauvegardes() {
+    try {
+      return listerSauvegardesDuDossier();
+    } catch {
+      return [];
+    }
+  }
+
+  function listerSauvegardesDuDossier() {
+    if (!fs.existsSync(dossierSauvegardes)) return [];
+    return fs.readdirSync(dossierSauvegardes)
+      .filter((f) => MOTIF_SAUVEGARDE.test(f))
+      .map((fichier) => {
+        const infos = fs.statSync(path.join(dossierSauvegardes, fichier));
+        return { fichier, date: infos.mtime.toISOString(), taille: infos.size };
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
 
   /** Complète un contenu lu avec les valeurs par défaut manquantes. */
   function normaliser(lu) {
@@ -105,6 +149,7 @@ export function creerStockage(dossierDonnees) {
       version: 1,
       parametres: { ...PARAMETRES_DEFAUT, ...(lu.parametres ?? {}) },
       recettes: Array.isArray(lu.recettes) ? lu.recettes : [],
+      achats: Array.isArray(lu.achats) ? lu.achats : [],
       clients: Array.isArray(lu.clients) ? lu.clients : []
     };
   }
@@ -140,6 +185,24 @@ export function creerStockage(dossierDonnees) {
     const temporaire = `${cheminFichier}.tmp`;
     fs.writeFileSync(temporaire, JSON.stringify(donnees, null, 2), 'utf8');
     fs.renameSync(temporaire, cheminFichier);
+    rafraichirCopieDeSecours();
+  }
+
+  /**
+   * Met à jour la copie de secours, hors du dossier de données.
+   *
+   * Son échec (disque plein, dossier inaccessible) ne doit jamais empêcher
+   * l'utilisateur de travailler : le fichier principal vient d'être écrit,
+   * et la copie repartira à l'écriture suivante.
+   */
+  function rafraichirCopieDeSecours() {
+    try {
+      fs.mkdirSync(dossierSauvegardes, { recursive: true });
+      const cible = path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS);
+      const temporaire = `${cible}.tmp`;
+      fs.copyFileSync(cheminFichier, temporaire);
+      fs.renameSync(temporaire, cible);
+    } catch { /* réessayé à la prochaine écriture */ }
   }
 
   /** Garde les `garder` sauvegardes les plus récentes correspondant au motif. */
@@ -153,23 +216,32 @@ export function creerStockage(dossierDonnees) {
     }
   }
 
-  /** Copie le fichier courant une fois par jour avant de le modifier. */
+  /**
+   * Copie le fichier courant une fois par jour avant de le modifier.
+   *
+   * Comme la copie de secours, son échec ne bloque jamais la saisie : tenir le
+   * registre est l'obligation de l'utilisateur, la sauvegarde n'est qu'un
+   * filet. Un dossier devenu inaccessible (lecteur réseau absent, disque
+   * plein, antivirus) l'empêcherait sinon d'enregistrer la moindre recette.
+   */
   function creerSauvegardeQuotidienne() {
     if (!fs.existsSync(cheminFichier)) return;
-    fs.mkdirSync(dossierSauvegardes, { recursive: true });
-    const jour = new Date().toISOString().slice(0, 10);
-    const cible = path.join(dossierSauvegardes, `livre-des-recettes-${jour}.json`);
-    if (fs.existsSync(cible)) return;
-    fs.copyFileSync(cheminFichier, cible);
+    try {
+      fs.mkdirSync(dossierSauvegardes, { recursive: true });
+      const jour = new Date().toISOString().slice(0, 10);
+      const cible = path.join(dossierSauvegardes, `livre-des-recettes-${jour}.json`);
+      if (fs.existsSync(cible)) return;
+      fs.copyFileSync(cheminFichier, cible);
 
-    // Rotation : quotidiennes 14 jours, hebdomadaires 2 mois, mensuelles 1 an.
-    const motifQuotidien = /^livre-des-recettes-(\d{4}-\d{2}-\d{2})\.json$/;
-    const dates = fs.readdirSync(dossierSauvegardes)
-      .map((f) => motifQuotidien.exec(f)?.[1])
-      .filter(Boolean);
-    for (const date of sauvegardesObsoletes(dates, jour)) {
-      fs.unlinkSync(path.join(dossierSauvegardes, `livre-des-recettes-${date}.json`));
-    }
+      // Rotation : quotidiennes 14 jours, hebdomadaires 2 mois, mensuelles 1 an.
+      const motifQuotidien = /^livre-des-recettes-(\d{4}-\d{2}-\d{2})\.json$/;
+      const dates = fs.readdirSync(dossierSauvegardes)
+        .map((f) => motifQuotidien.exec(f)?.[1])
+        .filter(Boolean);
+      for (const date of sauvegardesObsoletes(dates, jour)) {
+        fs.unlinkSync(path.join(dossierSauvegardes, `livre-des-recettes-${date}.json`));
+      }
+    } catch { /* réessayé à la prochaine écriture */ }
   }
 
   const horodatage = () => new Date().toISOString();
@@ -193,10 +265,49 @@ export function creerStockage(dossierDonnees) {
 
   return {
     cheminFichier,
+    dossierSauvegardes,
 
     /** Message décrivant la corruption du fichier de données, ou `null`. */
     corruption() {
       return corruption;
+    },
+
+    /**
+     * Le fichier de données a-t-il disparu alors que des sauvegardes
+     * existent ? L'interface propose alors de le reconstituer.
+     */
+    donneesAbsentes() {
+      return disparition;
+    },
+
+    /**
+     * Repart d'un livre vide : le fichier (et son dossier) sont recréés.
+     * Choisi par l'utilisateur qui préfère ignorer les sauvegardes.
+     *
+     * La copie de secours reflète le dernier état connu : elle est mise de
+     * côté avant d'être remplacée par le livre vide, pour qu'un changement
+     * d'avis reste possible.
+     */
+    repartirDeZero() {
+      const secours = path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS);
+      if (fs.existsSync(secours)) {
+        const horo = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        fs.copyFileSync(secours, path.join(dossierSauvegardes, `livre-des-recettes-${horo}-avant-remise-a-zero.json`));
+        purger(/^livre-des-recettes-.*-avant-remise-a-zero\.json$/, SAUVEGARDES_ETIQUETEES_CONSERVEES);
+      }
+      donnees = normaliser({});
+      corruption = null;
+      sauvegarder();
+      disparition = false;
+    },
+
+    /** Nombre d'éléments par registre, sans recopier les listes. */
+    compter() {
+      return {
+        recettes: donnees.recettes.length,
+        achats: donnees.achats.length,
+        clients: donnees.clients.length
+      };
     },
 
     // ---- Recettes ------------------------------------------------------------
@@ -245,6 +356,45 @@ export function creerStockage(dossierDonnees) {
       return ecrire(
         () => { donnees.recettes.splice(index, 1); return true; },
         () => { donnees.recettes.splice(index, 0, supprimee); }
+      );
+    },
+
+    // ---- Achats (registre des achats) ----------------------------------------
+
+    /** Tous les achats (copies : le stockage reste seul maître des originaux). */
+    listerAchats() {
+      return donnees.achats.map((a) => ({ ...a }));
+    },
+
+    /** Ajoute un achat déjà validé. Retourne l'achat créé. */
+    ajouterAchat(champs) {
+      const maintenant = horodatage();
+      const cree = { id: crypto.randomUUID(), ...champs, creeLe: maintenant, modifieLe: maintenant };
+      return ecrire(
+        () => { donnees.achats.push(cree); return { ...cree }; },
+        () => { donnees.achats.pop(); }
+      );
+    },
+
+    /** Met à jour un achat. Retourne l'achat modifié, ou `null` si absent. */
+    modifierAchat(id, champs) {
+      const achat = donnees.achats.find((a) => a.id === id);
+      if (!achat) return null;
+      const avant = { ...achat };
+      return ecrire(
+        () => { Object.assign(achat, champs, { modifieLe: horodatage() }); return { ...achat }; },
+        () => { Object.assign(achat, avant); }
+      );
+    },
+
+    /** Supprime un achat. Retourne `false` si l'identifiant est inconnu. */
+    supprimerAchat(id) {
+      const index = donnees.achats.findIndex((a) => a.id === id);
+      if (index === -1) return false;
+      const [supprime] = donnees.achats.slice(index, index + 1);
+      return ecrire(
+        () => { donnees.achats.splice(index, 1); return true; },
+        () => { donnees.achats.splice(index, 0, supprime); }
       );
     },
 
@@ -322,16 +472,7 @@ export function creerStockage(dossierDonnees) {
     },
 
     /** Sauvegardes disponibles, de la plus récente à la plus ancienne. */
-    listerSauvegardes() {
-      if (!fs.existsSync(dossierSauvegardes)) return [];
-      return fs.readdirSync(dossierSauvegardes)
-        .filter((f) => MOTIF_SAUVEGARDE.test(f))
-        .map((fichier) => {
-          const infos = fs.statSync(path.join(dossierSauvegardes, fichier));
-          return { fichier, date: infos.mtime.toISOString(), taille: infos.size };
-        })
-        .sort((a, b) => b.date.localeCompare(a.date));
-    },
+    listerSauvegardes: sauvegardes,
 
     /**
      * Remplace les données courantes par le contenu d'une sauvegarde.
@@ -366,7 +507,9 @@ export function creerStockage(dossierDonnees) {
 
       donnees = normaliser(lu);
       corruption = null;
+      // Le dossier de données est recréé au besoin par l'écriture qui suit.
       sauvegarder();
+      disparition = false;
       return { recettes: donnees.recettes.length, clients: donnees.clients.length };
     },
 

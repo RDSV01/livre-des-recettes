@@ -8,15 +8,19 @@
  */
 
 import { api } from '../api.js';
-import { etat, definirParametres } from '../etat.js';
+import { etat, definirParametres, registreAchatsUtile } from '../etat.js';
 import { echapperHtml, toast } from '../ui.js';
 import { icone } from '../icones.js';
 import { formaterMontant } from '/partage/montants.js';
+import { libelleCategorieCourt } from '/partage/constantes.js';
 import { formaterDate, nomMois, dernierePeriodeEchue } from '/partage/dates.js';
-import { bilanSeuils, ANNEE_SEUILS } from '/partage/seuils.js';
+import { bilanSeuils, seuilsValentPour, ANNEE_SEUILS } from '/partage/seuils.js';
 
 /** Abréviations françaises des mois, pour l'axe du graphique. */
 const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+
+/** « 4 prestations », « 1 vente » : le nombre suivi du mot accordé. */
+const accord = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? 's' : ''}`;
 
 /**
  * Graphique à barres du CA mensuel (une seule série, teinte accent).
@@ -92,14 +96,20 @@ function graphiqueCaMensuel(points, devise) {
  * native du navigateur.
  */
 function installerInfobulle(conteneur) {
-  const svg = conteneur.querySelector('.graphique-ca');
-  if (!svg) return;
+  const graphiques = conteneur.querySelectorAll('.graphique-ca');
+  if (graphiques.length === 0) return;
 
   const bulle = document.createElement('div');
   bulle.className = 'infobulle-graphique';
   bulle.hidden = true;
   conteneur.appendChild(bulle);
 
+  // Une seule info-bulle partagée par les graphiques de la page.
+  for (const svg of graphiques) suivrePointeur(svg, bulle);
+}
+
+/** Fait suivre l'info-bulle au pointeur sur un graphique donné. */
+function suivrePointeur(svg, bulle) {
   svg.addEventListener('pointermove', (evenement) => {
     const colonne = evenement.target.closest('.colonne');
     if (!colonne) {
@@ -161,20 +171,20 @@ function carteSeuils(stats, devise) {
   return `
     <h2>Plafond et franchise de TVA (${stats.annee})</h2>
     ${jauge({
-      titre: estMixte ? 'Plafond micro-entrepreneur (global)' : 'Plafond micro-entrepreneur',
+      titre: estMixte ? 'Plafond micro-entrepreneur (ventes + prestations)' : 'Plafond micro-entrepreneur',
       ca: stats.caAnnee,
       progression: bilan.plafondMicro,
       devise,
       messageAttention: '{p} % du plafond annuel atteint.',
-      messageDepasse: 'Plafond annuel atteint : renseignez-vous sur le régime réel.'
+      messageDepasse: 'Plafond dépassé. Le régime micro ne prend fin qu’après deux années consécutives de dépassement.'
     })}
     ${jauge({
-      titre: estMixte ? 'Franchise en base de TVA (global)' : 'Franchise en base de TVA',
+      titre: estMixte ? 'Franchise en base de TVA (ventes + prestations)' : 'Franchise en base de TVA',
       ca: stats.caAnnee,
       progression: bilan.franchiseTva,
       devise,
       messageAttention: 'Vous approchez du seuil de franchise de TVA ({p} %).',
-      messageDepasse: `Seuil dépassé. Tolérance jusqu’au seuil majoré : ${formaterMontant(bilan.franchiseTva.seuilMajore, devise)}.`
+      messageDepasse: `Seuil dépassé : la franchise prend fin au 1er janvier prochain. Au-delà de ${formaterMontant(bilan.franchiseTva.seuilMajore, devise)}, elle cesse dès le jour du dépassement.`
     })}
     ${bilan.prestations ? `
     ${jauge({
@@ -183,7 +193,7 @@ function carteSeuils(stats, devise) {
       progression: bilan.prestations.plafondMicro,
       devise,
       messageAttention: '{p} % du plafond des prestations atteint.',
-      messageDepasse: 'Plafond des prestations atteint : renseignez-vous sur le régime réel.'
+      messageDepasse: 'Plafond des prestations dépassé. Le régime micro ne prend fin qu’après deux années consécutives de dépassement.'
     })}
     ${jauge({
       titre: 'Part prestations : franchise de TVA',
@@ -191,7 +201,7 @@ function carteSeuils(stats, devise) {
       progression: bilan.prestations.franchiseTva,
       devise,
       messageAttention: 'La part prestations approche de son seuil de TVA ({p} %).',
-      messageDepasse: `Seuil dépassé. Tolérance jusqu’au seuil majoré : ${formaterMontant(bilan.prestations.franchiseTva.seuilMajore, devise)}.`
+      messageDepasse: `Seuil dépassé : la franchise prend fin au 1er janvier prochain. Au-delà de ${formaterMontant(bilan.prestations.franchiseTva.seuilMajore, devise)}, elle cesse dès le jour du dépassement.`
     })}` : ''}
     ${estMixte && stats.nombreNonCategorisees > 0 ? `
       <p class="note-legale">
@@ -199,6 +209,12 @@ function carteSeuils(stats, devise) {
         <span>${stats.nombreNonCategorisees} recette${stats.nombreNonCategorisees > 1 ? 's' : ''} de ${stats.annee}
         sans catégorie : modifiez-les (vente ou prestation) pour un suivi fiable de la part prestations.</span>
       </p>` : ''}
+    ${seuilsValentPour(stats.annee) ? '' : `
+      <p class="note-legale">
+        ${icone('cercle-alerte', { taille: 16 })}
+        <span>Les seuils ci-dessus sont ceux de la période ${ANNEE_SEUILS} : ceux applicables
+        en ${stats.annee} étaient différents, ces jauges ne valent donc pas pour cette année.</span>
+      </p>`}
     <p class="note-legale">
       ${icone('info', { taille: 16 })}
       <span>Suivi purement informatif, basé sur les seuils ${ANNEE_SEUILS}. En cas de doute,
@@ -234,24 +250,48 @@ export async function vueTableauDeBord(conteneur) {
   async function rendre() {
     const stats = await api.tableauDeBord({ annee: anneeChoisie });
     const { devise, formatDate, suiviSeuils } = etat.parametres;
+    // La catégorie n'est renseignée, et n'a de sens, qu'en activité mixte.
+    const estMixte = etat.parametres.typeActivite === 'mixte';
 
     const cartes = [
       { etiquette: `CA de ${nomMois(stats.mois)} ${stats.annee}`, valeur: formaterMontant(stats.caMois, devise), icone: 'billet', principale: true },
       { etiquette: `CA de l’année ${stats.annee}`, valeur: formaterMontant(stats.caAnnee, devise), icone: 'calendrier', principale: true },
       { etiquette: `Encaissements en ${stats.annee}`, valeur: String(stats.nombreEncaissements), icone: 'diese' },
-      { etiquette: 'Moyenne par encaissement', valeur: formaterMontant(stats.moyenneEncaissement, devise), icone: 'tendance' }
+      { etiquette: 'Moyenne par encaissement', valeur: formaterMontant(stats.moyenneEncaissement, devise), icone: 'tendance' },
+      // Activité mixte : le détail par catégorie, sur le mois puis sur l'année.
+      // L'étiquette porte le nombre d'encaissements concernés.
+      ...(estMixte ? [
+        { etiquette: `${accord(stats.nombreMoisPrestations, 'prestation')} en ${nomMois(stats.mois)}`, valeur: formaterMontant(stats.caMoisPrestations, devise), icone: 'billet' },
+        { etiquette: `${accord(stats.nombreMoisVentes, 'vente')} en ${nomMois(stats.mois)}`, valeur: formaterMontant(stats.caMoisVentes, devise), icone: 'billet' },
+        { etiquette: `${accord(stats.nombreAnneePrestations, 'prestation')} en ${stats.annee}`, valeur: formaterMontant(stats.caAnneePrestations, devise), icone: 'calendrier' },
+        { etiquette: `${accord(stats.nombreAnneeVentes, 'vente')} en ${stats.annee}`, valeur: formaterMontant(stats.caAnneeVentes, devise), icone: 'calendrier' }
+      ] : [])
     ];
 
-    const aDesDonnees = stats.caParMois.some((p) => p.total > 0);
-    const carteGraphique = `
+    /** Une carte de graphique, ou un message tant qu'il n'y a rien à tracer. */
+    const carteGraphique = (titre, points, messageVide) => `
       <div class="carte">
-        <h2>Chiffre d’affaires mensuel (${stats.annee})</h2>
-        ${aDesDonnees ? graphiqueCaMensuel(stats.caParMois, devise) : `
+        <h2>${echapperHtml(titre)}</h2>
+        ${points.some((p) => p.total > 0) ? graphiqueCaMensuel(points, devise) : `
           <div class="etat-vide">
             <div class="grande-icone">${icone('tendance', { taille: 32 })}</div>
-            Le graphique apparaîtra dès vos premiers encaissements.
+            ${echapperHtml(messageVide)}
           </div>`}
       </div>`;
+
+    const graphiquePrincipal = carteGraphique(
+      `Chiffre d’affaires mensuel (${stats.annee})`,
+      stats.caParMois,
+      'Le graphique apparaîtra dès vos premiers encaissements.'
+    );
+
+    // Activité mixte : le détail par activité, sous le graphique global et à
+    // la même largeur, pour que les trois se comparent d'un coup d'œil.
+    const graphiquesParActivite = !estMixte ? '' : `
+      ${carteGraphique(`Prestations de services (${stats.annee})`, stats.caParMoisPrestations,
+        `Aucune prestation encaissée en ${stats.annee}.`)}
+      ${carteGraphique(`Ventes de marchandises (${stats.annee})`, stats.caParMoisVentes,
+        `Aucune vente encaissée en ${stats.annee}.`)}`;
 
     conteneur.innerHTML = `
       <header class="entete-vue">
@@ -265,6 +305,8 @@ export async function vueTableauDeBord(conteneur) {
               ${anneesDisponibles.map((a) => `<option value="${a}" ${a === anneeChoisie ? 'selected' : ''}>${a}</option>`).join('')}
             </select>` : ''}
           <a class="btn btn-discret" href="#/exports">${icone('exports', { taille: 16 })}<span>Exporter le livre des recettes</span></a>
+          ${registreAchatsUtile() ? `
+            <a class="btn btn-secondaire" href="#/achats?nouveau=1">${icone('plus', { taille: 16 })}<span>Nouvel achat</span></a>` : ''}
           <a class="btn btn-primaire" href="#/recettes?nouvelle=1">${icone('plus', { taille: 16 })}<span>Nouvelle recette</span></a>
         </div>
       </header>
@@ -284,13 +326,17 @@ export async function vueTableauDeBord(conteneur) {
 
       ${suiviSeuils ? `
       <section class="grille-deux">
-        ${carteGraphique}
+        <div>
+          ${graphiquePrincipal}
+          ${graphiquesParActivite}
+        </div>
         <div class="carte">
           ${carteSeuils(stats, devise)}
         </div>
       </section>` : `
       <section>
-        ${carteGraphique}
+        ${graphiquePrincipal}
+        ${graphiquesParActivite}
       </section>`}
 
       <section class="carte">
@@ -304,7 +350,11 @@ export async function vueTableauDeBord(conteneur) {
           <div class="conteneur-tableau">
             <table>
               <thead>
-                <tr><th>Encaissé le</th><th>Client</th><th>Libellé</th><th class="montant">Montant</th></tr>
+                <tr>
+                  <th>Encaissé le</th><th>Client</th><th>Libellé</th>
+                  ${estMixte ? '<th>Catégorie</th>' : ''}
+                  <th class="montant">Montant</th>
+                </tr>
               </thead>
               <tbody>
                 ${stats.dernieresRecettes.map((r) => `
@@ -312,6 +362,9 @@ export async function vueTableauDeBord(conteneur) {
                     <td>${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
                     <td>${echapperHtml(r.client)}</td>
                     <td>${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">-</span>'}</td>
+                    ${estMixte ? `<td>${r.categorie
+                      ? `<span class="badge categorie-${r.categorie}">${echapperHtml(libelleCategorieCourt(r.categorie))}</span>`
+                      : '<span class="attenue">-</span>'}</td>` : ''}
                     <td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td>
                   </tr>`).join('')}
               </tbody>

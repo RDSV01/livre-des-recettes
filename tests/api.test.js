@@ -14,12 +14,16 @@ import path from 'node:path';
 import { creerApp } from '../src/app.js';
 
 let dossier;
+let dossierSauvegardes;
 let serveur;
 let base;
 
 before(async () => {
   dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-api-'));
-  const app = creerApp({ dossierDonnees: dossier });
+  // Sauvegardes hors du dossier de données, comme en production, mais dans
+  // un dossier temporaire pour ne rien laisser sur la machine.
+  dossierSauvegardes = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-api-copies-'));
+  const app = creerApp({ dossierDonnees: dossier, dossierSauvegardes });
   await new Promise((resoudre) => {
     serveur = app.listen(0, '127.0.0.1', resoudre);
   });
@@ -29,6 +33,7 @@ before(async () => {
 after(() => {
   serveur.close();
   fs.rmSync(dossier, { recursive: true, force: true });
+  fs.rmSync(dossierSauvegardes, { recursive: true, force: true });
 });
 
 async function appeler(chemin, options = {}) {
@@ -128,6 +133,14 @@ test('un import réel crée une sauvegarde automatique restaurable', async () =>
   assert.equal(recettes.filter((r) => r.numeroFacture === 'SAUV-1').length, 0);
 });
 
+test('GET /api/systeme annonce l’emplacement des sauvegardes, hors des données', async () => {
+  const systeme = await (await appeler('/api/systeme')).json();
+  assert.equal(systeme.dossierSauvegardes, dossierSauvegardes);
+  assert.ok(!systeme.dossierSauvegardes.startsWith(dossier), 'les copies ne sont pas dans le dossier de données');
+  // Fichier bien présent : rien à reconstituer.
+  assert.equal(systeme.donneesAbsentes, false);
+});
+
 test('la restauration refuse un nom de fichier invalide', async () => {
   const reponse = await appeler('/api/sauvegardes/restaurer', {
     methode: 'POST',
@@ -165,6 +178,72 @@ test('l’import détecte doublons et erreurs, la simulation n’écrit rien', a
 
   const apres = (await (await appeler('/api/recettes')).json()).recettes.length;
   assert.equal(apres, avant + 1);
+});
+
+// ---- Achats --------------------------------------------------------------------
+
+const ACHAT = {
+  dateReglement: '2026-07-08',
+  fournisseur: 'Métro Cash & Carry',
+  referenceFacture: 'A-2026-014',
+  montant: '89,90',
+  modeReglement: 'carte'
+};
+
+test('POST /api/achats crée un achat limité aux cinq colonnes légales', async () => {
+  const reponse = await appeler('/api/achats', { methode: 'POST', corps: { ...ACHAT, notes: 'ignoré' } });
+  assert.equal(reponse.status, 201);
+  const { achat } = await reponse.json();
+  assert.equal(achat.montant, 89.9);
+  assert.equal(achat.fournisseur, 'Métro Cash & Carry');
+  assert.ok(achat.id);
+  assert.equal(achat.notes, undefined);
+});
+
+test('POST /api/achats refuse un achat invalide avec le détail', async () => {
+  const reponse = await appeler('/api/achats', {
+    methode: 'POST',
+    corps: { ...ACHAT, fournisseur: '', montant: '0', modeReglement: 'bitcoin' }
+  });
+  assert.equal(reponse.status, 400);
+  const { erreurs } = await reponse.json();
+  assert.ok(erreurs.fournisseur);
+  assert.ok(erreurs.montant);
+  assert.ok(erreurs.modeReglement);
+});
+
+test('GET /api/achats trie par date de règlement décroissante, /annees les liste', async () => {
+  await appeler('/api/achats', {
+    methode: 'POST',
+    corps: { ...ACHAT, dateReglement: '2025-11-02', fournisseur: 'Papeterie Léon', referenceFacture: '', montant: 25 }
+  });
+
+  const { achats } = await (await appeler('/api/achats')).json();
+  assert.equal(achats.length, 2);
+  assert.equal(achats[0].dateReglement, '2026-07-08');
+  assert.equal(achats[1].dateReglement, '2025-11-02');
+  // La référence du justificatif reste facultative.
+  assert.equal(achats[1].referenceFacture, '');
+
+  const { annees } = await (await appeler('/api/achats/annees')).json();
+  assert.deepEqual(annees, [2026, 2025]);
+});
+
+test('PUT et DELETE /api/achats mettent à jour puis suppriment', async () => {
+  const { achat } = await (await appeler('/api/achats', {
+    methode: 'POST',
+    corps: { ...ACHAT, fournisseur: 'Fournisseur éphémère' }
+  })).json();
+
+  const maj = await appeler(`/api/achats/${achat.id}`, {
+    methode: 'PUT',
+    corps: { ...ACHAT, fournisseur: 'Fournisseur corrigé', montant: 12 }
+  });
+  assert.equal(maj.status, 200);
+  assert.equal((await maj.json()).achat.fournisseur, 'Fournisseur corrigé');
+
+  assert.equal((await appeler(`/api/achats/${achat.id}`, { methode: 'DELETE' })).status, 204);
+  assert.equal((await appeler(`/api/achats/${achat.id}`, { methode: 'DELETE' })).status, 404);
 });
 
 // ---- Clients -------------------------------------------------------------------
@@ -257,10 +336,76 @@ test('GET /api/exports/pdf produit un PDF', async () => {
   assert.equal(texte.slice(0, 5), '%PDF-');
 });
 
+test('GET /api/exports/achats produit les trois formats du registre des achats', async () => {
+  const csv = await appeler('/api/exports/achats/csv?annee=2026');
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-disposition'), /registre-achats-2026\.csv/);
+  const contenu = new TextDecoder('utf-8').decode(new Uint8Array(await csv.arrayBuffer()));
+  assert.match(contenu, /Date du règlement;Fournisseur;Référence de la facture ou du justificatif/);
+  assert.match(contenu, /Métro Cash & Carry/);
+  assert.match(contenu, /Total juillet 2026/);
+
+  const xlsx = await appeler('/api/exports/achats/xlsx?annee=2026');
+  const octets = new Uint8Array(await xlsx.arrayBuffer());
+  assert.equal(octets[0], 0x50);
+  assert.equal(octets[1], 0x4b);
+
+  const pdf = await appeler('/api/exports/achats/pdf?annee=2026');
+  const texte = Buffer.from(await pdf.arrayBuffer()).toString('latin1');
+  assert.equal(texte.slice(0, 5), '%PDF-');
+});
+
 test('les exports exigent une année valide', async () => {
   assert.equal((await appeler('/api/exports/csv')).status, 400);
   assert.equal((await appeler('/api/exports/pdf?annee=abc')).status, 400);
   assert.equal((await appeler('/api/exports/xlsx?annee=2026&mois=13')).status, 400);
+  assert.equal((await appeler('/api/exports/achats/csv')).status, 400);
+});
+
+// ---- Requêtes venues d'un autre site --------------------------------------------
+
+test('une écriture demandée par un site tiers est refusée', async () => {
+  // Un site visité par l'utilisateur peut envoyer un formulaire vers
+  // l'application locale : le navigateur annonce alors « cross-site ».
+  const envoyer = (chemin, entetes) => fetch(`${base}${chemin}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...entetes },
+    body: JSON.stringify({})
+  });
+
+  for (const chemin of ['/api/maj/appliquer', '/api/recettes', '/api/achats', '/api/sauvegardes/restaurer']) {
+    const parSecFetch = await envoyer(chemin, { 'Sec-Fetch-Site': 'cross-site' });
+    assert.equal(parSecFetch.status, 403, `${chemin} doit refuser une requête cross-site`);
+
+    const parOrigine = await envoyer(chemin, { Origin: 'https://exemple-malveillant.test' });
+    assert.equal(parOrigine.status, 403, `${chemin} doit refuser une origine étrangère`);
+  }
+
+  // L'application elle-même reste évidemment servie.
+  const legitime = await envoyer('/api/recettes', { 'Sec-Fetch-Site': 'same-origin' });
+  assert.notEqual(legitime.status, 403);
+
+  // Les lectures ne sont jamais bloquées.
+  const lecture = await fetch(`${base}/api/recettes`, { headers: { 'Sec-Fetch-Site': 'cross-site' } });
+  assert.equal(lecture.status, 200);
+});
+
+// ---- Mise à jour ---------------------------------------------------------------
+
+test('GET /api/maj ne contacte rien quand la vérification est désactivée', async () => {
+  const parametres = (await (await appeler('/api/parametres')).json()).parametres;
+  await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { ...parametres, verifierMisesAJour: false }
+  });
+
+  const maj = await (await appeler('/api/maj')).json();
+  assert.equal(maj.actif, false);
+  assert.equal(maj.disponible, false);
+  // Lancée depuis les sources, l'application ne peut pas se remplacer.
+  assert.equal(maj.remplacable, false);
+
+  await appeler('/api/parametres', { methode: 'PUT', corps: parametres });
 });
 
 // ---- Paramètres, sauvegarde, routes inconnues ----------------------------------
@@ -392,4 +537,75 @@ test('une route API inconnue répond 404 en JSON', async () => {
   const reponse = await appeler('/api/nimporte-quoi');
   assert.equal(reponse.status, 404);
   assert.ok((await reponse.json()).erreur);
+});
+
+// ---- Disparition du dossier de données ------------------------------------------
+
+/**
+ * Scénario complet, sur ses propres dossiers : l'utilisateur supprime son
+ * dossier de données, l'application le détecte au démarrage suivant et sait
+ * le reconstituer, ou repartir d'un livre vide.
+ */
+test('le dossier de données supprimé est détecté, puis réparé', async (t) => {
+  const donnees = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-perte-'));
+  const copies = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-perte-copies-'));
+  t.after(() => {
+    fs.rmSync(donnees, { recursive: true, force: true });
+    fs.rmSync(copies, { recursive: true, force: true });
+  });
+
+  /** Ouvre l'application sur ces dossiers, comme un nouveau lancement. */
+  const lancer = async () => {
+    const app = creerApp({ dossierDonnees: donnees, dossierSauvegardes: copies });
+    const instance = await new Promise((pret) => {
+      const s = app.listen(0, '127.0.0.1', () => pret(s));
+    });
+    const adresse = `http://127.0.0.1:${instance.address().port}`;
+    return {
+      adresse,
+      // Les connexions gardées ouvertes par `fetch` retiendraient le
+      // processus de test bien après la dernière assertion.
+      fermer: () => { instance.close(); instance.closeAllConnections(); },
+      lire: async (chemin) => (await fetch(adresse + chemin)).json(),
+      poster: (chemin, corps) => fetch(adresse + chemin, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps)
+      })
+    };
+  };
+
+  // Vie normale : deux recettes, donc une sauvegarde quotidienne.
+  const premier = await lancer();
+  await premier.poster('/api/recettes', RECETTE);
+  await premier.poster('/api/recettes', { ...RECETTE, numeroFacture: 'FAC-002' });
+  premier.fermer();
+
+  // L'utilisateur supprime tout le dossier de données.
+  fs.rmSync(donnees, { recursive: true, force: true });
+
+  const apres = await lancer();
+  const systeme = await apres.lire('/api/systeme');
+  assert.equal(systeme.donneesAbsentes, true, 'la disparition est détectée');
+  assert.equal(systeme.premierLancement, true, 'le livre est vide, mais ce n’est pas un vrai début');
+
+  const disponibles = (await apres.lire('/api/sauvegardes')).sauvegardes.map((s) => s.fichier);
+  assert.ok(disponibles.some((f) => /^livre-des-recettes-\d{4}-\d{2}-\d{2}\.json$/.test(f)), 'la quotidienne a survécu');
+  assert.equal(disponibles[0], 'livre-des-recettes-copie-de-secours.json', 'la plus récente est la copie de secours');
+
+  // Restaurer la plus récente rend TOUTES les saisies, y compris la dernière.
+  const restauration = await apres.poster('/api/sauvegardes/restaurer', { fichier: disponibles[0] });
+  assert.equal(restauration.status, 200);
+  assert.equal((await apres.lire('/api/systeme')).donneesAbsentes, false);
+  assert.ok(fs.existsSync(path.join(donnees, 'livre-des-recettes.json')));
+  assert.equal((await apres.lire('/api/recettes')).recettes.length, 2, 'rien n’est perdu');
+  apres.fermer();
+
+  // Autre issue possible : repartir d'un livre vide.
+  fs.rmSync(donnees, { recursive: true, force: true });
+  const dernier = await lancer();
+  assert.equal((await dernier.lire('/api/systeme')).donneesAbsentes, true);
+  assert.equal((await dernier.poster('/api/sauvegardes/repartir-de-zero', {})).status, 200);
+  assert.equal((await dernier.lire('/api/systeme')).donneesAbsentes, false);
+  assert.equal((await dernier.lire('/api/recettes')).recettes.length, 0);
+  assert.ok((await dernier.lire('/api/sauvegardes')).sauvegardes.length > 0, 'les copies restent disponibles');
+  dernier.fermer();
 });

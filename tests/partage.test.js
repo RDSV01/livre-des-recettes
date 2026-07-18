@@ -10,8 +10,8 @@ import {
 import { analyserMontant, sommeMontants, enCentimes } from '../src/partage/montants.js';
 import { normaliserTexte } from '../src/partage/texte.js';
 import { estDoublon, chercherSimilaire } from '../src/partage/doublons.js';
-import { bilanSeuils, SEUILS } from '../src/partage/seuils.js';
-import { filtrerRecettes, libellesFrequents } from '../src/partage/filtres.js';
+import { bilanSeuils, seuilsValentPour, SEUILS, ANNEE_SEUILS } from '../src/partage/seuils.js';
+import { filtrerRecettes, filtrerAchats, valeursFrequentes } from '../src/partage/filtres.js';
 
 test('estDateIso accepte les dates réelles et refuse le reste', () => {
   assert.equal(estDateIso('2026-07-15'), true);
@@ -104,12 +104,29 @@ test('filtrerRecettes croise année, mois, mode, catégorie et recherche', () =>
   assert.equal(filtrerRecettes(RECETTES_FILTRE, {}).length, 3);
 });
 
-test('libellesFrequents dédoublonne et trie par fréquence puis alphabet', () => {
-  const libelles = libellesFrequents([
+test('valeursFrequentes dédoublonne et trie par fréquence puis alphabet', () => {
+  const libelles = valeursFrequentes([
     { libelle: 'cours de piano' }, { libelle: 'Cours de piano' },
     { libelle: 'Accordage' }, { libelle: '' }
-  ]);
+  ], 'libelle');
   assert.deepEqual(libelles, ['cours de piano', 'Accordage']);
+});
+
+const ACHATS_FILTRE = [
+  { dateReglement: '2026-07-15', fournisseur: 'Métro', referenceFacture: 'A-12', montant: 120.50, modeReglement: 'carte' },
+  { dateReglement: '2026-02-01', fournisseur: 'Papeterie Léon', referenceFacture: '', montant: 30, modeReglement: 'virement' },
+  { dateReglement: '2025-12-10', fournisseur: 'Métro', referenceFacture: 'A-04', montant: 80, modeReglement: 'carte' }
+];
+
+test('filtrerAchats croise période, mode de paiement et recherche libre', () => {
+  assert.equal(filtrerAchats(ACHATS_FILTRE, { annee: 2026 }).length, 2);
+  assert.equal(filtrerAchats(ACHATS_FILTRE, { annee: 2026, mois: 7 }).length, 1);
+  assert.equal(filtrerAchats(ACHATS_FILTRE, { mode: 'carte' }).length, 2);
+  // Recherche sur le fournisseur (sans accent), la référence, puis le montant exact.
+  assert.equal(filtrerAchats(ACHATS_FILTRE, { q: 'metro' }).length, 2);
+  assert.equal(filtrerAchats(ACHATS_FILTRE, { q: 'A-04' }).length, 1);
+  assert.equal(filtrerAchats(ACHATS_FILTRE, { q: '120,50' }).length, 1);
+  assert.equal(filtrerAchats(ACHATS_FILTRE, {}).length, 3);
 });
 
 // ---- Doublons et similarité ------------------------------------------------
@@ -184,4 +201,22 @@ test('bilanSeuils suit la part prestations d’une activité mixte', () => {
   assert.equal(bilan.prestations.franchiseTva.pourcentage, 100);
   // Sans CA prestations fourni, pas de bilan de la part prestations.
   assert.equal(bilanSeuils(100_000, 'mixte').prestations, null);
+});
+
+test('une activité mixte n’impose aucun plafond propre aux ventes', () => {
+  // Deux conditions cumulatives, et deux seulement : le total et la part
+  // prestations. La part ventes n'est bornée que par le total.
+  const bilan = bilanSeuils(SEUILS.mixte.plafondMicro, 'mixte', 1000);
+  assert.deepEqual(Object.keys(bilan.prestations), ['chiffreAffaires', 'plafondMicro', 'franchiseTva']);
+  assert.equal(bilan.ventes, undefined, 'aucun seuil des ventes ne doit être calculé');
+});
+
+test('seuilsValentPour délimite la période de validité', () => {
+  const [debut, fin] = ANNEE_SEUILS.split('-').map(Number);
+  assert.equal(seuilsValentPour(debut), true);
+  assert.equal(seuilsValentPour(fin), true);
+  // Un exercice antérieur relevait d'autres montants : le tableau de bord
+  // doit pouvoir prévenir que ses jauges ne valent pas pour cette année.
+  assert.equal(seuilsValentPour(debut - 1), false);
+  assert.equal(seuilsValentPour(fin + 1), false);
 });

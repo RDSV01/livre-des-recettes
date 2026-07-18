@@ -43,6 +43,15 @@ export const CATEGORIES_RECETTE = [
   { code: 'prestations', libelle: 'Prestation de services' }
 ];
 
+/**
+ * Libellé court d'une catégorie (« Vente », « Prestation »), pour les
+ * tableaux et les colonnes d'export, où le libellé complet serait trop long.
+ * Retourne une chaîne vide pour une recette non catégorisée.
+ */
+export function libelleCategorieCourt(code) {
+  return code === 'ventes' ? 'Vente' : code === 'prestations' ? 'Prestation' : '';
+}
+
 /** Paramètres appliqués tant que l'utilisateur n'a rien configuré. */
 export const PARAMETRES_DEFAUT = {
   nomEntreprise: '',
@@ -61,7 +70,11 @@ export const PARAMETRES_DEFAUT = {
   // Options d'interface, désactivables dans les paramètres.
   alertesNumerotation: true,
   alerteRecetteSimilaire: true,
-  suiviSeuils: true
+  suiviSeuils: true,
+  // Seul réglage qui autorise l'application à contacter Internet d'elle-même
+  // (voir `src/maj.js`) : elle demande à GitHub s'il existe une version plus
+  // récente, et rien d'autre.
+  verifierMisesAJour: true
 };
 
 /**

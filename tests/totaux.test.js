@@ -6,9 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  totalRecettes, filtrerParPeriode, statistiquesTableauDeBord, bilanPeriode, caMensuel
+  totalMontants, filtrerParPeriode, statistiquesTableauDeBord, bilanPeriode, caMensuel
 } from '../src/totaux.js';
-import { construireRegistre } from '../src/exports/registre.js';
+import { registreRecettes, registreAchats } from '../src/exports/registre.js';
 
 /** Petite fabrique de recettes pour les tests. */
 function recette(date, montant, extra = {}) {
@@ -33,8 +33,8 @@ const RECETTES = [
   recette('2025-12-31', 999)
 ];
 
-test('totalRecettes cumule sans erreur d’arrondi', () => {
-  assert.equal(totalRecettes([recette('2026-07-01', 0.1), recette('2026-07-02', 0.2)]), 0.3);
+test('totalMontants cumule sans erreur d’arrondi', () => {
+  assert.equal(totalMontants([recette('2026-07-01', 0.1), recette('2026-07-02', 0.2)]), 0.3);
 });
 
 test('filtrerParPeriode filtre par année, mois et trimestre', () => {
@@ -85,6 +85,44 @@ test('statistiquesTableauDeBord ventile la part prestations et les non catégori
   assert.equal(stats.nombreNonCategorisees, 1);
 });
 
+test('statistiquesTableauDeBord ventile aussi le mois et les graphiques', () => {
+  const recettes = [
+    recette('2026-07-03', 800, { categorie: 'prestations' }),
+    recette('2026-07-20', 150, { categorie: 'ventes' }),
+    recette('2026-07-25', 40), // non catégorisée : dans le total, dans aucune part
+    recette('2026-03-05', 300, { categorie: 'prestations' }),
+    recette('2026-03-09', 90, { categorie: 'ventes' })
+  ];
+  const stats = statistiquesTableauDeBord(recettes, { maintenant: new Date(2026, 6, 16) });
+
+  // Mois en cours (juillet) : total, puis chaque catégorie.
+  assert.equal(stats.caMois, 990);
+  assert.equal(stats.caMoisPrestations, 800);
+  assert.equal(stats.caMoisVentes, 150);
+  assert.equal(stats.nombreMoisPrestations, 1);
+  assert.equal(stats.nombreMoisVentes, 1);
+
+  // Année entière.
+  assert.equal(stats.caAnnee, 1380);
+  assert.equal(stats.caAnneePrestations, 1100);
+  assert.equal(stats.caAnneeVentes, 240);
+  assert.equal(stats.nombreAnneePrestations, 2);
+  assert.equal(stats.nombreAnneeVentes, 2);
+  // La recette sans catégorie n'entre dans aucune des deux parts.
+  assert.equal(stats.nombreEncaissements, 5);
+
+  // Un graphique par catégorie, sur les mêmes douze mois que le graphique global.
+  const juillet = (points) => points.find((p) => p.mois === 7).total;
+  const mars = (points) => points.find((p) => p.mois === 3).total;
+  assert.equal(stats.caParMoisPrestations.length, 12);
+  assert.equal(stats.caParMoisVentes.length, 12);
+  assert.equal(juillet(stats.caParMois), 990);
+  assert.equal(juillet(stats.caParMoisPrestations), 800);
+  assert.equal(juillet(stats.caParMoisVentes), 150);
+  assert.equal(mars(stats.caParMoisPrestations), 300);
+  assert.equal(mars(stats.caParMoisVentes), 90);
+});
+
 test('caMensuel couvre les mois vides et franchit les années', () => {
   const points = caMensuel(RECETTES, { maintenant: new Date(2026, 1, 10) }); // février 2026
   assert.equal(points.length, 12);
@@ -122,18 +160,20 @@ test('bilanPeriode ventile ventes, prestations et non catégorisé', () => {
   assert.deepEqual(bilan.nonCategorise, { chiffreAffaires: 50, nombreEncaissements: 1 });
 });
 
-test('construireRegistre trie chronologiquement et insère les totaux', () => {
-  const registre = construireRegistre(RECETTES, { annee: 2026 });
+test('registreRecettes trie chronologiquement et insère les totaux', () => {
+  const registre = registreRecettes(RECETTES, { annee: 2026 });
   assert.equal(registre.nombre, 5);
   assert.equal(registre.total, 600.40);
-  assert.equal(registre.titre, 'Année 2026');
+  assert.equal(registre.titrePeriode, 'Année 2026');
+  assert.equal(registre.nomFichier, 'livre-recettes-2026');
+  assert.equal(registre.resume, '5 encaissements');
 
   const types = registre.lignes.map((l) => l.type);
   // 2 recettes de janvier + total, 1 de mars + total, 2 de juillet + total, total annuel.
   assert.deepEqual(types, [
-    'recette', 'recette', 'total',
-    'recette', 'total',
-    'recette', 'recette', 'total',
+    'element', 'element', 'total',
+    'element', 'total',
+    'element', 'element', 'total',
     'total'
   ]);
 
@@ -141,16 +181,17 @@ test('construireRegistre trie chronologiquement et insère les totaux', () => {
   assert.equal(totaux[0].libelle, 'Total janvier 2026');
   assert.equal(totaux[0].montant, 300.10);
   assert.equal(totaux.at(-1).libelle, 'Total année 2026');
-  assert.equal(totaux.at(-1).final, true);
+  assert.equal(totaux.at(-1).montant, 600.40);
 
   // Ordre chronologique croissant.
-  const dates = registre.lignes.filter((l) => l.type === 'recette').map((l) => l.recette.dateEncaissement);
+  const dates = registre.lignes.filter((l) => l.type === 'element').map((l) => l.element.dateEncaissement);
   assert.deepEqual(dates, [...dates].sort());
 });
 
-test('construireRegistre pour un seul mois : total mensuel uniquement', () => {
-  const registre = construireRegistre(RECETTES, { annee: 2026, mois: 1 });
-  assert.equal(registre.titre, 'Janvier 2026');
+test('registreRecettes pour un seul mois : total mensuel uniquement', () => {
+  const registre = registreRecettes(RECETTES, { annee: 2026, mois: 1 });
+  assert.equal(registre.titrePeriode, 'Janvier 2026');
+  assert.equal(registre.nomFichier, 'livre-recettes-2026-01');
   const totaux = registre.lignes.filter((l) => l.type === 'total');
   assert.equal(totaux.length, 1);
   assert.equal(totaux[0].libelle, 'Total janvier 2026');
@@ -162,8 +203,8 @@ test('un registre ventilé ajoute les lignes « dont … » sous chaque total', 
     recette('2026-01-20', 200, { categorie: 'ventes' }),
     recette('2026-01-25', 50) // non catégorisée
   ];
-  const registre = construireRegistre(recettesMixte, { annee: 2026 }, { ventiler: true });
-  assert.equal(registre.ventiler, true);
+  const registre = registreRecettes(recettesMixte, { annee: 2026 }, { ventiler: true });
+  assert.ok(registre.colonnes.some((c) => c.titre === 'Catégorie'));
 
   const ventilations = registre.lignes.filter((l) => l.type === 'ventilation');
   // Trois lignes après le total de janvier, trois après le total annuel.
@@ -178,10 +219,50 @@ test('un registre ventilé ajoute les lignes « dont … » sous chaque total', 
   );
 
   // Sans recette non catégorisée, la ligne correspondante disparaît.
-  const registrePropre = construireRegistre(recettesMixte.slice(0, 2), { annee: 2026 }, { ventiler: true });
+  const registrePropre = registreRecettes(recettesMixte.slice(0, 2), { annee: 2026 }, { ventiler: true });
   assert.equal(registrePropre.lignes.filter((l) => l.libelle === 'dont non catégorisé').length, 0);
 
   // Sans ventilation demandée : aucun « dont … ».
-  const registreSimple = construireRegistre(recettesMixte, { annee: 2026 });
+  const registreSimple = registreRecettes(recettesMixte, { annee: 2026 });
   assert.equal(registreSimple.lignes.filter((l) => l.type === 'ventilation').length, 0);
+});
+
+test('registreAchats reprend les cinq colonnes légales, montant en dernier', () => {
+  const achat = (date, montant, extra = {}) => ({
+    dateReglement: date,
+    fournisseur: 'Fournisseur test',
+    referenceFacture: 'F-1',
+    montant,
+    modeReglement: 'cb',
+    creeLe: '2026-01-01T00:00:00.000Z',
+    ...extra
+  });
+  const registre = registreAchats([
+    achat('2026-02-15', 40),
+    achat('2026-01-10', 60),
+    achat('2025-11-02', 999)
+  ], { annee: 2026 });
+
+  assert.deepEqual(registre.colonnes.map((c) => c.titre), [
+    'Date du règlement',
+    'Fournisseur',
+    'Référence de la facture ou du justificatif',
+    'Mode de paiement',
+    'Montant de l’achat'
+  ]);
+  assert.equal(registre.colonnes.findIndex((c) => c.montant), 4);
+  assert.equal(registre.titreDocument, 'Registre des achats');
+  assert.equal(registre.nomFichier, 'registre-achats-2026');
+  assert.equal(registre.resume, '2 achats');
+  assert.equal(registre.total, 100);
+
+  // Ordre chronologique croissant, un total par mois puis le total annuel.
+  const dates = registre.lignes.filter((l) => l.type === 'element').map((l) => l.element.dateReglement);
+  assert.deepEqual(dates, ['2026-01-10', '2026-02-15']);
+  assert.deepEqual(
+    registre.lignes.filter((l) => l.type === 'total').map((l) => l.libelle),
+    ['Total janvier 2026', 'Total février 2026', 'Total année 2026']
+  );
+  // Aucune ventilation : elle ne concerne que le livre des recettes.
+  assert.equal(registre.lignes.filter((l) => l.type === 'ventilation').length, 0);
 });

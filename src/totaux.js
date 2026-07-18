@@ -8,36 +8,41 @@
 import { enCentimes, enEuros } from './partage/montants.js';
 import { anneeDe, moisDe, nomMois, trimestreDe } from './partage/dates.js';
 
-/** Total d'une liste de recettes, en euros. */
-export function totalRecettes(recettes) {
-  return enEuros(recettes.reduce((acc, r) => acc + enCentimes(r.montant), 0));
+/** Total d'une liste de lignes (recettes ou achats), en euros. */
+export function totalMontants(lignes) {
+  return enEuros(lignes.reduce((acc, l) => acc + enCentimes(l.montant), 0));
 }
 
 /**
  * Filtre par période. Chaque critère est facultatif :
  * `{ annee: 2026, mois: 7 }`, `{ annee: 2026, trimestre: 3 }`, `{ annee: 2026 }`…
+ * `cleDate` désigne la date qui fait foi : encaissement pour une recette,
+ * règlement pour un achat.
  */
-export function filtrerParPeriode(recettes, { annee, mois, trimestre } = {}) {
-  return recettes.filter((r) => {
-    if (annee && anneeDe(r.dateEncaissement) !== annee) return false;
-    if (mois && moisDe(r.dateEncaissement) !== mois) return false;
-    if (trimestre && trimestreDe(moisDe(r.dateEncaissement)) !== trimestre) return false;
+export function filtrerParPeriode(lignes, { annee, mois, trimestre } = {}, cleDate = 'dateEncaissement') {
+  return lignes.filter((l) => {
+    const date = l[cleDate];
+    if (annee && anneeDe(date) !== annee) return false;
+    if (mois && moisDe(date) !== mois) return false;
+    if (trimestre && trimestreDe(moisDe(date)) !== trimestre) return false;
     return true;
   });
 }
 
 /**
- * Ordre d'affichage du tableau : date d'encaissement décroissante,
- * puis création décroissante (les dates ISO se comparent lexicographiquement).
+ * Ordre d'affichage d'un tableau : date décroissante, puis création
+ * décroissante (les dates ISO se comparent lexicographiquement).
+ * S'utilise ainsi : `recettes.sort(parDateDesc('dateEncaissement'))`.
  */
-export function comparerParDateDesc(a, b) {
-  return b.dateEncaissement.localeCompare(a.dateEncaissement) ||
+export function parDateDesc(cleDate) {
+  return (a, b) => String(b[cleDate]).localeCompare(String(a[cleDate])) ||
     String(b.creeLe).localeCompare(String(a.creeLe));
 }
 
 /** Ordre chronologique du registre exporté (croissant). */
-export function comparerParDateAsc(a, b) {
-  return -comparerParDateDesc(a, b);
+export function parDateAsc(cleDate) {
+  const desc = parDateDesc(cleDate);
+  return (a, b) => -desc(a, b);
 }
 
 /**
@@ -81,22 +86,34 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
   const recettesMois = filtrerParPeriode(recettesAnnee, { mois });
 
   const caAnneeCentimes = recettesAnnee.reduce((acc, r) => acc + enCentimes(r.montant), 0);
-  const caPrestationsCentimes = recettesAnnee
-    .filter((r) => r.categorie === 'prestations')
-    .reduce((acc, r) => acc + enCentimes(r.montant), 0);
   const nombreAnnee = recettesAnnee.length;
+
+  // Ventilation ventes / prestations : elle n'a de sens qu'en activité mixte,
+  // où l'interface l'affiche, mais son calcul ne coûte rien.
+  const deCategorie = (liste, categorie) => liste.filter((r) => r.categorie === categorie);
+  const decembre = new Date(anneeChoisie, 11, 15);
+  const parMois = (liste) => caMensuel(liste, { maintenant: decembre });
 
   return {
     annee: anneeChoisie,
     mois,
-    caMois: totalRecettes(recettesMois),
+    caMois: totalMontants(recettesMois),
+    caMoisVentes: totalMontants(deCategorie(recettesMois, 'ventes')),
+    caMoisPrestations: totalMontants(deCategorie(recettesMois, 'prestations')),
+    nombreMoisVentes: deCategorie(recettesMois, 'ventes').length,
+    nombreMoisPrestations: deCategorie(recettesMois, 'prestations').length,
     caAnnee: enEuros(caAnneeCentimes),
-    caAnneePrestations: enEuros(caPrestationsCentimes),
+    caAnneeVentes: totalMontants(deCategorie(recettesAnnee, 'ventes')),
+    caAnneePrestations: totalMontants(deCategorie(recettesAnnee, 'prestations')),
+    nombreAnneeVentes: deCategorie(recettesAnnee, 'ventes').length,
+    nombreAnneePrestations: deCategorie(recettesAnnee, 'prestations').length,
     nombreEncaissements: nombreAnnee,
     nombreNonCategorisees: recettesAnnee.filter((r) => !r.categorie).length,
     moyenneEncaissement: nombreAnnee === 0 ? 0 : enEuros(Math.round(caAnneeCentimes / nombreAnnee)),
-    caParMois: caMensuel(recettes, { maintenant: new Date(anneeChoisie, 11, 15) }),
-    dernieresRecettes: recettesAnnee.sort(comparerParDateDesc).slice(0, 5)
+    caParMois: parMois(recettes),
+    caParMoisVentes: parMois(deCategorie(recettes, 'ventes')),
+    caParMoisPrestations: parMois(deCategorie(recettes, 'prestations')),
+    dernieresRecettes: recettesAnnee.sort(parDateDesc('dateEncaissement')).slice(0, 5)
   };
 }
 
@@ -131,7 +148,7 @@ export function bilanPeriode(recettes, { annee, type, valeur }) {
 
   const partie = (filtre) => {
     const groupe = selection.filter(filtre);
-    return { chiffreAffaires: totalRecettes(groupe), nombreEncaissements: groupe.length };
+    return { chiffreAffaires: totalMontants(groupe), nombreEncaissements: groupe.length };
   };
 
   return {
@@ -139,7 +156,7 @@ export function bilanPeriode(recettes, { annee, type, valeur }) {
     type,
     valeur: type === 'annee' ? null : valeur,
     libellePeriode,
-    chiffreAffaires: totalRecettes(selection),
+    chiffreAffaires: totalMontants(selection),
     nombreEncaissements: selection.length,
     ventes: partie((r) => r.categorie === 'ventes'),
     prestations: partie((r) => r.categorie === 'prestations'),

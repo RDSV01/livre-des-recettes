@@ -1,0 +1,100 @@
+# Construit les exécutables autonomes et les attache à la version publiée.
+#
+# Déclenchement : un tag « v1.3.0 » poussé sur le dépôt. Chaque système
+# construit son propre fichier (un exécutable ne peut pas être fabriqué pour
+# un autre système), puis un dernier travail rassemble les trois et crée la
+# version publiée : la création est ainsi faite une seule fois, sans que les
+# constructions se marchent dessus.
+#
+# Les noms des fichiers publiés sont ceux que l'application attend pour se
+# mettre à jour toute seule (voir `src/maj.js`) : ne pas les changer sans
+# changer aussi `ACTIF_ATTENDU`.
+
+name: Exécutables
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  construire:
+    name: ${{ matrix.systeme }}
+    runs-on: ${{ matrix.systeme }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - systeme: windows-latest
+            construit: dist/livre-des-recettes.exe
+            publie: livre-des-recettes-windows.exe
+          - systeme: macos-latest
+            construit: dist/livre-des-recettes
+            publie: livre-des-recettes-macos
+          - systeme: ubuntu-latest
+            construit: dist/livre-des-recettes
+            publie: livre-des-recettes-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Le numéro embarqué dans l'exécutable vient de package.json : s'il
+      # diffère du tag, la version publiée s'annoncerait sous un faux numéro
+      # et proposerait sans fin de se mettre à jour vers elle-même.
+      - name: Vérifier que le tag correspond à package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "Le tag $GITHUB_REF_NAME ne correspond pas à la version $version de package.json." >&2
+            exit 1
+          fi
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lancer les tests
+        run: npm test
+
+      - name: Construire l'exécutable
+        run: npm run construire:exe
+
+      - name: Nommer le fichier publié
+        shell: bash
+        run: mv "${{ matrix.construit }}" "${{ matrix.publie }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.publie }}
+          path: ${{ matrix.publie }}
+          retention-days: 1
+
+  publier:
+    name: Publier la version
+    needs: construire
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: executables
+          merge-multiple: true
+
+      # Action tierce épinglée par empreinte de commit (v2.6.2) : un tag
+      # mobile pourrait être redirigé vers un autre code du jour au lendemain.
+      - name: Créer la version et y joindre les exécutables
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          # Le tag est déduit de la référence poussée ; l'indiquer évite toute
+          # ambiguïté si le travail est relancé à la main.
+          tag_name: ${{ github.ref_name }}
+          files: executables/*
+          generate_release_notes: true

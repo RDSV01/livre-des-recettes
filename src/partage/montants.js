@@ -24,17 +24,30 @@ export function sommeMontants(montants) {
   return enEuros(total);
 }
 
+/**
+ * Formateurs conservés par devise : en construire un est environ cinquante
+ * fois plus coûteux que de s'en servir, et un tableau en demande un par
+ * montant affiché.
+ */
+const formateurs = new Map();
+
+function formateur(devise) {
+  const existant = formateurs.get(devise);
+  if (existant) return existant;
+  const nouveau = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: devise });
+  formateurs.set(devise, nouveau);
+  return nouveau;
+}
+
 /** Formate un montant pour l'affichage : `1 234,56 €`. */
 export function formaterMontant(montant, devise = 'EUR') {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: devise })
-    .format(Number(montant) || 0);
+  return formateur(devise).format(Number(montant) || 0);
 }
 
 /** Symbole d'une devise (`EUR` donne `€`), avec repli sur le code lui-même. */
 export function symboleDevise(devise = 'EUR') {
   try {
-    const parts = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: devise })
-      .formatToParts(0);
+    const parts = formateur(devise).formatToParts(0);
     return parts.find((p) => p.type === 'currency')?.value ?? devise;
   } catch {
     return devise;

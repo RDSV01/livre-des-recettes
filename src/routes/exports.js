@@ -1,12 +1,12 @@
 /**
- * API des exports : registre en CSV / Excel / PDF.
+ * API des exports : les deux registres en CSV / Excel / PDF.
  *
  * Aucune donnée ne quitte la machine : ces routes produisent des fichiers
  * téléchargés par le navigateur de l'utilisateur, rien de plus.
  */
 
 import express from 'express';
-import { construireRegistre, nomFichierExport } from '../exports/registre.js';
+import { registreRecettes, registreAchats } from '../exports/registre.js';
 import { genererCsv } from '../exports/csv.js';
 import { genererXlsx } from '../exports/xlsx.js';
 import { genererPdf } from '../exports/pdf.js';
@@ -35,49 +35,55 @@ function lirePeriode(req, res) {
 export function routesExports(stockage) {
   const routeur = express.Router();
 
-  /** Registre de la période, ventilé ventes / prestations en activité mixte. */
-  const registrePour = (periode) => {
-    const parametres = stockage.obtenirParametres();
-    return {
-      parametres,
-      registre: construireRegistre(stockage.listerRecettes(), periode, {
-        ventiler: parametres.typeActivite === 'mixte'
-      })
-    };
-  };
-
-  routeur.get('/csv', (req, res) => {
-    const periode = lirePeriode(req, res);
-    if (!periode) return;
-    const { registre, parametres } = registrePour(periode);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${nomFichierExport(periode)}.csv"`);
-    res.send(genererCsv(registre, parametres));
-  });
-
-  routeur.get('/xlsx', async (req, res, next) => {
-    try {
+  /**
+   * Monte les trois formats d'un registre sous un même préfixe d'URL.
+   * `construire(periode, parametres)` retourne le registre à exporter.
+   */
+  function monterFormats(prefixe, construire) {
+    const preparer = (req, res) => {
       const periode = lirePeriode(req, res);
-      if (!periode) return;
-      const { registre, parametres } = registrePour(periode);
-      const classeur = await genererXlsx(registre, parametres);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${nomFichierExport(periode)}.xlsx"`);
-      await classeur.xlsx.write(res);
-      res.end();
-    } catch (erreur) {
-      next(erreur);
-    }
-  });
+      if (!periode) return null;
+      const parametres = stockage.obtenirParametres();
+      return { parametres, registre: construire(periode, parametres) };
+    };
 
-  routeur.get('/pdf', (req, res) => {
-    const periode = lirePeriode(req, res);
-    if (!periode) return;
-    const { registre, parametres } = registrePour(periode);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${nomFichierExport(periode)}.pdf"`);
-    genererPdf(registre, parametres, res);
-  });
+    routeur.get(`${prefixe}/csv`, (req, res) => {
+      const prepare = preparer(req, res);
+      if (!prepare) return;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${prepare.registre.nomFichier}.csv"`);
+      res.send(genererCsv(prepare.registre, prepare.parametres));
+    });
+
+    routeur.get(`${prefixe}/xlsx`, async (req, res, next) => {
+      try {
+        const prepare = preparer(req, res);
+        if (!prepare) return;
+        const classeur = await genererXlsx(prepare.registre, prepare.parametres);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${prepare.registre.nomFichier}.xlsx"`);
+        await classeur.xlsx.write(res);
+        res.end();
+      } catch (erreur) {
+        next(erreur);
+      }
+    });
+
+    routeur.get(`${prefixe}/pdf`, (req, res) => {
+      const prepare = preparer(req, res);
+      if (!prepare) return;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${prepare.registre.nomFichier}.pdf"`);
+      genererPdf(prepare.registre, prepare.parametres, res);
+    });
+  }
+
+  // Livre des recettes, ventilé ventes / prestations en activité mixte.
+  monterFormats('', (periode, parametres) => registreRecettes(stockage.listerRecettes(), periode, {
+    ventiler: parametres.typeActivite === 'mixte'
+  }));
+
+  monterFormats('/achats', (periode) => registreAchats(stockage.listerAchats(), periode));
 
   return routeur;
 }

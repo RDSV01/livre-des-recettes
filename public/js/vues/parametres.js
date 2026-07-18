@@ -82,7 +82,7 @@ export async function vueParametres(conteneur) {
             <option value="mois" ${p.periodiciteUrssaf === 'mois' ? 'selected' : ''}>Mensuelle</option>
             <option value="trimestre" ${p.periodiciteUrssaf === 'trimestre' ? 'selected' : ''}>Trimestrielle</option>
           </select>
-          <span class="indication">Active un rappel discret sur le tableau de bord quand une période à déclarer est écoulée.</span>
+          <span class="indication">Active un rappel sur le tableau de bord quand une période à déclarer est écoulée.</span>
           <span class="erreur-champ"></span>
         </div>
         <div class="champ" data-champ="devise">
@@ -119,6 +119,11 @@ export async function vueParametres(conteneur) {
           <input type="checkbox" name="suiviSeuils" ${p.suiviSeuils ? 'checked' : ''}>
           <span>Suivi des seuils (plafond micro et franchise de TVA) sur le tableau de bord</span>
         </label>
+        <label class="option-case">
+          <input type="checkbox" name="verifierMisesAJour" ${p.verifierMisesAJour ? 'checked' : ''}>
+          <span>Signaler les nouvelles versions de l’application (demande la dernière version
+          publiée à GitHub, sans rien envoyer de vos données)</span>
+        </label>
       </div>
 
       <h2 style="margin-top: 24px;">Modes de règlement personnalisés</h2>
@@ -144,17 +149,24 @@ export async function vueParametres(conteneur) {
     <div class="carte">
       <h2>Vos données</h2>
       <p>
-        Tout le livre tient dans un seul fichier sur cette machine :<br>
+        Tout le livre tient dans un seul fichier :<br>
         <code class="chemin">${echapperHtml(etat.systeme.fichierDonnees)}</code>
       </p>
       <ul>
         <li>Une sauvegarde automatique est créée chaque jour, avant chaque import CSV
           et avant chaque restauration. Conservation : tout pendant 14 jours, puis une
-          par semaine pendant 2 mois, puis une par mois pendant 1 an.</li>
+          par semaine pendant 2 mois, puis une par mois pendant 1 an. S’y ajoute une
+          copie de secours mise à jour à chaque saisie.</li>
+        <li>Ces sauvegardes vivent <strong>en dehors</strong> du dossier de données :<br>
+          <code class="chemin">${echapperHtml(etat.systeme.dossierSauvegardes)}</code><br>
+          supprimer vos documents ne les efface donc pas, et l’application propose de
+          tout reconstituer au démarrage suivant.</li>
         <li>Pour changer d’ordinateur ou vous protéger d’une panne : copiez le dossier
-          <code class="chemin">data</code> (clé USB, dossier synchronisé…), c’est tout.</li>
+          de données (clé USB, dossier synchronisé…), c’est tout.</li>
       </ul>
-      <a class="btn btn-secondaire" href="/api/sauvegarde">${icone('telecharger', { taille: 16 })}<span>Télécharger une copie de mes données (JSON)</span></a>
+      <div class="actions-donnees">
+        <a class="btn btn-secondaire" href="/api/sauvegarde">${icone('telecharger', { taille: 16 })}<span>Télécharger une copie de mes données (JSON)</span></a>
+      </div>
     </div>
 
     <div class="carte">
@@ -171,7 +183,8 @@ export async function vueParametres(conteneur) {
     ligne.className = 'ligne-gestion';
     ligne.innerHTML = `
       <input type="text" class="libelle-gestion" value="${echapperHtml(libelle)}"
-        placeholder="Nom du mode (ex. : Lydia)" data-code="${echapperHtml(code)}" maxlength="50">
+        placeholder="Nom du mode (ex. : Lydia)" aria-label="Nom du mode de règlement"
+        data-code="${echapperHtml(code)}" maxlength="50">
       <button type="button" class="btn-icone danger" title="Supprimer" aria-label="Supprimer">${icone('corbeille', { taille: 16 })}</button>`;
     ligne.querySelector('button').addEventListener('click', () => ligne.remove());
     return ligne;
@@ -197,7 +210,7 @@ export async function vueParametres(conteneur) {
       libelle: champ.value
     }));
     // Les cases décochées sont absentes de FormData : booléens explicites.
-    for (const option of ['alertesNumerotation', 'alerteRecetteSimilaire', 'suiviSeuils']) {
+    for (const option of ['alertesNumerotation', 'alerteRecetteSimilaire', 'suiviSeuils', 'verifierMisesAJour']) {
       donnees[option] = formulaire[option].checked;
     }
     // Posée par le bouton « C'est fait » du tableau de bord : conservée telle quelle.

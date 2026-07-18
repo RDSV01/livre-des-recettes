@@ -24,18 +24,21 @@
 import { api } from '../api.js';
 import { etat } from '../etat.js';
 import {
-  echapperHtml, toast, confirmer, differer,
-  afficherErreursFormulaire, effacerErreursFormulaire
+  echapperHtml, toast, confirmer, differer, formaterChampMontant,
+  afficherErreursFormulaire, effacerErreursFormulaire,
+  installerSuggestions, majIndicateursTri, majBarreSelection
 } from '../ui.js';
 import { icone } from '../icones.js';
 import { enregistrerAction } from '../historique.js';
 import { formaterMontant, sommeMontants, analyserMontant, enCentimes } from '/partage/montants.js';
 import { formaterDate, aujourdHuiIso, anneeDe, NOMS_MOIS } from '/partage/dates.js';
-import { MODES_REGLEMENT, CATEGORIES_RECETTE, libelleMode } from '/partage/constantes.js';
+import {
+  MODES_REGLEMENT, CATEGORIES_RECETTE, libelleMode, libelleCategorieCourt
+} from '/partage/constantes.js';
 import { normaliserTexte } from '/partage/texte.js';
 import { chercherSimilaire } from '/partage/doublons.js';
 import { analyserNumerotation, suggererNumeroSuivant } from '/partage/factures.js';
-import { filtrerRecettes, libellesFrequents } from '/partage/filtres.js';
+import { filtrerRecettes, valeursFrequentes } from '/partage/filtres.js';
 
 const OPTION_NOUVEAU = '__nouveau__';
 const LIMITE_AFFICHAGE = 200;
@@ -54,12 +57,6 @@ const champsRecette = (r) => ({
   categorie: r.categorie ?? ''
 });
 
-/** « 12,5 » devient « 12,50 » ; une saisie inintelligible est laissée telle quelle. */
-function formaterChampMontant(valeur) {
-  const montant = analyserMontant(valeur);
-  return montant === null ? String(valeur ?? '') : montant.toFixed(2).replace('.', ',');
-}
-
 /** Clés de tri par colonne du tableau. */
 const CLES_TRI = {
   date: (r) => r.dateEncaissement,
@@ -67,6 +64,7 @@ const CLES_TRI = {
   libelle: (r) => normaliserTexte(r.libelle),
   facture: (r) => normaliserTexte(r.numeroFacture),
   mode: (r, modes) => normaliserTexte(libelleMode(r.modeReglement, modes)),
+  categorie: (r) => libelleCategorieCourt(r.categorie),
   montant: (r) => enCentimes(r.montant)
 };
 
@@ -158,13 +156,6 @@ export async function vueRecettes(conteneur, params) {
     rendreTableau();
   });
 
-  function rendreIndicateursTri() {
-    refs.entetes.querySelectorAll('th.triable').forEach((th) => {
-      th.querySelector('.indicateur-tri').innerHTML = th.dataset.tri === tri.colonne
-        ? icone(tri.sens === 'asc' ? 'chevron-haut' : 'chevron-bas', { taille: 13 })
-        : '';
-    });
-  }
 
   // ---- Sélection multiple --------------------------------------------------------
   refs.corps.addEventListener('change', (evenement) => {
@@ -187,12 +178,11 @@ export async function vueRecettes(conteneur, params) {
     majSelection();
   });
 
-  function majSelection() {
-    const nombre = selection.size;
-    refs.barreSelection.hidden = nombre === 0;
-    refs.compteSelection.textContent = `${nombre} recette${nombre > 1 ? 's' : ''} sélectionnée${nombre > 1 ? 's' : ''}`;
-    refs.toutSelectionner.checked = idsVisibles.length > 0 && idsVisibles.every((id) => selection.has(id));
-  }
+  const majSelection = () => majBarreSelection(
+    { barre: refs.barreSelection, compte: refs.compteSelection, toutSelectionner: refs.toutSelectionner },
+    selection, idsVisibles,
+    (n) => `${n} recette${n > 1 ? 's' : ''} sélectionnée${n > 1 ? 's' : ''}`
+  );
 
   const recettesSelectionnees = () => toutes.filter((r) => selection.has(r.id));
 
@@ -417,66 +407,11 @@ export async function vueRecettes(conteneur, params) {
   });
 
   // ---- Suggestions de libellé (liste maison, sans composant natif) --------------
-  const fermerSuggestions = installerSuggestionsLibelle();
-
-  function installerSuggestionsLibelle() {
-    const champ = refs.formulaire.libelle;
-    const liste = refs.suggestions;
-    let visibles = [];
-    let indexActif = -1;
-
-    const fermer = () => {
-      liste.hidden = true;
-      liste.innerHTML = '';
-      visibles = [];
-      indexActif = -1;
-    };
-
-    const ouvrir = () => {
-      const saisie = normaliserTexte(champ.value);
-      visibles = saisie === '' ? [] : libelles
-        .filter((l) => normaliserTexte(l).includes(saisie) && normaliserTexte(l) !== saisie)
-        .slice(0, 6);
-      if (visibles.length === 0) return fermer();
-      indexActif = -1;
-      liste.innerHTML = visibles
-        .map((l, i) => `<div role="option" data-index="${i}">${echapperHtml(l)}</div>`)
-        .join('');
-      liste.hidden = false;
-    };
-
-    champ.addEventListener('input', ouvrir);
-    champ.addEventListener('keydown', (evenement) => {
-      if (liste.hidden) return;
-      if (evenement.key === 'ArrowDown' || evenement.key === 'ArrowUp') {
-        evenement.preventDefault();
-        const pas = evenement.key === 'ArrowDown' ? 1 : -1;
-        indexActif = (indexActif + pas + visibles.length) % visibles.length;
-        [...liste.children].forEach((option, i) => option.classList.toggle('actif', i === indexActif));
-      } else if (evenement.key === 'Enter') {
-        // Une suggestion surlignée est choisie ; sinon Enter garde son rôle.
-        if (indexActif >= 0) {
-          evenement.preventDefault();
-          champ.value = visibles[indexActif];
-        }
-        fermer();
-      } else if (evenement.key === 'Escape') {
-        // Ne ferme que la liste, pas la boîte de dialogue.
-        evenement.preventDefault();
-        fermer();
-      }
-    });
-    // `pointerdown` précède le `blur` du champ : le clic choisit la suggestion.
-    liste.addEventListener('pointerdown', (evenement) => {
-      const option = evenement.target.closest('[role="option"]');
-      if (!option) return;
-      evenement.preventDefault();
-      champ.value = visibles[Number(option.dataset.index)];
-      fermer();
-    });
-    champ.addEventListener('blur', () => setTimeout(fermer, 120));
-    return fermer;
-  }
+  const fermerSuggestions = installerSuggestions({
+    champ: refs.formulaire.libelle,
+    liste: refs.suggestions,
+    valeurs: () => libelles
+  });
 
   // ---- Enregistrement -----------------------------------------------------------
   refs.formulaire.addEventListener('submit', async (evenement) => {
@@ -625,7 +560,7 @@ export async function vueRecettes(conteneur, params) {
   async function chargerRecettes() {
     const reponse = await api.listerRecettes();
     toutes = reponse.recettes;
-    libelles = libellesFrequents(toutes);
+    libelles = valeursFrequentes(toutes, 'libelle');
     rendreAnnees();
     rendreAnomalies();
     rendreTableau();
@@ -696,12 +631,12 @@ export async function vueRecettes(conteneur, params) {
       ? 'Aucune recette ne correspond.'
       : `${affichees.length} recette${affichees.length > 1 ? 's' : ''} (${formaterMontant(total, devise)})`;
 
-    rendreIndicateursTri();
+    majIndicateursTri(refs.entetes, tri);
 
     if (affichees.length === 0) {
       idsVisibles = [];
       refs.corps.innerHTML = `
-        <tr class="ligne-vide"><td colspan="8">
+        <tr class="ligne-vide"><td colspan="${estMixte ? 9 : 8}">
           Aucune recette à afficher. Ajoutez-en une avec « Nouvelle recette ».
         </td></tr>`;
       majSelection();
@@ -721,6 +656,9 @@ export async function vueRecettes(conteneur, params) {
         <td>${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">-</span>'}</td>
         <td>${r.numeroFacture ? echapperHtml(r.numeroFacture) : '<span class="attenue">-</span>'}</td>
         <td><span class="badge">${echapperHtml(libelleMode(r.modeReglement, modesPersonnalises))}</span></td>
+        ${estMixte ? `<td>${r.categorie
+          ? `<span class="badge categorie-${r.categorie}">${echapperHtml(libelleCategorieCourt(r.categorie))}</span>`
+          : '<span class="attenue">-</span>'}</td>` : ''}
         <td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td>
         <td class="actions">
           <button type="button" class="btn-icone" data-action="dupliquer" data-id="${r.id}" title="Dupliquer (paiement récurrent)" aria-label="Dupliquer">${icone('copier', { taille: 16 })}</button>
@@ -728,7 +666,7 @@ export async function vueRecettes(conteneur, params) {
           <button type="button" class="btn-icone danger" data-action="supprimer" data-id="${r.id}" title="Supprimer" aria-label="Supprimer">${icone('corbeille', { taille: 16 })}</button>
         </td>
       </tr>`).join('') + (restantes > 0 ? `
-      <tr class="ligne-vide"><td colspan="8">
+      <tr class="ligne-vide"><td colspan="${estMixte ? 9 : 8}">
         <button type="button" class="btn btn-discret" data-action="afficher-plus">
           Afficher les ${restantes} recette${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''}
         </button>
@@ -807,9 +745,14 @@ export async function vueRecettes(conteneur, params) {
 
         <table id="table-recettes">
           <colgroup>
-            <col style="width: 4%"><col style="width: 11%"><col style="width: 16%">
-            <col style="width: 22%"><col style="width: 13%"><col style="width: 12%">
-            <col style="width: 11%"><col style="width: 11%">
+            ${estMixte ? `
+              <col style="width: 4%"><col style="width: 10%"><col style="width: 15%">
+              <col style="width: 19%"><col style="width: 12%"><col style="width: 11%">
+              <col style="width: 9%"><col style="width: 11%"><col style="width: 9%">`
+            : `
+              <col style="width: 4%"><col style="width: 11%"><col style="width: 16%">
+              <col style="width: 22%"><col style="width: 13%"><col style="width: 12%">
+              <col style="width: 11%"><col style="width: 11%">`}
           </colgroup>
           <thead>
             <tr>
@@ -819,6 +762,7 @@ export async function vueRecettes(conteneur, params) {
               ${enTete('libelle', 'Libellé')}
               ${enTete('facture', 'Facture')}
               ${enTete('mode', 'Paiement')}
+              ${estMixte ? enTete('categorie', 'Catégorie') : ''}
               ${enTete('montant', 'Montant', 'montant')}
               <th></th>
             </tr>
@@ -847,6 +791,7 @@ export async function vueRecettes(conteneur, params) {
               <select id="recette-client-select"></select>
               <div id="bloc-nouveau-client" class="bloc-nouveau-client">
                 <input type="text" id="recette-client-nouveau" autocomplete="off"
+                  aria-label="SIRET ou nom du nouveau client"
                   placeholder="SIRET (14 chiffres) ou nom du client">
                 <div class="resultat-siret" id="recette-client-resolu" hidden></div>
               </div>
