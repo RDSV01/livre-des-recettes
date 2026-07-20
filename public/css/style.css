@@ -187,7 +187,40 @@ a { color: var(--accent); }
 
 h2 { font-size: 17px; margin: 0 0 14px; }
 
-.chargement { color: var(--texte-secondaire); padding: 44px 0; text-align: center; }
+/* Squelette de chargement : blocs gris qui miroitent, en place du contenu.
+   La forme épouse la page qui arrive et occupe l'écran, pour éviter tout saut
+   de mise en page quand les vraies données remplacent le squelette. */
+.squelette { display: flex; flex-direction: column; gap: 18px; }
+.sq-titre, .sq-carte, .sq-bloc, .sq-barre, .sq-ligne {
+  position: relative;
+  overflow: hidden;
+  background: var(--neutre-doux);
+  border-radius: var(--rayon-petit);
+}
+.sq-titre { height: 34px; width: 38%; }
+.sq-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+.sq-carte { height: 82px; }
+.sq-bloc { height: 230px; }
+/* Forme « liste » : une barre de filtres puis un tableau bien rempli. */
+.sq-barre { height: 58px; }
+.sq-tableau { display: flex; flex-direction: column; gap: 8px; }
+.sq-ligne { height: 44px; }
+.squelette [class^="sq-"]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--survol), transparent);
+  animation: miroitement 1.3s infinite;
+}
+@keyframes miroitement { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .squelette [class^="sq-"]::after { animation: none; }
+}
 
 /* ---- Cartes -------------------------------------------------------------- */
 
@@ -857,4 +890,84 @@ code.chemin {
 
   .contenu { padding: 18px 14px 40px; }
   .grille-formulaire { grid-template-columns: 1fr; }
+}
+
+/* ---- Éléments introduits en v1.4 ----------------------------------------- */
+
+/* Choix du registre à importer (recettes / achats). */
+.choix-registre { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Aperçu « 28 mai 2026 » sous un champ date. */
+.apercu-date { color: var(--texte-secondaire); font-size: 12.5px; min-height: 1em; }
+
+/* Chemin suivi d'un bouton « copier ». */
+.chemin-copiable { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.chemin-copiable .chemin { overflow-x: auto; }
+
+/* Lien texte discret (à côté d'un bouton, dans un bandeau). */
+.lien-discret { color: var(--texte-secondaire); font-size: 13px; text-decoration: underline; }
+.lien-discret:hover { color: var(--texte); }
+
+/* Bandeau du jeu de démonstration : distinct du rappel URSSAF. */
+.bandeau-demo { background: var(--succes-doux); }
+.bandeau-demo > .icone { color: var(--succes); }
+
+/* Note d'alerte (sauvegardes en échec) : reprend la note légale en teinte alerte. */
+.note-legale.alerte { color: var(--alerte); }
+.note-legale.alerte .icone { color: var(--alerte); }
+
+/* ---- Micro-animations ---------------------------------------------------- */
+/* Discrètes et porteuses de sens : elles disent ce qui apparaît, se remplit ou
+   change, et se coupent entièrement pour qui préfère moins de mouvement.
+   Le changement de page, lui, est instantané : rien ne « remonte ». */
+
+/* Transition d'entrée, identique à chaque changement de page : un simple fondu,
+   sans mouvement, joué une fois le contenu (ou le placeholder) prêt. Seule la
+   zone de contenu est concernée : le menu de gauche ne bouge pas. */
+.vue-cachee { opacity: 0; }
+.vue-entre { animation: entree-page 0.2s ease-out; }
+
+@keyframes entree-page {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Une ligne qui vient d'être ajoutée s'illumine brièvement, puis s'apaise. */
+.ligne-nouvelle { animation: apparition-ligne 1.1s ease-out; }
+
+@keyframes apparition-ligne {
+  0% { background: var(--accent-doux); }
+  100% { background: transparent; }
+}
+
+/* Une ligne supprimée s'efface et se retire avant le rafraîchissement. */
+.ligne-part { animation: depart-ligne 0.24s ease forwards; }
+
+@keyframes depart-ligne {
+  to { opacity: 0; transform: translateX(-14px); }
+}
+
+/* Les jauges de seuils se remplissent depuis la gauche au premier affichage. */
+.jauge > span {
+  transform-origin: left;
+  animation: remplir-jauge 0.45s ease-out;
+}
+
+@keyframes remplir-jauge { from { transform: scaleX(0); } }
+
+/* Les barres du graphique montent depuis la ligne de base. */
+.barre-graphique {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: monter-barre 0.5s ease-out both;
+}
+
+@keyframes monter-barre { from { transform: scaleY(0); } }
+
+/* Léger enfoncement au clic, sur tous les boutons. */
+.btn:active:not(:disabled) { transform: translateY(1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .vue-entre, .ligne-nouvelle, .ligne-part, .jauge > span, .barre-graphique { animation: none; }
+  .btn:active:not(:disabled) { transform: none; }
 }

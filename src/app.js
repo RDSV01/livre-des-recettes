@@ -24,6 +24,7 @@ import { routesExports } from './routes/exports.js';
 import { routesUrssaf } from './routes/urssaf.js';
 import { routesSauvegardes } from './routes/sauvegardes.js';
 import { statistiquesTableauDeBord } from './totaux.js';
+import { construireJeuDemo } from './demo.js';
 import { aujourdHuiIso } from './partage/dates.js';
 import { dossierDonneesParDefaut } from './emplacements.js';
 
@@ -119,7 +120,8 @@ export function creerApp({
   app.get('/api/tableau-de-bord', (req, res) => {
     const annee = Number.parseInt(req.query.annee, 10);
     res.json(statistiquesTableauDeBord(stockage.listerRecettes(), {
-      annee: Number.isInteger(annee) && annee >= 2000 && annee <= 2100 ? annee : null
+      annee: Number.isInteger(annee) && annee >= 2000 && annee <= 2100 ? annee : null,
+      achats: stockage.listerAchats()
     }));
   });
 
@@ -131,6 +133,9 @@ export function creerApp({
       fichierDonnees: stockage.cheminFichier,
       dossierSauvegardes: stockage.dossierSauvegardes,
       corruption: stockage.corruption(),
+      // Copie de secours impossible à écrire : l'utilisateur travaille sans
+      // filet, les paramètres l'en avertissent.
+      sauvegardesEnEchec: stockage.sauvegardesEnEchec(),
       // Fichier de données disparu alors que des sauvegardes subsistent :
       // l'interface propose de le reconstituer avant toute saisie.
       donneesAbsentes: stockage.donneesAbsentes(),
@@ -141,6 +146,20 @@ export function creerApp({
       premierLancement: nombre.recettes === 0 && nombre.clients === 0 &&
         !parametres.nomEntreprise && !parametres.typeActivite
     });
+  });
+
+  /**
+   * Charge le jeu de démonstration : POST /api/demo.
+   * Refusé si le livre contient déjà quoi que ce soit, pour ne jamais
+   * recouvrir de vraies données.
+   */
+  app.post('/api/demo', (req, res) => {
+    const nombre = stockage.compter();
+    if (nombre.recettes > 0 || nombre.achats > 0 || nombre.clients > 0) {
+      return res.status(409).json({ erreur: 'Le jeu de démonstration ne se charge que sur un livre vide.' });
+    }
+    stockage.chargerDemo(construireJeuDemo());
+    res.json({ charge: true });
   });
 
   // Sauvegarde complète téléchargeable (le fichier de données, tel quel).

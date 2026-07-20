@@ -16,6 +16,9 @@ import { TYPES_ACTIVITE } from '/partage/seuils.js';
 
 export async function vueParametres(conteneur) {
   const p = etat.parametres;
+  // État système rafraîchi : l'échec des sauvegardes n'apparaît qu'après une
+  // écriture, donc pas forcément au démarrage. On relit la valeur courante.
+  const systeme = await api.systeme().catch(() => etat.systeme);
 
   conteneur.innerHTML = `
     <header class="entete-vue">
@@ -32,6 +35,10 @@ export async function vueParametres(conteneur) {
       ces informations apparaissent en tête de vos exports, le type d’activité active le
       suivi de vos plafonds et de la franchise de TVA, et la périodicité de déclaration
       active un rappel discret sur le tableau de bord.</p>
+      <p>Envie de voir l’application en action d’abord ?</p>
+      <button type="button" class="btn btn-secondaire" id="charger-demo">
+        ${icone('etincelle', { taille: 16 })}<span>Découvrir avec un jeu de démonstration</span>
+      </button>
     </div>` : ''}
 
     <form class="carte" id="formulaire-parametres" novalidate>
@@ -148,9 +155,21 @@ export async function vueParametres(conteneur) {
 
     <div class="carte">
       <h2>Vos données</h2>
+      ${systeme.sauvegardesEnEchec ? `
+        <p class="note-legale alerte">
+          ${icone('cercle-alerte', { taille: 16 })}
+          <span>Vos sauvegardes automatiques n’ont pas pu être écrites : le dossier ci-dessous
+          est peut-être inaccessible (lecteur réseau déconnecté, disque plein). Vos saisies sont
+          bien enregistrées, mais sans filet pour l’instant : téléchargez une copie ci-dessous
+          par précaution.</span>
+        </p>` : ''}
       <p>
         Tout le livre tient dans un seul fichier :<br>
-        <code class="chemin">${echapperHtml(etat.systeme.fichierDonnees)}</code>
+        <span class="chemin-copiable">
+          <code class="chemin">${echapperHtml(systeme.fichierDonnees)}</code>
+          <button type="button" class="btn-icone" data-copier="${echapperHtml(systeme.fichierDonnees)}"
+            title="Copier le chemin" aria-label="Copier le chemin du fichier de données">${icone('copier', { taille: 15 })}</button>
+        </span>
       </p>
       <ul>
         <li>Une sauvegarde automatique est créée chaque jour, avant chaque import CSV
@@ -158,7 +177,11 @@ export async function vueParametres(conteneur) {
           par semaine pendant 2 mois, puis une par mois pendant 1 an. S’y ajoute une
           copie de secours mise à jour à chaque saisie.</li>
         <li>Ces sauvegardes vivent <strong>en dehors</strong> du dossier de données :<br>
-          <code class="chemin">${echapperHtml(etat.systeme.dossierSauvegardes)}</code><br>
+          <span class="chemin-copiable">
+            <code class="chemin">${echapperHtml(systeme.dossierSauvegardes)}</code>
+            <button type="button" class="btn-icone" data-copier="${echapperHtml(systeme.dossierSauvegardes)}"
+              title="Copier le chemin" aria-label="Copier le chemin des sauvegardes">${icone('copier', { taille: 15 })}</button>
+          </span><br>
           supprimer vos documents ne les efface donc pas, et l’application propose de
           tout reconstituer au démarrage suivant.</li>
         <li>Pour changer d’ordinateur ou vous protéger d’une panne : copiez le dossier
@@ -234,6 +257,33 @@ export async function vueParametres(conteneur) {
         toast(erreur.message, 'erreur');
       }
     }
+  });
+
+  // ---- Jeu de démonstration (première utilisation) -----------------------------------
+  conteneur.querySelector('#charger-demo')?.addEventListener('click', async (evenement) => {
+    const bouton = evenement.currentTarget;
+    bouton.disabled = true;
+    try {
+      await api.chargerDemo();
+      toast('Jeu de démonstration chargé.');
+      window.location.hash = '#/';
+      window.location.reload();
+    } catch (erreur) {
+      bouton.disabled = false;
+      toast(erreur.message, 'erreur');
+    }
+  });
+
+  // ---- Copie d'un chemin dans le presse-papiers --------------------------------------
+  conteneur.querySelectorAll('[data-copier]').forEach((bouton) => {
+    bouton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(bouton.dataset.copier);
+        toast('Chemin copié dans le presse-papiers.');
+      } catch {
+        toast('Copie impossible : sélectionnez le chemin à la main.', 'erreur');
+      }
+    });
   });
 
   // ---- Sauvegardes -------------------------------------------------------------------

@@ -18,9 +18,11 @@ import { etat } from '../etat.js';
 import {
   echapperHtml, toast, confirmer, differer, formaterChampMontant,
   afficherErreursFormulaire, effacerErreursFormulaire,
-  installerSuggestions, majIndicateursTri, majBarreSelection
+  installerSuggestions, installerApercuDate, majIndicateursTri, majBarreSelection,
+  animerDepartLignes
 } from '../ui.js';
 import { icone } from '../icones.js';
+import { etatFiltres } from '../preferences-vues.js';
 import { enregistrerAction } from '../historique.js';
 import { formaterMontant, sommeMontants, enCentimes } from '/partage/montants.js';
 import { formaterDate, aujourdHuiIso, anneeDe, NOMS_MOIS } from '/partage/dates.js';
@@ -51,8 +53,8 @@ const CLES_TRI = {
 export async function vueAchats(conteneur, params) {
   const { devise, formatDate, modesPersonnalises } = etat.parametres;
   const modes = MODES_REGLEMENT.concat(modesPersonnalises);
-  const filtres = { q: '', annee: '', mois: '', mode: '' };
-  const tri = { colonne: 'date', sens: 'desc' };
+  // Filtres et tri conservés le temps de la session (voir preferences-vues.js).
+  const { filtres, tri } = etatFiltres('achats');
   const selection = new Set(); // identifiants des achats cochés
   let tous = [];               // liste complète, source de tout le reste
   let affiches = [];           // liste filtrée et triée (avant pagination)
@@ -60,6 +62,7 @@ export async function vueAchats(conteneur, params) {
   let fournisseurs = [];       // fournisseurs existants, pour les suggestions
   let montrerTout = false;     // affichage au-delà de LIMITE_AFFICHAGE
   let enEdition = null;        // achat en cours de modification, ou null
+  let idsNouveaux = new Set(); // achats à mettre en avant au prochain rendu (ajout)
   let instantaneInitial = '';  // état du formulaire à l'ouverture (garde-fou)
 
   conteneur.innerHTML = gabarit();
@@ -81,6 +84,15 @@ export async function vueAchats(conteneur, params) {
     formulaire: conteneur.querySelector('#formulaire-achat'),
     titreDialogue: conteneur.querySelector('#titre-dialogue-achat')
   };
+
+  // Reflète dans les contrôles les filtres restaurés (l'année est gérée par
+  // rendreAnnees, qui dépend des données chargées).
+  refs.recherche.value = filtres.q;
+  refs.mois.value = filtres.mois;
+  refs.mode.value = filtres.mode;
+
+  // Aperçu « 28 mai 2026 » sous le champ date du formulaire.
+  const rafraichirApercuDate = installerApercuDate(refs.formulaire.dateReglement);
 
   // ---- Filtres ---------------------------------------------------------------
   const changerFiltres = () => {
@@ -143,11 +155,17 @@ export async function vueAchats(conteneur, params) {
     majSelection();
   });
 
-  const majSelection = () => majBarreSelection(
-    { barre: refs.barreSelection, compte: refs.compteSelection, toutSelectionner: refs.toutSelectionner },
-    selection, idsVisibles,
-    (n) => `${n} achat${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`
-  );
+  const achatsSelectionnes = () => tous.filter((a) => selection.has(a.id));
+
+  const majSelection = () => {
+    // Total des achats cochés, comme pour les recettes.
+    const total = sommeMontants(achatsSelectionnes().map((a) => a.montant));
+    majBarreSelection(
+      { barre: refs.barreSelection, compte: refs.compteSelection, toutSelectionner: refs.toutSelectionner },
+      selection, idsVisibles,
+      (n) => `${n} achat${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''} · ${formaterMontant(total, devise)}`
+    );
+  };
 
   conteneur.querySelector('#deselectionner').addEventListener('click', () => {
     selection.clear();
@@ -156,7 +174,7 @@ export async function vueAchats(conteneur, params) {
   });
 
   conteneur.querySelector('#supprimer-selection').addEventListener('click', async () => {
-    const cibles = tous.filter((a) => selection.has(a.id));
+    const cibles = achatsSelectionnes();
     if (cibles.length === 0) return;
     const total = sommeMontants(cibles.map((a) => a.montant));
     const accord = await confirmer({
@@ -165,6 +183,8 @@ export async function vueAchats(conteneur, params) {
     });
     if (!accord) return;
     try {
+      const lignes = cibles.map((a) => refs.corps.querySelector(`input[data-selection="${a.id}"]`)?.closest('tr'));
+      await animerDepartLignes(lignes);
       for (const achat of cibles) await api.supprimerAchat(achat.id);
       const donnees = cibles.map(champsAchat);
       let ids = cibles.map((a) => a.id);
@@ -210,6 +230,7 @@ export async function vueAchats(conteneur, params) {
       });
       if (!accord) return;
       try {
+        await animerDepartLignes([bouton.closest('tr')]);
         await api.supprimerAchat(achat.id);
         const donnees = champsAchat(achat);
         let id = achat.id;
@@ -295,6 +316,7 @@ export async function vueAchats(conteneur, params) {
         const { achat } = await api.creerAchat(payload);
         const donnees = champsAchat(achat);
         let id = achat.id;
+        idsNouveaux = new Set([achat.id]); // surligné au rendu qui suit
         enregistrerAction({
           annuler: () => api.supprimerAchat(id),
           retablir: async () => { id = (await api.creerAchat(donnees)).achat.id; }
@@ -325,6 +347,7 @@ export async function vueAchats(conteneur, params) {
     const source = achat ?? modele;
     const f = refs.formulaire;
     f.dateReglement.value = achat?.dateReglement ?? aujourdHuiIso();
+    rafraichirApercuDate();
     f.fournisseur.value = source?.fournisseur ?? '';
     f.montant.value = source ? formaterChampMontant(source.montant) : '';
     f.modeReglement.value = source?.modeReglement ?? 'virement';
@@ -384,7 +407,7 @@ export async function vueAchats(conteneur, params) {
     const restants = affiches.length - visibles.length;
 
     refs.corps.innerHTML = visibles.map((a) => `
-      <tr>
+      <tr${idsNouveaux.has(a.id) ? ' class="ligne-nouvelle"' : ''}>
         <td class="col-case"><input type="checkbox" data-selection="${a.id}"
           ${selection.has(a.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
         <td>${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>
@@ -404,6 +427,8 @@ export async function vueAchats(conteneur, params) {
         </button>
       </td></tr>` : '');
 
+    // Le surlignage d'ajout n'a lieu qu'une fois, au rendu qui suit la création.
+    idsNouveaux.clear();
     majSelection();
   }
 

@@ -27,6 +27,7 @@ cd livre-des-recettes
 npm install
 npm start        # lance l'application sur http://localhost:3000
 npm test         # lance la suite de tests (node:test, aucune dépendance)
+npm run verifier # exerce l'application assemblée de bout en bout (toutes les routes)
 ```
 
 Prérequis : Node.js >= 18. L'application écrit dans le dossier de l'utilisateur
@@ -63,6 +64,10 @@ LDR_DATA_DIR=./data npm start     # Windows : set LDR_DATA_DIR=.\data
 - `src/exports/` : générateurs PDF / Excel / CSV. Les deux registres partagent
   ces générateurs : chacun décrit ses colonnes dans `src/exports/registre.js`,
   les trois formats se contentent de les dérouler ;
+- `src/import-registre.js` : mécanique d'import en lot (validation, doublons,
+  simulation, sauvegarde) commune aux recettes et aux achats ; chaque route
+  fournit sa validation, sa détection de doublon et son accès au stockage ;
+- `src/demo.js` : jeu de démonstration, chargé sur un livre vide et effaçable ;
 - `public/` : interface en JavaScript vanilla (modules ES, pas de build). Les vues
   vivent dans `public/js/vues/`, les icônes dans `public/js/icones.js`.
 
@@ -116,8 +121,13 @@ LDR_DATA_DIR=./data npm start     # Windows : set LDR_DATA_DIR=.\data
   `dialogueAttente`). Dans un gestionnaire d'événement, retenez l'élément
   cliqué **avant** le premier `await` : le navigateur remet `currentTarget`
   à `null` dès la fin de l'événement.
+- **Animations** : discrètes et porteuses de sens (ce qui apparaît, se remplit,
+  change). Aucune 3D, aucune bibliothèque. Toute animation doit se couper sous
+  `@media (prefers-reduced-motion: reduce)`, déjà respecté par la feuille de
+  style.
 - **Tests** : toute correction de bug arrive avec le test qui l'aurait attrapée ;
-  toute fonctionnalité arrive avec ses tests. `npm test` doit rester vert.
+  toute fonctionnalité arrive avec ses tests. `npm test` et `npm run verifier`
+  doivent rester verts.
 
 ## Proposer un changement
 

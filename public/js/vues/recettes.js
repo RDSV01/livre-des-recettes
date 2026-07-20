@@ -26,9 +26,11 @@ import { etat } from '../etat.js';
 import {
   echapperHtml, toast, confirmer, differer, formaterChampMontant,
   afficherErreursFormulaire, effacerErreursFormulaire,
-  installerSuggestions, majIndicateursTri, majBarreSelection
+  installerSuggestions, installerApercuDate, majIndicateursTri, majBarreSelection,
+  animerDepartLignes
 } from '../ui.js';
 import { icone } from '../icones.js';
+import { etatFiltres } from '../preferences-vues.js';
 import { enregistrerAction } from '../historique.js';
 import { formaterMontant, sommeMontants, analyserMontant, enCentimes } from '/partage/montants.js';
 import { formaterDate, aujourdHuiIso, anneeDe, NOMS_MOIS } from '/partage/dates.js';
@@ -72,8 +74,8 @@ export async function vueRecettes(conteneur, params) {
   const { devise, formatDate, modesPersonnalises } = etat.parametres;
   const modes = MODES_REGLEMENT.concat(modesPersonnalises);
   const estMixte = etat.parametres.typeActivite === 'mixte';
-  const filtres = { q: '', annee: '', mois: '', mode: '', categorie: '' };
-  const tri = { colonne: 'date', sens: 'desc' };
+  // Filtres et tri conservés le temps de la session (voir preferences-vues.js).
+  const { filtres, tri } = etatFiltres('recettes');
   const selection = new Set(); // identifiants des recettes cochées
   let toutes = [];             // liste complète, source de tout le reste
   let affichees = [];          // liste filtrée et triée (avant pagination)
@@ -81,6 +83,7 @@ export async function vueRecettes(conteneur, params) {
   let libelles = [];           // libellés existants, pour les suggestions
   let montrerTout = false;     // affichage au-delà de LIMITE_AFFICHAGE
   let enEdition = null;        // recette en cours de modification, ou null
+  let idsNouveaux = new Set(); // recettes à mettre en avant au prochain rendu (ajout)
   let siretResolu = null;      // { requete, siret, nom } après une recherche réussie
   let dejaAverti = false;      // avertissement « recette similaire » déjà montré
   let categorieSource = '';    // catégorie conservée quand le champ n'est pas affiché
@@ -115,6 +118,16 @@ export async function vueRecettes(conteneur, params) {
     enregistrer: conteneur.querySelector('#enregistrer-recette')
   };
   let clients = [];
+
+  // Reflète dans les contrôles les filtres restaurés (l'année est gérée par
+  // rendreAnnees, qui dépend des données chargées).
+  refs.recherche.value = filtres.q;
+  refs.mois.value = filtres.mois;
+  refs.mode.value = filtres.mode;
+  if (refs.categorie) refs.categorie.value = filtres.categorie;
+
+  // Aperçu « 28 mai 2026 » sous le champ date du formulaire.
+  const rafraichirApercuDate = installerApercuDate(refs.formulaire.dateEncaissement);
 
   // ---- Filtres ---------------------------------------------------------------
   const changerFiltres = () => {
@@ -178,13 +191,17 @@ export async function vueRecettes(conteneur, params) {
     majSelection();
   });
 
-  const majSelection = () => majBarreSelection(
-    { barre: refs.barreSelection, compte: refs.compteSelection, toutSelectionner: refs.toutSelectionner },
-    selection, idsVisibles,
-    (n) => `${n} recette${n > 1 ? 's' : ''} sélectionnée${n > 1 ? 's' : ''}`
-  );
-
   const recettesSelectionnees = () => toutes.filter((r) => selection.has(r.id));
+
+  const majSelection = () => {
+    // Total des recettes cochées : pratique pour recouper un montant déclaré.
+    const total = sommeMontants(recettesSelectionnees().map((r) => r.montant));
+    majBarreSelection(
+      { barre: refs.barreSelection, compte: refs.compteSelection, toutSelectionner: refs.toutSelectionner },
+      selection, idsVisibles,
+      (n) => `${n} recette${n > 1 ? 's' : ''} sélectionnée${n > 1 ? 's' : ''} · ${formaterMontant(total, devise)}`
+    );
+  };
 
   conteneur.querySelector('#deselectionner').addEventListener('click', () => {
     selection.clear();
@@ -202,6 +219,8 @@ export async function vueRecettes(conteneur, params) {
     });
     if (!accord) return;
     try {
+      const lignes = cibles.map((r) => refs.corps.querySelector(`input[data-selection="${r.id}"]`)?.closest('tr'));
+      await animerDepartLignes(lignes);
       for (const recette of cibles) await api.supprimerRecette(recette.id);
       const donnees = cibles.map(champsRecette);
       let ids = cibles.map((r) => r.id);
@@ -276,6 +295,7 @@ export async function vueRecettes(conteneur, params) {
       });
       if (!accord) return;
       try {
+        await animerDepartLignes([bouton.closest('tr')]);
         await api.supprimerRecette(recette.id);
         const donnees = champsRecette(recette);
         let id = recette.id;
@@ -479,6 +499,7 @@ export async function vueRecettes(conteneur, params) {
         const { recette } = await api.creerRecette(payload);
         const donnees = champsRecette(recette);
         let id = recette.id;
+        idsNouveaux = new Set([recette.id]); // surlignée au rendu qui suit
         enregistrerAction({
           annuler: () => api.supprimerRecette(id),
           retablir: async () => { id = (await api.creerRecette(donnees)).recette.id; }
@@ -513,6 +534,7 @@ export async function vueRecettes(conteneur, params) {
     const source = recette ?? modele;
     const f = refs.formulaire;
     f.dateEncaissement.value = recette?.dateEncaissement ?? aujourdHuiIso();
+    rafraichirApercuDate();
     f.montant.value = source ? formaterChampMontant(source.montant) : '';
     f.modeReglement.value = source?.modeReglement ?? 'virement';
     f.numeroFacture.value = recette?.numeroFacture ?? '';
@@ -648,7 +670,7 @@ export async function vueRecettes(conteneur, params) {
     const restantes = affichees.length - visibles.length;
 
     refs.corps.innerHTML = visibles.map((r) => `
-      <tr>
+      <tr${idsNouveaux.has(r.id) ? ' class="ligne-nouvelle"' : ''}>
         <td class="col-case"><input type="checkbox" data-selection="${r.id}"
           ${selection.has(r.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
         <td>${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
@@ -672,6 +694,8 @@ export async function vueRecettes(conteneur, params) {
         </button>
       </td></tr>` : '');
 
+    // Le surlignage d'ajout n'a lieu qu'une fois, au rendu qui suit la création.
+    idsNouveaux.clear();
     majSelection();
   }
 

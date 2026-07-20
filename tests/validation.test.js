@@ -92,6 +92,11 @@ test('les options d’interface sont des booléens, activées par défaut', () =
   assert.equal(desactive.alertesNumerotation, false);
   assert.equal(desactive.alerteRecetteSimilaire, true);
   assert.equal(desactive.suiviSeuils, false);
+
+  // Le drapeau du jeu de démonstration retombe à faux dès qu'on enregistre ses
+  // propres paramètres (le formulaire ne le renvoie pas).
+  assert.equal(valeurs.jeuDemo, false);
+  assert.equal(validerParametres({ jeuDemo: true }).valeurs.jeuDemo, true);
 });
 
 // ---- Clé de contrôle SIREN / SIRET ---------------------------------------------

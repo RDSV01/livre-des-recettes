@@ -7,11 +7,15 @@
  */
 
 import { icone } from './icones.js';
-import { analyserMontant } from '/partage/montants.js';
+import { analyserMontant, formaterMontant } from '/partage/montants.js';
+import { dateEnFrancaisLong } from '/partage/dates.js';
 import { normaliserTexte } from '/partage/texte.js';
 
 /** Nombre de suggestions proposées sous un champ de saisie. */
 const SUGGESTIONS_MAX = 6;
+
+/** L'utilisateur préfère-t-il moins de mouvement ? */
+const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Échappe un texte pour l'insérer sans risque dans du HTML. */
 export function echapperHtml(texte) {
@@ -21,6 +25,33 @@ export function echapperHtml(texte) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+/**
+ * Squelette de chargement : des blocs gris à la forme de la page qui arrive, le
+ * temps qu'une vue récupère ses données. La forme épouse celle du contenu réel
+ * (un tableau plein pour une liste, des tuiles pour le tableau de bord) et
+ * occupe tout l'écran : le passage au contenu ne provoque donc pas de saut.
+ * Le miroitement se coupe sous `prefers-reduced-motion`.
+ *
+ * @param {'liste' | 'tableau-de-bord' | 'simple'} [forme] gabarit à imiter.
+ */
+export function chargeur(forme = 'liste') {
+  const contenu = {
+    'tableau-de-bord': `
+      <div class="sq-grille">${'<div class="sq-carte"></div>'.repeat(4)}</div>
+      <div class="sq-bloc"></div>`,
+    liste: `
+      <div class="sq-barre"></div>
+      <div class="sq-tableau">${'<div class="sq-ligne"></div>'.repeat(12)}</div>`,
+    simple: '<div class="sq-bloc"></div>'
+  }[forme] ?? '<div class="sq-bloc"></div>';
+
+  return `
+    <div class="squelette" role="status" aria-label="Chargement…">
+      <div class="sq-titre"></div>
+      ${contenu}
+    </div>`;
 }
 
 /** Affiche une notification éphémère en bas à droite. */
@@ -219,6 +250,25 @@ export function installerSuggestions({ champ, liste, valeurs }) {
   return fermer;
 }
 
+/**
+ * Affiche sous un champ de type date la date saisie en toutes lettres
+ * (« 28 mai 2026 »), sans changer la façon de la renseigner. L'aperçu est
+ * ajouté après le champ et se met à jour à chaque changement.
+ *
+ * @returns {() => void} rafraîchit l'aperçu (à appeler après un remplissage
+ *   programmatique, qui ne déclenche pas d'événement).
+ */
+export function installerApercuDate(champ) {
+  const apercu = document.createElement('small');
+  apercu.className = 'apercu-date';
+  champ.insertAdjacentElement('afterend', apercu);
+  const rafraichir = () => { apercu.textContent = dateEnFrancaisLong(champ.value); };
+  champ.addEventListener('input', rafraichir);
+  champ.addEventListener('change', rafraichir);
+  rafraichir();
+  return rafraichir;
+}
+
 /** Place la flèche de tri sur la colonne active du tableau. */
 export function majIndicateursTri(entetes, tri) {
   entetes.querySelectorAll('th.triable').forEach((th) => {
@@ -240,6 +290,50 @@ export function majBarreSelection({ barre, compte, toutSelectionner }, selection
   barre.hidden = selection.size === 0;
   compte.textContent = libelle(selection.size);
   toutSelectionner.checked = idsVisibles.length > 0 && idsVisibles.every((id) => selection.has(id));
+}
+
+/**
+ * Fait défiler les valeurs chiffrées jusqu'à leur montant : chaque élément
+ * `[data-compteur]` monte de zéro à sa cible en une demi-seconde. Le texte
+ * final déjà présent reste la référence exacte (aucune divergence de format).
+ * Ne fait rien si l'utilisateur préfère moins de mouvement.
+ *
+ * @param {HTMLElement} racine conteneur où chercher les compteurs.
+ * @param {string} devise code de devise, pour les compteurs de montant.
+ */
+export function animerCompteurs(racine, devise) {
+  if (mouvementReduit()) return;
+  const DUREE = 550;
+  for (const element of racine.querySelectorAll('[data-compteur]')) {
+    const cible = Number(element.dataset.compteur);
+    if (!Number.isFinite(cible) || cible === 0) continue;
+    const texteFinal = element.textContent;
+    const formater = element.dataset.format === 'entier'
+      ? (v) => String(Math.round(v))
+      : (v) => formaterMontant(v, devise);
+    const debut = performance.now();
+    const avancer = (maintenant) => {
+      const t = Math.min(1, (maintenant - debut) / DUREE);
+      const progression = 1 - (1 - t) ** 3; // départ vif, fin douce
+      element.textContent = t < 1 ? formater(cible * progression) : texteFinal;
+      if (t < 1) requestAnimationFrame(avancer);
+    };
+    requestAnimationFrame(avancer);
+  }
+}
+
+/**
+ * Fait disparaître des lignes de tableau (fondu vers la gauche) avant leur
+ * retrait réel, pour que la suppression se voie. Résout quand l'animation est
+ * finie, ou immédiatement si l'utilisateur préfère moins de mouvement.
+ *
+ * @param {Iterable<HTMLElement>} lignes lignes `<tr>` à faire partir.
+ */
+export function animerDepartLignes(lignes) {
+  const cibles = [...lignes].filter(Boolean);
+  if (cibles.length === 0 || mouvementReduit()) return Promise.resolve();
+  for (const tr of cibles) tr.classList.add('ligne-part');
+  return new Promise((resoudre) => setTimeout(resoudre, 240));
 }
 
 /** Retarde l'appel d'une fonction (recherche au clavier). */

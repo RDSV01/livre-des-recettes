@@ -63,6 +63,17 @@ export function nomMois(mois) {
   return NOMS_MOIS[mois - 1] ?? String(mois);
 }
 
+/**
+ * Date ISO en toutes lettres (« 28 mai 2026 »), pour confirmer sous un champ
+ * ce que l'utilisateur vient de saisir. Chaîne vide si la date est incomplète.
+ * Calcul purement textuel : aucun décalage de fuseau possible.
+ */
+export function dateEnFrancaisLong(iso) {
+  if (!estDateIso(iso)) return '';
+  const [annee, mois, jour] = iso.split('-');
+  return `${Number(jour)} ${NOMS_MOIS[Number(mois) - 1]} ${annee}`;
+}
+
 /** Date du jour (heure locale) au format ISO. */
 export function aujourdHuiIso() {
   const d = new Date();

@@ -11,7 +11,7 @@ import { api } from '../api.js';
 import { etat } from '../etat.js';
 import {
   echapperHtml, toast, confirmer,
-  afficherErreursFormulaire, effacerErreursFormulaire
+  afficherErreursFormulaire, effacerErreursFormulaire, animerDepartLignes
 } from '../ui.js';
 import { icone } from '../icones.js';
 import { formaterMontant } from '/partage/montants.js';
@@ -19,6 +19,7 @@ import { formaterMontant } from '/partage/montants.js';
 export async function vueClients(conteneur) {
   let clients = [];
   let enEdition = null;
+  let idsNouveaux = new Set(); // clients à mettre en avant au prochain rendu (ajout)
 
   conteneur.innerHTML = gabarit();
 
@@ -74,6 +75,7 @@ export async function vueClients(conteneur) {
       });
       if (!accord) return;
       try {
+        await animerDepartLignes([bouton.closest('tr')]);
         await api.supprimerClient(client.id);
         toast('Client supprimé.');
         await charger();
@@ -92,7 +94,8 @@ export async function vueClients(conteneur) {
         await api.modifierClient(enEdition.id, donnees);
         toast('Client modifié.');
       } else {
-        await api.creerClient(donnees);
+        const { client } = await api.creerClient(donnees);
+        idsNouveaux = new Set([client.id]); // surligné au rendu qui suit
         toast('Client ajouté au carnet.');
       }
       refs.dialogue.close();
@@ -140,7 +143,7 @@ export async function vueClients(conteneur) {
 
     const devise = etat.parametres.devise;
     refs.corps.innerHTML = clients.map((c) => `
-      <tr>
+      <tr${idsNouveaux.has(c.id) ? ' class="ligne-nouvelle"' : ''}>
         <td>${echapperHtml(c.nom)}</td>
         <td>${c.siret ? echapperHtml(c.siret) : '<span class="attenue">-</span>'}</td>
         <td>${c.nombreRecettes > 0 ? `${c.nombreRecettes} recette${c.nombreRecettes > 1 ? 's' : ''}` : '<span class="attenue">-</span>'}</td>
@@ -150,6 +153,9 @@ export async function vueClients(conteneur) {
           <button type="button" class="btn-icone danger" data-action="supprimer" data-id="${c.id}" title="Supprimer" aria-label="Supprimer">${icone('corbeille', { taille: 16 })}</button>
         </td>
       </tr>`).join('');
+
+    // Le surlignage d'ajout n'a lieu qu'une fois, au rendu qui suit la création.
+    idsNouveaux.clear();
   }
 
   function gabarit() {

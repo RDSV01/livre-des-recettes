@@ -609,3 +609,36 @@ test('le dossier de données supprimé est détecté, puis réparé', async (t) 
   assert.ok((await dernier.lire('/api/sauvegardes')).sauvegardes.length > 0, 'les copies restent disponibles');
   dernier.fermer();
 });
+
+test('POST /api/demo charge un jeu, puis se refuse sur un livre non vide', async (t) => {
+  const donnees = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-demo-'));
+  const copies = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-demo-copies-'));
+  t.after(() => {
+    fs.rmSync(donnees, { recursive: true, force: true });
+    fs.rmSync(copies, { recursive: true, force: true });
+  });
+
+  const app = creerApp({ dossierDonnees: donnees, dossierSauvegardes: copies });
+  const instance = await new Promise((pret) => { const s = app.listen(0, '127.0.0.1', () => pret(s)); });
+  const adresse = `http://127.0.0.1:${instance.address().port}`;
+  const lire = async (chemin) => (await fetch(adresse + chemin)).json();
+  const charger = () => fetch(adresse + '/api/demo', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  });
+
+  const premier = await charger();
+  assert.equal(premier.status, 200);
+
+  const recettes = (await lire('/api/recettes')).recettes;
+  const achats = (await lire('/api/achats')).achats;
+  assert.ok(recettes.length > 0 && achats.length > 0, 'les deux registres sont remplis');
+  assert.equal((await lire('/api/parametres')).parametres.jeuDemo, true);
+  // Le total des achats remonte bien au tableau de bord.
+  assert.ok((await lire('/api/tableau-de-bord')).achatsAnnee >= 0);
+
+  // Une deuxième fois : refus, pour ne jamais recouvrir de vraies données.
+  assert.equal((await charger()).status, 409);
+
+  instance.close();
+  instance.closeAllConnections();
+});

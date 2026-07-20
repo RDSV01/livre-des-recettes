@@ -284,6 +284,52 @@ test('l’import en lot n’écrit qu’une fois et retourne les copies', (t) =>
   assert.equal(stockage.listerRecettes().length, 2);
 });
 
+const ACHAT = { dateReglement: '2026-05-10', fournisseur: 'Métro', referenceFacture: 'A-1', montant: 120, modeReglement: 'carte' };
+
+test('les achats s’ajoutent en lot et persistent', (t) => {
+  const { ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
+  const crees = stockage.ajouterAchats([ACHAT, { ...ACHAT, montant: 30 }]);
+  assert.equal(crees.length, 2);
+  assert.notEqual(crees[0].id, crees[1].id);
+  assert.equal(ouvrir().listerAchats().length, 2, 'persistés après réouverture');
+});
+
+test('chargerDemo remplace tout le contenu en une fois', (t) => {
+  const { ouvrir } = environnement(t);
+
+  const stockage = ouvrir();
+  const resultat = stockage.chargerDemo({
+    parametres: { nomEntreprise: 'Démo', jeuDemo: true },
+    recettes: [{ dateEncaissement: '2026-01-05', client: 'C', libelle: '', numeroFacture: '', montant: 100, modeReglement: 'carte', categorie: 'ventes' }],
+    achats: [ACHAT],
+    clients: [{ nom: 'Client démo', siret: '' }]
+  });
+  assert.equal(resultat, true);
+
+  const relu = ouvrir();
+  assert.equal(relu.listerRecettes().length, 1);
+  assert.equal(relu.listerAchats().length, 1);
+  assert.equal(relu.listerClients().length, 1);
+  assert.equal(relu.obtenirParametres().jeuDemo, true);
+  // Les enregistrements ont bien reçu un identifiant.
+  assert.ok(relu.listerRecettes()[0].id);
+});
+
+test('un dossier de sauvegardes inaccessible se signale sans bloquer', (t) => {
+  const donnees = dossierTemporaire();
+  const sauvegardes = path.join(dossierTemporaire(), 'occupe');
+  fs.writeFileSync(sauvegardes, 'un fichier, pas un dossier');
+  t.after(() => fs.rmSync(donnees, { recursive: true, force: true }));
+
+  const stockage = creerStockage(donnees, { dossierSauvegardes: sauvegardes });
+  assert.equal(stockage.sauvegardesEnEchec(), false, 'aucune écriture encore tentée');
+  stockage.ajouterRecette(CHAMPS);
+  assert.equal(stockage.sauvegardesEnEchec(), true, 'la copie de secours a échoué');
+  assert.equal(stockage.listerRecettes().length, 1, 'la saisie a bien été enregistrée');
+});
+
 test('cycle complet des clients, triés par nom et persistés', (t) => {
   const { ouvrir } = environnement(t);
 

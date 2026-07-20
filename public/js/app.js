@@ -7,7 +7,7 @@
 
 import { api } from './api.js';
 import { chargerEtat, etat, registreAchatsUtile } from './etat.js';
-import { echapperHtml, toast, confirmer, dialogueAttente } from './ui.js';
+import { echapperHtml, toast, confirmer, dialogueAttente, chargeur } from './ui.js';
 import { icone } from './icones.js';
 import { annuler, retablir } from './historique.js';
 import { vueTableauDeBord } from './vues/tableau-de-bord.js';
@@ -24,14 +24,14 @@ import { vueParametres } from './vues/parametres.js';
  * routage. Un onglet peut porter une condition d'affichage (`utile`).
  */
 const ROUTES = [
-  { chemin: '', label: 'Tableau de bord', icone: 'tableau-de-bord', vue: vueTableauDeBord },
-  { chemin: 'recettes', label: 'Recettes', icone: 'recettes', vue: vueRecettes },
-  { chemin: 'achats', label: 'Achats', icone: 'achats', vue: vueAchats, utile: registreAchatsUtile },
-  { chemin: 'urssaf', label: 'URSSAF', icone: 'urssaf', vue: vueUrssaf },
-  { chemin: 'clients', label: 'Clients', icone: 'clients', vue: vueClients },
-  { chemin: 'import', label: 'Import CSV', icone: 'import', vue: vueImport },
-  { chemin: 'exports', label: 'Exports', icone: 'exports', vue: vueExports },
-  { chemin: 'parametres', label: 'Paramètres', icone: 'parametres', vue: vueParametres }
+  { chemin: '', label: 'Tableau de bord', icone: 'tableau-de-bord', vue: vueTableauDeBord, forme: 'tableau-de-bord' },
+  { chemin: 'recettes', label: 'Recettes', icone: 'recettes', vue: vueRecettes, forme: 'liste' },
+  { chemin: 'achats', label: 'Achats', icone: 'achats', vue: vueAchats, utile: registreAchatsUtile, forme: 'liste' },
+  { chemin: 'urssaf', label: 'URSSAF', icone: 'urssaf', vue: vueUrssaf, forme: 'simple' },
+  { chemin: 'clients', label: 'Clients', icone: 'clients', vue: vueClients, forme: 'liste' },
+  { chemin: 'import', label: 'Import CSV', icone: 'import', vue: vueImport, forme: 'simple' },
+  { chemin: 'exports', label: 'Exports', icone: 'exports', vue: vueExports, forme: 'simple' },
+  { chemin: 'parametres', label: 'Paramètres', icone: 'parametres', vue: vueParametres, forme: 'simple' }
 ];
 
 const CLE_THEME = 'ldr-theme';
@@ -115,10 +115,26 @@ async function afficherVue() {
   });
 
   const conteneur = document.getElementById('vue');
-  conteneur.innerHTML = '<div class="chargement">Chargement…</div>';
+  // La zone de contenu est masquée le temps de préparer la vue, puis révélée en
+  // fondu une fois le contenu (ou le placeholder, si le chargement traîne)
+  // prêt. Rien ne bouge : seule l'opacité de cette zone change, jamais le menu.
+  const contenuPrecedent = conteneur.innerHTML;
+  conteneur.classList.add('vue-cachee');
+
+  // Squelette différé : en local une vue s'affiche en quelques millisecondes ;
+  // le placeholder n'apparaît donc qu'au-delà d'un court délai, en fondu lui
+  // aussi, et seulement si la vue n'a encore rien dessiné.
+  const minuteurSquelette = setTimeout(() => {
+    if (conteneur.innerHTML === contenuPrecedent) {
+      conteneur.innerHTML = chargeur(route.forme);
+      revelerEnFondu(conteneur);
+    }
+  }, 180);
   try {
     await route.vue(conteneur, params);
     rendreBandeauMaj();
+    rendreBandeauDemo();
+    revelerEnFondu(conteneur);
     conteneur.focus();
   } catch (erreur) {
     console.error(erreur);
@@ -128,7 +144,51 @@ async function afficherVue() {
         <p>Impossible de charger cette page : ${echapperHtml(erreur.message)}</p>
         <p>Vérifiez que l’application est bien lancée, puis rechargez.</p>
       </div>`;
+    revelerEnFondu(conteneur);
+  } finally {
+    clearTimeout(minuteurSquelette);
   }
+}
+
+/** Révèle la zone de contenu en rejouant le fondu (retrait du masque, reflow). */
+function revelerEnFondu(conteneur) {
+  conteneur.classList.remove('vue-cachee', 'vue-entre');
+  void conteneur.offsetWidth;
+  conteneur.classList.add('vue-entre');
+}
+
+// ---- Jeu de démonstration ----------------------------------------------------
+
+/**
+ * Bandeau rappelant que le livre affiché est le jeu de démonstration, avec un
+ * bouton pour tout effacer et commencer son vrai livre.
+ */
+function rendreBandeauDemo() {
+  if (!etat.parametres?.jeuDemo) return;
+  const conteneur = document.getElementById('vue');
+  conteneur.insertAdjacentHTML('afterbegin', `
+    <div class="bandeau-rappel bandeau-demo">
+      ${icone('info', { taille: 18 })}
+      <span>Vous explorez un <strong>jeu de démonstration</strong>. Effacez-le quand vous voulez commencer votre vrai livre.</span>
+      <button type="button" class="btn btn-discret" id="effacer-demo">${icone('corbeille', { taille: 16 })}<span>Tout effacer</span></button>
+    </div>`);
+  document.getElementById('effacer-demo')?.addEventListener('click', async (evenement) => {
+    const bouton = evenement.currentTarget;
+    const accord = await confirmer({
+      titre: 'Effacer le jeu de démonstration ?',
+      message: 'Les données de démonstration seront supprimées pour repartir sur un livre vide.',
+      boutonOk: 'Tout effacer'
+    });
+    if (!accord) return;
+    bouton.disabled = true;
+    try {
+      await api.repartirDeZero();
+      window.location.reload();
+    } catch (erreur) {
+      bouton.disabled = false;
+      toast(erreur.message, 'erreur');
+    }
+  });
 }
 
 // ---- Mise à jour de l'application ---------------------------------------------
@@ -145,8 +205,11 @@ let miseAJour = null;
 function rendreBandeauMaj() {
   if (!miseAJour?.disponible) return;
   const conteneur = document.getElementById('vue');
+  // Un exécutable se met à jour tout seul, mais on propose toujours de lire
+  // ce que la version apporte avant de l'installer.
   const action = miseAJour.remplacable
-    ? '<button type="button" class="btn btn-discret" id="lancer-maj">Mettre à jour</button>'
+    ? `<a class="lien-discret" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Nouveautés</a>
+       <button type="button" class="btn btn-discret" id="lancer-maj">Mettre à jour</button>`
     : `<a class="btn btn-discret" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Voir la nouvelle version</a>`;
 
   conteneur.insertAdjacentHTML('afterbegin', `

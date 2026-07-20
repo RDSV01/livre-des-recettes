@@ -76,7 +76,7 @@ export function caMensuel(recettes, { nombreMois = 12, maintenant = new Date() }
  * décembre. Le mois mis en avant est le mois en cours pour l'année courante,
  * décembre pour une année passée.
  */
-export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), annee = null } = {}) {
+export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), annee = null, achats = [] } = {}) {
   const anneeCourante = maintenant.getFullYear();
   const anneeChoisie = annee ?? anneeCourante;
   const estCourante = anneeChoisie === anneeCourante;
@@ -84,6 +84,11 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
 
   const recettesAnnee = filtrerParPeriode(recettes, { annee: anneeChoisie });
   const recettesMois = filtrerParPeriode(recettesAnnee, { mois });
+
+  // Registre des achats : simple total de la période, sans ventilation par
+  // catégorie (un achat n'en porte pas). La date qui fait foi est le règlement.
+  const achatsAnnee = filtrerParPeriode(achats, { annee: anneeChoisie }, 'dateReglement');
+  const achatsMois = filtrerParPeriode(achatsAnnee, { mois }, 'dateReglement');
 
   const caAnneeCentimes = recettesAnnee.reduce((acc, r) => acc + enCentimes(r.montant), 0);
   const nombreAnnee = recettesAnnee.length;
@@ -113,7 +118,10 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
     caParMois: parMois(recettes),
     caParMoisVentes: parMois(deCategorie(recettes, 'ventes')),
     caParMoisPrestations: parMois(deCategorie(recettes, 'prestations')),
-    dernieresRecettes: recettesAnnee.sort(parDateDesc('dateEncaissement')).slice(0, 5)
+    dernieresRecettes: recettesAnnee.sort(parDateDesc('dateEncaissement')).slice(0, 5),
+    achatsMois: totalMontants(achatsMois),
+    achatsAnnee: totalMontants(achatsAnnee),
+    nombreAchatsAnnee: achatsAnnee.length
   };
 }
 

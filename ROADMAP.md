@@ -6,6 +6,28 @@ est jugée à cette aune.
 
 ## Déjà livré
 
+### v1.4
+
+- Import CSV du registre des achats, sur le modèle de l'import des recettes
+  (correspondance des colonnes, détection des doublons, rapport avant import).
+- Total des achats de l'année sur le tableau de bord, à côté du chiffre
+  d'affaires.
+- Jeu de démonstration : un livre fictif à charger en un clic pour découvrir
+  l'application, effaçable d'un clic, jamais mêlé aux vraies données.
+- Mises à jour vérifiées par empreinte SHA-256 : le fichier téléchargé est
+  contrôlé localement, sans service tiers, avant de remplacer l'application.
+- Total de la sélection multiple affiché dans les deux registres.
+- Filtres et tri conservés le temps de la session (en mémoire, rien n'est écrit
+  dans le navigateur).
+- Chemins des données et des sauvegardes copiables d'un clic, avertissement
+  quand une sauvegarde n'a pas pu être écrite.
+- Lien vers les nouveautés dans le bandeau de mise à jour.
+- Date en toutes lettres (« 28 mai 2026 ») affichée sous chaque champ date, sans
+  changer la façon de la saisir.
+- Squelettes de chargement (blocs qui miroitent) et micro-animations discrètes
+  (compteurs, jauges, barres du graphique).
+- Vérification de bout en bout intégrée (`npm run verifier`).
+
 ### v1.3
 
 - Registre des achats : date du règlement, fournisseur, référence de la facture
@@ -74,11 +96,9 @@ est jugée à cette aune.
 
 ## Prochaines versions (par ordre de priorité pressenti)
 
-- [ ] **Import CSV des achats**, sur le modèle de l'import des recettes
-      (correspondance des colonnes, détection des doublons, rapport avant import).
 - [ ] **Gestion multi entreprises**
-- [ ] **Total des achats dans le tableau de bord**
-- [ ] **Loader de chargement**
+- [ ] **Un exécutable pour Mac Intel**
+- [ ] **Possibilité de choisir dans les paramètres ce qu'on affiche dans le tableau de bord**
 
 ## À l'étude (pas engagé)
 

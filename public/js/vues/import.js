@@ -1,33 +1,21 @@
 /**
- * Vue « Import CSV » en trois étapes :
+ * Vue « Import CSV », pour les deux registres (recettes et achats), en trois
+ * étapes :
  *  1. choix du fichier (clic ou glisser-déposer) ;
- *  2. correspondance des colonnes du fichier avec les champs du livre ;
+ *  2. correspondance des colonnes du fichier avec les champs du registre ;
  *  3. analyse (simulation côté serveur : validation + doublons) puis import.
+ *
+ * Le registre visé se choisit en tête quand l'activité tient aussi un registre
+ * des achats ; sinon seules les recettes sont proposées.
  */
 
 import { api } from '../api.js';
-import { etat } from '../etat.js';
+import { etat, registreAchatsUtile } from '../etat.js';
 import { echapperHtml, toast } from '../ui.js';
 import { icone } from '../icones.js';
 import { analyserCsv, lireFichierCsv } from '../csv.js';
 import { analyserDateSouple } from '/partage/dates.js';
 import { normaliserTexte } from '/partage/texte.js';
-
-/**
- * Champs du livre pouvant être alimentés par le fichier.
- * `indices` sert à deviner la colonne à partir de son en-tête.
- * La cible « catégorie » n'est proposée qu'aux activités mixtes.
- */
-const CIBLES = [
-  { cle: 'dateEncaissement', libelle: 'Date d’encaissement *', indices: ['date', 'encaissement'] },
-  { cle: 'client', libelle: 'Client *', indices: ['client', 'nom'] },
-  { cle: 'montant', libelle: 'Montant *', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
-  { cle: 'libelle', libelle: 'Libellé', indices: ['libelle', 'description', 'objet', 'designation'] },
-  { cle: 'modeReglement', libelle: 'Mode de règlement', indices: ['mode', 'paiement', 'reglement'] },
-  { cle: 'numeroFacture', libelle: 'Numéro de facture', indices: ['facture', 'reference'] },
-  { cle: 'categorie', libelle: 'Catégorie (vente / prestation)', indices: ['categorie'] }
-];
-const CIBLES_OBLIGATOIRES = ['dateEncaissement', 'client', 'montant'];
 
 /** Convertit une catégorie en texte libre vers un code du livre. */
 function devinerCategorie(texte) {
@@ -56,9 +44,63 @@ function devinerMode(texte, modesPersonnalises) {
   return 'autre';
 }
 
+/**
+ * Description des deux registres importables. `cibles` liste les champs
+ * pouvant être alimentés (`indices` sert à deviner la colonne d'après son
+ * en-tête), et `construire` assemble une ligne prête pour le serveur.
+ */
+const REGISTRES = {
+  recettes: {
+    libelle: 'Recettes',
+    lien: '#/recettes',
+    obligatoires: ['dateEncaissement', 'client', 'montant'],
+    importer: (demande) => api.importerRecettes(demande),
+    cibles: ({ estMixte }) => [
+      { cle: 'dateEncaissement', libelle: 'Date d’encaissement *', indices: ['date', 'encaissement'] },
+      { cle: 'client', libelle: 'Client *', indices: ['client', 'nom'] },
+      { cle: 'montant', libelle: 'Montant *', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
+      { cle: 'libelle', libelle: 'Libellé', indices: ['libelle', 'description', 'objet', 'designation'] },
+      { cle: 'modeReglement', libelle: 'Mode de règlement', indices: ['mode', 'paiement', 'reglement'] },
+      { cle: 'numeroFacture', libelle: 'Numéro de facture', indices: ['facture', 'reference'] },
+      ...(estMixte ? [{ cle: 'categorie', libelle: 'Catégorie (vente / prestation)', indices: ['categorie'] }] : [])
+    ],
+    construire: (v, { estMixte, categorieDefaut, modes }) => ({
+      dateEncaissement: analyserDateSouple(v('dateEncaissement')) ?? v('dateEncaissement'),
+      client: v('client'),
+      montant: v('montant'),
+      libelle: v('libelle'),
+      modeReglement: devinerMode(v('modeReglement'), modes),
+      numeroFacture: v('numeroFacture'),
+      categorie: estMixte ? (devinerCategorie(v('categorie')) || categorieDefaut) : ''
+    })
+  },
+  achats: {
+    libelle: 'Achats',
+    lien: '#/achats',
+    obligatoires: ['dateReglement', 'fournisseur', 'montant'],
+    importer: (demande) => api.importerAchats(demande),
+    cibles: () => [
+      { cle: 'dateReglement', libelle: 'Date du règlement *', indices: ['date', 'reglement', 'paiement'] },
+      { cle: 'fournisseur', libelle: 'Fournisseur *', indices: ['fournisseur', 'nom', 'vendeur'] },
+      { cle: 'montant', libelle: 'Montant *', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
+      { cle: 'modeReglement', libelle: 'Mode de paiement', indices: ['mode', 'paiement', 'reglement'] },
+      { cle: 'referenceFacture', libelle: 'Référence de la pièce', indices: ['reference', 'facture', 'piece', 'justificatif'] }
+    ],
+    construire: (v, { modes }) => ({
+      dateReglement: analyserDateSouple(v('dateReglement')) ?? v('dateReglement'),
+      fournisseur: v('fournisseur'),
+      montant: v('montant'),
+      modeReglement: devinerMode(v('modeReglement'), modes),
+      referenceFacture: v('referenceFacture')
+    })
+  }
+};
+
 export async function vueImport(conteneur) {
   const estMixte = etat.parametres.typeActivite === 'mixte';
-  const cibles = CIBLES.filter((c) => c.cle !== 'categorie' || estMixte);
+  const modes = etat.parametres.modesPersonnalises;
+  const achatsUtiles = registreAchatsUtile();
+  let registre = 'recettes';
   let donneesCsv = null; // { entetes, lignes }
   let nomFichier = '';
 
@@ -69,6 +111,18 @@ export async function vueImport(conteneur) {
         <p>Reprenez l’historique tenu dans un tableur : rien n’est importé sans votre confirmation.</p>
       </div>
     </header>
+
+    ${achatsUtiles ? `
+    <div class="carte">
+      <h2>Que voulez-vous importer ?</h2>
+      <div class="choix-registre" role="tablist">
+        ${Object.entries(REGISTRES).map(([cle, r]) => `
+          <button type="button" class="btn ${cle === registre ? 'btn-primaire' : 'btn-secondaire'}"
+            role="tab" data-registre="${cle}" aria-selected="${cle === registre}">
+            ${echapperHtml(r.libelle)}
+          </button>`).join('')}
+      </div>
+    </div>` : ''}
 
     <div class="carte" id="etape-fichier">
       <h2>1. Choisir le fichier</h2>
@@ -100,6 +154,27 @@ export async function vueImport(conteneur) {
     boutonAnalyser: conteneur.querySelector('#bouton-analyser'),
     etapeRapport: conteneur.querySelector('#etape-rapport')
   };
+
+  /** Cibles du registre courant (les recettes mixtes ont une colonne de plus). */
+  const ciblesCourantes = () => REGISTRES[registre].cibles({ estMixte });
+
+  // ---- Choix du registre (recettes / achats) -----------------------------------
+  conteneur.querySelectorAll('[data-registre]').forEach((bouton) => {
+    bouton.addEventListener('click', () => {
+      if (bouton.dataset.registre === registre) return;
+      registre = bouton.dataset.registre;
+      conteneur.querySelectorAll('[data-registre]').forEach((b) => {
+        const actif = b.dataset.registre === registre;
+        b.classList.toggle('btn-primaire', actif);
+        b.classList.toggle('btn-secondaire', !actif);
+        b.setAttribute('aria-selected', String(actif));
+      });
+      // Un fichier déjà chargé se relit pour l'autre registre ; sinon on repart
+      // de l'étape 1.
+      refs.etapeRapport.hidden = true;
+      if (donneesCsv) afficherCorrespondance();
+    });
+  });
 
   // ---- Étape 1 : fichier -------------------------------------------------------
   refs.zone.addEventListener('click', () => refs.champFichier.click());
@@ -145,7 +220,8 @@ export async function vueImport(conteneur) {
       `${nomFichier} : ${donneesCsv.lignes.length} ligne${donneesCsv.lignes.length > 1 ? 's' : ''}, ` +
       `${donneesCsv.entetes.length} colonnes détectées.`;
 
-    refs.grille.innerHTML = cibles.map((cible) => `
+    const besoinCategorie = registre === 'recettes' && estMixte;
+    refs.grille.innerHTML = ciblesCourantes().map((cible) => `
       <div class="champ">
         <label for="correspondance-${cible.cle}">${echapperHtml(cible.libelle)}</label>
         <select id="correspondance-${cible.cle}" data-cible="${cible.cle}">
@@ -154,7 +230,7 @@ export async function vueImport(conteneur) {
             `<option value="${i}" ${devinerColonne(cible) === i ? 'selected' : ''}>${echapperHtml(entete)}</option>`
           ).join('')}
         </select>
-      </div>` ).join('') + (estMixte ? `
+      </div>` ).join('') + (besoinCategorie ? `
       <div class="champ">
         <label for="categorie-defaut">Catégorie par défaut (lignes sans catégorie)</label>
         <select id="categorie-defaut">
@@ -181,31 +257,22 @@ export async function vueImport(conteneur) {
       if (select.value !== '') correspondance[select.dataset.cible] = Number(select.value);
     });
 
-    const manquantes = CIBLES_OBLIGATOIRES.filter((cle) => correspondance[cle] === undefined);
+    const desc = REGISTRES[registre];
+    const manquantes = desc.obligatoires.filter((cle) => correspondance[cle] === undefined);
     if (manquantes.length > 0) {
-      toast('Colonnes obligatoires non associées : date, client et montant.', 'erreur');
+      const libelles = ciblesCourantes()
+        .filter((c) => manquantes.includes(c.cle))
+        .map((c) => c.libelle.replace(' *', ''));
+      toast(`Colonnes obligatoires non associées : ${libelles.join(', ')}.`, 'erreur');
       return null;
     }
 
     const valeur = (rangee, cle) =>
       correspondance[cle] === undefined ? '' : (rangee[correspondance[cle]] ?? '').trim();
-    const categorieDefaut = estMixte
-      ? refs.grille.querySelector('#categorie-defaut').value
-      : '';
+    const categorieDefaut = refs.grille.querySelector('#categorie-defaut')?.value ?? '';
 
-    return donneesCsv.lignes.map((rangee) => ({
-      // Date convertie en ISO si possible ; sinon on transmet la valeur brute,
-      // le serveur signalera l'erreur sur la bonne ligne.
-      dateEncaissement: analyserDateSouple(valeur(rangee, 'dateEncaissement')) ?? valeur(rangee, 'dateEncaissement'),
-      client: valeur(rangee, 'client'),
-      montant: valeur(rangee, 'montant'),
-      libelle: valeur(rangee, 'libelle'),
-      modeReglement: devinerMode(valeur(rangee, 'modeReglement'), etat.parametres.modesPersonnalises),
-      numeroFacture: valeur(rangee, 'numeroFacture'),
-      categorie: estMixte
-        ? (devinerCategorie(valeur(rangee, 'categorie')) || categorieDefaut)
-        : ''
-    }));
+    return donneesCsv.lignes.map((rangee) =>
+      desc.construire((cle) => valeur(rangee, cle), { estMixte, categorieDefaut, modes }));
   }
 
   // ---- Étape 3 : analyse puis import ------------------------------------------------
@@ -214,7 +281,7 @@ export async function vueImport(conteneur) {
     if (!lignes) return;
     refs.boutonAnalyser.disabled = true;
     try {
-      const rapport = await api.importerRecettes({ lignes, simulation: true });
+      const rapport = await REGISTRES[registre].importer({ lignes, simulation: true });
       afficherRapport(rapport, lignes);
     } catch (erreur) {
       toast(erreur.message, 'erreur');
@@ -224,20 +291,24 @@ export async function vueImport(conteneur) {
   });
 
   function afficherRapport(rapport, lignes) {
+    const desc = REGISTRES[registre];
+    const nom = registre === 'achats' ? 'achat' : 'recette';
+    const accord = (n) => `${nom}${n > 1 ? 's' : ''}`;
+
     refs.etapeRapport.hidden = false;
     refs.etapeRapport.innerHTML = `
       <h2>3. Vérifier puis importer</h2>
       <div class="compteurs-import">
-        <div class="compteur ok"><strong>${rapport.valides}</strong> recettes prêtes à importer</div>
+        <div class="compteur ok"><strong>${rapport.valides}</strong> ${accord(rapport.valides)} prêt${rapport.valides > 1 ? 's' : ''} à importer</div>
         <div class="compteur attention"><strong>${rapport.doublons.length}</strong> doublons détectés</div>
         <div class="compteur erreur"><strong>${rapport.erreurs.length}</strong> lignes en erreur</div>
       </div>
 
       ${rapport.doublons.length > 0 ? `
-        <p><strong>Doublons</strong> (même date, même client, même montant qu’une recette existante) :</p>
+        <p><strong>Doublons</strong> (même date, même tiers, même montant qu’une ligne existante) :</p>
         <ul>
           ${rapport.doublons.slice(0, 15).map((d) =>
-            `<li>Ligne ${d.ligne} : ${echapperHtml(d.dateEncaissement)}, ${echapperHtml(d.client)}, ${d.montant}</li>`
+            `<li>Ligne ${d.ligne} : ${echapperHtml(d.date)}, ${echapperHtml(d.tiers)}, ${d.montant}</li>`
           ).join('')}
           ${rapport.doublons.length > 15 ? `<li>… et ${rapport.doublons.length - 15} autres.</li>` : ''}
         </ul>
@@ -275,14 +346,14 @@ export async function vueImport(conteneur) {
       const gardeFermeture = (e) => { e.preventDefault(); };
       window.addEventListener('beforeunload', gardeFermeture);
       try {
-        const resultat = await api.importerRecettes({ lignes, importerDoublons });
-        toast(`${resultat.importees} recette${resultat.importees > 1 ? 's' : ''} importée${resultat.importees > 1 ? 's' : ''}.`);
+        const resultat = await desc.importer({ lignes, importerDoublons });
+        toast(`${resultat.importees} ${accord(resultat.importees)} importé${resultat.importees > 1 ? 's' : ''}.`);
         refs.etapeRapport.innerHTML = `
           <h2>Import terminé</h2>
-          <p>${resultat.importees} recette${resultat.importees > 1 ? 's' : ''} ajoutée${resultat.importees > 1 ? 's' : ''} au livre.
+          <p>${resultat.importees} ${accord(resultat.importees)} ajouté${resultat.importees > 1 ? 's' : ''} au registre.
           ${resultat.erreurs.length > 0 ? `${resultat.erreurs.length} ligne${resultat.erreurs.length > 1 ? 's' : ''} en erreur ignorée${resultat.erreurs.length > 1 ? 's' : ''}.` : ''}
           ${resultat.sauvegarde ? 'Une sauvegarde des données précédentes a été créée (voir les paramètres).' : ''}</p>
-          <p><a class="btn btn-secondaire" href="#/recettes">${icone('recettes', { taille: 16 })}<span>Voir les recettes</span></a></p>`;
+          <p><a class="btn btn-secondaire" href="${desc.lien}">${icone(registre, { taille: 16 })}<span>Voir les ${desc.libelle.toLowerCase()}</span></a></p>`;
       } catch (erreur) {
         toast(erreur.message, 'erreur');
         bouton.disabled = false;

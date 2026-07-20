@@ -111,6 +111,11 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
   /** Message d'erreur si le fichier est corrompu, sinon `null`. */
   let corruption = null;
 
+  // Vrai si la dernière tentative de copie de secours a échoué : l'utilisateur
+  // travaille alors sans filet (dossier de sauvegardes inaccessible) et
+  // l'interface doit pouvoir l'en avertir, sans jamais bloquer la saisie.
+  let copieDeSecoursEnEchec = false;
+
   // Un fichier absent alors que des sauvegardes existent n'est pas une
   // première utilisation : c'est une disparition, et elle se répare.
   const fichierAbsent = !fs.existsSync(cheminFichier);
@@ -202,7 +207,11 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       const temporaire = `${cible}.tmp`;
       fs.copyFileSync(cheminFichier, temporaire);
       fs.renameSync(temporaire, cible);
-    } catch { /* réessayé à la prochaine écriture */ }
+      copieDeSecoursEnEchec = false;
+    } catch {
+      // Réessayé à la prochaine écriture ; l'interface signale l'absence de filet.
+      copieDeSecoursEnEchec = true;
+    }
   }
 
   /** Garde les `garder` sauvegardes les plus récentes correspondant au motif. */
@@ -273,6 +282,15 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     },
 
     /**
+     * La copie de secours n'a pas pu être écrite lors de la dernière saisie :
+     * l'utilisateur travaille sans filet (dossier de sauvegardes inaccessible).
+     * L'interface l'en avertit ; la saisie, elle, n'est jamais bloquée.
+     */
+    sauvegardesEnEchec() {
+      return copieDeSecoursEnEchec;
+    },
+
+    /**
      * Le fichier de données a-t-il disparu alors que des sauvegardes
      * existent ? L'interface propose alors de le reconstituer.
      */
@@ -299,6 +317,27 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       corruption = null;
       sauvegarder();
       disparition = false;
+    },
+
+    /**
+     * Remplace tout le contenu par un jeu de démonstration (champs métier sans
+     * identifiant : ils sont générés ici). En une seule écriture, annulable si
+     * elle échoue. La route appelante s'assure d'abord que le livre est vide.
+     */
+    chargerDemo(jeu) {
+      const maintenant = horodatage();
+      const avecId = (champs) => ({ id: crypto.randomUUID(), ...champs, creeLe: maintenant, modifieLe: maintenant });
+      const nouveau = normaliser({
+        parametres: jeu.parametres,
+        recettes: (jeu.recettes ?? []).map(avecId),
+        achats: (jeu.achats ?? []).map(avecId),
+        clients: (jeu.clients ?? []).map(avecId)
+      });
+      const avant = donnees;
+      return ecrire(
+        () => { donnees = nouveau; return true; },
+        () => { donnees = avant; }
+      );
     },
 
     /** Nombre d'éléments par registre, sans recopier les listes. */
@@ -368,11 +407,21 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
 
     /** Ajoute un achat déjà validé. Retourne l'achat créé. */
     ajouterAchat(champs) {
+      return this.ajouterAchats([champs])[0];
+    },
+
+    /** Ajoute un lot d'achats validés en une seule écriture (import). */
+    ajouterAchats(lot) {
       const maintenant = horodatage();
-      const cree = { id: crypto.randomUUID(), ...champs, creeLe: maintenant, modifieLe: maintenant };
+      const crees = lot.map((champs) => ({
+        id: crypto.randomUUID(),
+        ...champs,
+        creeLe: maintenant,
+        modifieLe: maintenant
+      }));
       return ecrire(
-        () => { donnees.achats.push(cree); return { ...cree }; },
-        () => { donnees.achats.pop(); }
+        () => { donnees.achats.push(...crees); return crees.map((a) => ({ ...a })); },
+        () => { donnees.achats.length -= crees.length; }
       );
     },
 

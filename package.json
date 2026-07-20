@@ -1,6 +1,6 @@
 {
   "name": "livre-des-recettes",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Tenez votre livre des recettes de micro-entrepreneur : simple, local et conforme aux obligations françaises.",
   "type": "module",
   "private": true,
@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
+    "verifier": "node scripts/verifier.mjs",
     "construire:exe": "node scripts/construire-exe.mjs"
   },
   "engines": {

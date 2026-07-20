@@ -9,24 +9,37 @@ import { normaliserTexte } from './texte.js';
 import { enCentimes } from './montants.js';
 
 /**
- * Deux recettes sont considérées comme un même encaissement si elles ont la
- * même date, le même montant et le même client (comparaison insensible à la
- * casse et aux accents). Si les deux portent un numéro de facture, il doit
- * aussi coïncider : deux factures distinctes de même montant le même jour ne
- * sont pas des doublons.
+ * Description d'un registre pour la comparaison : quelle date fait foi, quel
+ * tiers (client d'une recette, fournisseur d'un achat) et quelle référence
+ * (numéro de facture, référence de la pièce).
  */
-function memeEncaissement(a, b) {
-  const factureA = normaliserTexte(a.numeroFacture);
-  const factureB = normaliserTexte(b.numeroFacture);
-  return a.dateEncaissement === b.dateEncaissement &&
+const RECETTES = { cleDate: 'dateEncaissement', cleTiers: 'client', cleReference: 'numeroFacture' };
+const ACHATS = { cleDate: 'dateReglement', cleTiers: 'fournisseur', cleReference: 'referenceFacture' };
+
+/**
+ * Deux lignes d'un même registre désignent la même opération si elles ont la
+ * même date, le même montant et le même tiers (comparaison insensible à la
+ * casse et aux accents). Si les deux portent une référence, elle doit aussi
+ * coïncider : deux pièces distinctes de même montant le même jour ne sont pas
+ * des doublons.
+ */
+function memeOperation(a, b, { cleDate, cleTiers, cleReference }) {
+  const refA = normaliserTexte(a[cleReference]);
+  const refB = normaliserTexte(b[cleReference]);
+  return a[cleDate] === b[cleDate] &&
     enCentimes(a.montant) === enCentimes(b.montant) &&
-    normaliserTexte(a.client) === normaliserTexte(b.client) &&
-    (!factureA || !factureB || factureA === factureB);
+    normaliserTexte(a[cleTiers]) === normaliserTexte(b[cleTiers]) &&
+    (!refA || !refB || refA === refB);
 }
 
 /** Vrai si `recette` est un doublon d'une des recettes `existantes`. */
 export function estDoublon(recette, existantes) {
-  return existantes.some((autre) => memeEncaissement(recette, autre));
+  return existantes.some((autre) => memeOperation(recette, autre, RECETTES));
+}
+
+/** Vrai si `achat` est un doublon d'un des achats `existants`. */
+export function estDoublonAchat(achat, existants) {
+  return existants.some((autre) => memeOperation(achat, autre, ACHATS));
 }
 
 /**
@@ -37,7 +50,7 @@ export function estDoublon(recette, existantes) {
 export function chercherSimilaire(recette, existantes) {
   const facture = normaliserTexte(recette.numeroFacture);
   return existantes.find((autre) =>
-    memeEncaissement(recette, autre) ||
+    memeOperation(recette, autre, RECETTES) ||
     (facture !== '' && normaliserTexte(autre.numeroFacture) === facture)
   ) ?? null;
 }

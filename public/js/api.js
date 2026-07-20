@@ -44,11 +44,15 @@ export const api = {
   creerAchat: (achat) => requete('/api/achats', { methode: 'POST', corps: achat }),
   modifierAchat: (id, achat) => requete(`/api/achats/${id}`, { methode: 'PUT', corps: achat }),
   supprimerAchat: (id) => requete(`/api/achats/${id}`, { methode: 'DELETE' }),
+  importerAchats: (demande) => requete('/api/achats/import', { methode: 'POST', corps: demande }),
 
   // Sauvegardes
   listerSauvegardes: () => requete('/api/sauvegardes'),
   restaurerSauvegarde: (fichier) => requete('/api/sauvegardes/restaurer', { methode: 'POST', corps: { fichier } }),
   repartirDeZero: () => requete('/api/sauvegardes/repartir-de-zero', { methode: 'POST', corps: {} }),
+
+  // Jeu de démonstration
+  chargerDemo: () => requete('/api/demo', { methode: 'POST', corps: {} }),
 
   // Clients
   listerClients: () => requete('/api/clients'),

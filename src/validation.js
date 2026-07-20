@@ -332,7 +332,10 @@ export function validerParametres(entree) {
       alertesNumerotation: booleen(e.alertesNumerotation, true),
       alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
       suiviSeuils: booleen(e.suiviSeuils, true),
-      verifierMisesAJour: booleen(e.verifierMisesAJour, true)
+      verifierMisesAJour: booleen(e.verifierMisesAJour, true),
+      // Le formulaire ne renvoie pas ce drapeau : enregistrer ses paramètres
+      // sort donc du mode démonstration.
+      jeuDemo: booleen(e.jeuDemo, false)
     }
   };
 }

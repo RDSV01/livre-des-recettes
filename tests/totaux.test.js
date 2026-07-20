@@ -59,6 +59,24 @@ test('statistiquesTableauDeBord calcule le mois et l’année en cours', () => {
   assert.deepEqual(stats.caParMois.at(-1), { annee: 2026, mois: 12, total: 0 });
 });
 
+test('statistiquesTableauDeBord additionne les achats de la période', () => {
+  const achats = [
+    { dateReglement: '2026-07-05', fournisseur: 'F', referenceFacture: '', montant: 200, modeReglement: 'carte' },
+    { dateReglement: '2026-03-02', fournisseur: 'F', referenceFacture: '', montant: 50, modeReglement: 'carte' },
+    { dateReglement: '2025-11-01', fournisseur: 'F', referenceFacture: '', montant: 999, modeReglement: 'carte' }
+  ];
+  const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16), achats });
+  assert.equal(stats.achatsAnnee, 250, 'les deux achats de 2026, pas celui de 2025');
+  assert.equal(stats.achatsMois, 200, 'seul l’achat de juillet');
+  assert.equal(stats.nombreAchatsAnnee, 2);
+});
+
+test('statistiquesTableauDeBord met les achats à zéro quand il n’y en a pas', () => {
+  const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16) });
+  assert.equal(stats.achatsAnnee, 0);
+  assert.equal(stats.nombreAchatsAnnee, 0);
+});
+
 test('statistiquesTableauDeBord sait revenir sur une année passée', () => {
   const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16), annee: 2025 });
   assert.equal(stats.annee, 2025);

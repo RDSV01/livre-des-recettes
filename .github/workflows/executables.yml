@@ -1,6 +1,6 @@
 # Construit les exécutables autonomes et les attache à la version publiée.
 #
-# Déclenchement : un tag « v1.3.0 » poussé sur le dépôt. Chaque système
+# Déclenchement : un tag « v1.4.0 » poussé sur le dépôt. Chaque système
 # construit son propre fichier (un exécutable ne peut pas être fabriqué pour
 # un autre système), puis un dernier travail rassemble les trois et crée la
 # version publiée : la création est ainsi faite une seule fois, sans que les
@@ -39,9 +39,9 @@ jobs:
             publie: livre-des-recettes-linux
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -64,6 +64,9 @@ jobs:
       - name: Lancer les tests
         run: npm test
 
+      - name: Vérifier l'application de bout en bout
+        run: npm run verifier
+
       - name: Construire l'exécutable
         run: npm run construire:exe
 
@@ -71,10 +74,20 @@ jobs:
         shell: bash
         run: mv "${{ matrix.construit }}" "${{ matrix.publie }}"
 
-      - uses: actions/upload-artifact@v4
+      # Empreinte SHA-256 jointe à la version : l'application la vérifie avant de
+      # se remplacer (voir `src/maj.js`). Calculée avec Node pour un résultat
+      # identique sur les trois systèmes, sans dépendre d'un outil du runner.
+      - name: Empreinte SHA-256
+        shell: bash
+        run: >
+          node -e "const fs=require('fs'),c=require('crypto');const f=process.argv[1];const h=c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');fs.writeFileSync(f+'.sha256',h+'  '+f+'\n');" "${{ matrix.publie }}"
+
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.publie }}
-          path: ${{ matrix.publie }}
+          path: |
+            ${{ matrix.publie }}
+            ${{ matrix.publie }}.sha256
           retention-days: 1
 
   publier:
@@ -83,15 +96,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: executables
           merge-multiple: true
 
-      # Action tierce épinglée par empreinte de commit (v2.6.2) : un tag
+      # Action tierce épinglée par empreinte de commit (v3.0.2) : un tag
       # mobile pourrait être redirigé vers un autre code du jour au lendemain.
       - name: Créer la version et y joindre les exécutables
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
         with:
           # Le tag est déduit de la référence poussée ; l'indiquer évite toute
           # ambiguïté si le travail est relancé à la main.

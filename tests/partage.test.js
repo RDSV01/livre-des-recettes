@@ -5,11 +5,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  estDateIso, formaterDate, analyserDateSouple, trimestreDe, dernierePeriodeEchue
+  estDateIso, formaterDate, analyserDateSouple, trimestreDe, dernierePeriodeEchue, dateEnFrancaisLong
 } from '../src/partage/dates.js';
 import { analyserMontant, sommeMontants, enCentimes } from '../src/partage/montants.js';
 import { normaliserTexte } from '../src/partage/texte.js';
-import { estDoublon, chercherSimilaire } from '../src/partage/doublons.js';
+import { estDoublon, estDoublonAchat, chercherSimilaire } from '../src/partage/doublons.js';
 import { bilanSeuils, seuilsValentPour, SEUILS, ANNEE_SEUILS } from '../src/partage/seuils.js';
 import { filtrerRecettes, filtrerAchats, valeursFrequentes } from '../src/partage/filtres.js';
 
@@ -26,6 +26,14 @@ test('formaterDate suit le format des paramètres', () => {
   assert.equal(formaterDate('2026-07-15', 'JJ/MM/AAAA'), '15/07/2026');
   assert.equal(formaterDate('2026-07-15', 'JJ-MM-AAAA'), '15-07-2026');
   assert.equal(formaterDate('2026-07-15', 'AAAA-MM-JJ'), '2026-07-15');
+});
+
+test('dateEnFrancaisLong écrit la date en toutes lettres, sans zéro ni décalage', () => {
+  assert.equal(dateEnFrancaisLong('2026-05-28'), '28 mai 2026');
+  assert.equal(dateEnFrancaisLong('2026-01-01'), '1 janvier 2026');
+  assert.equal(dateEnFrancaisLong('2026-08-09'), '9 août 2026');
+  assert.equal(dateEnFrancaisLong(''), '', 'rien pour une date incomplète');
+  assert.equal(dateEnFrancaisLong('2026-02-31'), '', 'rien pour une date impossible');
 });
 
 test('analyserDateSouple comprend les formats usuels des tableurs', () => {
@@ -166,6 +174,24 @@ test('chercherSimilaire trouve aussi une facture identique', () => {
     { dateEncaissement: '2026-08-01', client: 'Autre client', montant: 10, numeroFacture: 'FAC-9' },
     EXISTANTES
   ), null);
+});
+
+test('estDoublonAchat compare la date de règlement, le fournisseur et la référence', () => {
+  const existants = [
+    { dateReglement: '2026-05-10', fournisseur: 'Métro', referenceFacture: 'A-1', montant: 120 }
+  ];
+  // Mêmes date, fournisseur, montant (référence absente d'un côté) : doublon.
+  assert.equal(estDoublonAchat(
+    { dateReglement: '2026-05-10', fournisseur: 'métro', referenceFacture: '', montant: 120 }, existants
+  ), true);
+  // Deux références différentes : pièces distinctes, pas un doublon.
+  assert.equal(estDoublonAchat(
+    { dateReglement: '2026-05-10', fournisseur: 'Métro', referenceFacture: 'A-2', montant: 120 }, existants
+  ), false);
+  // Fournisseur différent : pas un doublon.
+  assert.equal(estDoublonAchat(
+    { dateReglement: '2026-05-10', fournisseur: 'Autre', referenceFacture: '', montant: 120 }, existants
+  ), false);
 });
 
 // ---- Seuils micro et franchise de TVA ---------------------------------------

@@ -52,15 +52,19 @@ télédéclaration.
   les activités d'achat et de revente de marchandises.
 - **Mêmes automatismes que les recettes** : auto-complétion des fournisseurs déjà saisis,
   duplication d'un achat récurrent en un clic, tri par colonne, recherche libre
-  (fournisseur, référence, montant), filtres par année, mois et mode de paiement,
-  sélection multiple pour supprimer en une fois.
+  (fournisseur, référence, montant), filtres par année, mois et mode de paiement.
+- **Import CSV des achats**, sur le même principe que celui des recettes
+  (correspondance des colonnes, détection des doublons, rapport avant import).
 - **Exports du registre des achats** en PDF, Excel et CSV, avec les totaux mensuels et
   annuel, comme pour le livre des recettes.
 
 ### Pilotage
 
 - **Tableau de bord** : CA du mois, CA de l'année, nombre d'encaissements, moyenne par
-  encaissement, **graphique du CA mensuel** et dernières recettes. Un sélecteur permet de sélectionner les années précédentes.
+  encaissement, **total des achats de l'année**, **graphique du CA mensuel** et dernières
+  recettes. Un sélecteur permet de sélectionner les années précédentes.
+- **Jeu de démonstration** : au premier lancement, un livre fictif à charger en un clic
+  pour découvrir l'application, effaçable d'un clic et jamais mêlé à vos vraies données.
 - **Suivi des seuils** : selon votre type d'activité (ventes, prestations ou mixte), le
   tableau de bord suit votre progression vers le **plafond micro-entrepreneur** et le
   **seuil de franchise en base de TVA** : montant restant, pourcentage atteint, et un
@@ -80,8 +84,9 @@ télédéclaration.
 
 - **Exports conformes** des deux registres en **PDF**, **Excel (.xlsx)** et **CSV**, avec
   les colonnes légales et les **totaux mensuels et annuel** ajoutés automatiquement.
-- **Import CSV** : glissez-déposez votre historique Excel, correspondance des colonnes
-  assistée, détection des doublons, rapport d'analyse avant tout import, et **sauvegarde automatique juste avant** pour pouvoir revenir en arrière.
+- **Import CSV** des recettes **et des achats** : glissez-déposez votre historique Excel,
+  correspondance des colonnes assistée, détection des doublons, rapport d'analyse avant
+  tout import, et **sauvegarde automatique juste avant** pour pouvoir revenir en arrière.
 - **Sauvegardes gérables** : liste des sauvegardes automatiques (copie de secours,
   quotidiennes, avant import, avant restauration) dans les paramètres, avec restauration en
   un clic. Au démarrage, l'application vérifie le fichier de données : illisible, elle
@@ -158,7 +163,9 @@ l'extérieur, et aucun n'envoie vos données :
   toujours saisir le nom d'un client manuellement sans jamais utiliser cette recherche (client particulier par exemple) ;
 - la **recherche d'une nouvelle version** au démarrage : l'application demande à GitHub le
   numéro de la dernière version publiée, et rien d'autre. Décochez l'option dans les
-  paramètres et elle ne contacte plus rien du tout.
+  paramètres et elle ne contacte plus rien du tout. Si vous installez une mise à jour, le
+  fichier téléchargé est vérifié par son empreinte SHA-256, calculée sur votre machine,
+  avant de remplacer quoi que ce soit.
 
 ## Configuration
 
@@ -197,8 +204,10 @@ src/
   stockage.js          Persistance JSON (écriture atomique, sauvegardes, intégrité)
   validation.js        Validation des recettes, achats, clients et paramètres
   totaux.js            Calculs (totaux, CA mensuel, tableau de bord, bilan URSSAF)
+  import-registre.js   Mécanique d'import en lot commune aux deux registres
+  demo.js              Jeu de démonstration (données fictives)
   entreprises.js       Recherche d'entreprise par SIREN / SIRET (API publique)
-  maj.js               Nouvelle version publiée : détection et installation
+  maj.js               Nouvelle version publiée : détection, empreinte et installation
   emplacements.js      Où ranger les données, et les sauvegardes hors de celles-ci
   verrou.js            Verrou d'instance (un seul lancement à la fois)
   partage/             Modules communs serveur + navigateur (servis sous /partage) :
@@ -207,12 +216,13 @@ src/
   exports/             Générateurs PDF, Excel, CSV des deux registres
 public/                Interface (index.html, css, js/vues, icônes, historique)
 assets/                Icône de l'exécutable Windows
-scripts/               Construction de l'exécutable autonome
+scripts/               Construction de l'exécutable (construire-exe) et vérification (verifier)
 tests/                 Tests node:test (npm test)
 ```
 
 ```bash
 npm test              # unités + API en conditions réelles
+npm run verifier      # parcours de bout en bout de l'application assemblée
 npm run construire:exe # exécutable autonome dans dist/ (esbuild + Node SEA)
 ```
 

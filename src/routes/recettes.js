@@ -11,8 +11,7 @@ import { validerRecette } from '../validation.js';
 import { estDoublon } from '../partage/doublons.js';
 import { parDateDesc } from '../totaux.js';
 import { anneeDe } from '../partage/dates.js';
-
-const IMPORT_MAX_LIGNES = 10_000;
+import { traiterImport } from '../import-registre.js';
 
 export function routesRecettes(stockage) {
   const routeur = express.Router();
@@ -47,58 +46,15 @@ export function routesRecettes(stockage) {
    * d'une sauvegarde automatique, restaurable depuis les paramètres.
    */
   routeur.post('/import', (req, res) => {
-    const { lignes, importerDoublons = false, simulation = false } = req.body ?? {};
-    if (!Array.isArray(lignes) || lignes.length === 0) {
-      return res.status(400).json({ erreur: 'Aucune ligne à importer.' });
-    }
-    if (lignes.length > IMPORT_MAX_LIGNES) {
-      return res.status(400).json({ erreur: `Import limité à ${IMPORT_MAX_LIGNES} lignes à la fois.` });
-    }
-
-    const modes = modesPersonnalises();
-    const existantes = stockage.listerRecettes();
-    const valides = [];
-    const doublons = [];
-    const erreurs = [];
-
-    lignes.forEach((entree, index) => {
-      const resultat = validerRecette(entree, modes);
-      if (resultat.erreurs) {
-        erreurs.push({ ligne: index + 1, erreurs: resultat.erreurs });
-        return;
-      }
-      const dejaVues = valides.concat(doublons.map((d) => d.valeurs));
-      if (estDoublon(resultat.valeurs, existantes) || estDoublon(resultat.valeurs, dejaVues)) {
-        doublons.push({ ligne: index + 1, valeurs: resultat.valeurs });
-        return;
-      }
-      valides.push(resultat.valeurs);
+    const { erreur, rapport } = traiterImport(stockage, req.body, {
+      valider: (entree) => validerRecette(entree, modesPersonnalises()),
+      estDoublon,
+      lister: () => stockage.listerRecettes(),
+      ajouterLot: (lot) => stockage.ajouterRecettes(lot),
+      resume: (v) => ({ date: v.dateEncaissement, tiers: v.client, montant: v.montant })
     });
-
-    const aImporter = importerDoublons
-      ? valides.concat(doublons.map((d) => d.valeurs))
-      : valides;
-    let sauvegarde = null;
-    if (!simulation && aImporter.length > 0) {
-      sauvegarde = stockage.creerSauvegarde('avant-import');
-      stockage.ajouterRecettes(aImporter);
-    }
-
-    res.json({
-      simulation,
-      total: lignes.length,
-      valides: valides.length,
-      importables: aImporter.length,
-      importees: simulation ? 0 : aImporter.length,
-      sauvegarde,
-      doublons: doublons.map(({ ligne, valeurs }) => ({
-        ligne,
-        dateEncaissement: valeurs.dateEncaissement,
-        client: valeurs.client,
-        montant: valeurs.montant
-      })),
-      erreurs
-    });
+    if (erreur) return res.status(400).json({ erreur });
+    res.json(rapport);
   });
 
   routeur.put('/:id', (req, res) => {

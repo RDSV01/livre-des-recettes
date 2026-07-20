@@ -7,8 +7,10 @@
 
 import express from 'express';
 import { validerAchat } from '../validation.js';
+import { estDoublonAchat } from '../partage/doublons.js';
 import { parDateDesc } from '../totaux.js';
 import { anneeDe } from '../partage/dates.js';
+import { traiterImport } from '../import-registre.js';
 
 export function routesAchats(stockage) {
   const routeur = express.Router();
@@ -33,6 +35,24 @@ export function routesAchats(stockage) {
     const { erreurs, valeurs } = validerAchat(req.body, modesPersonnalises());
     if (erreurs) return res.status(400).json({ erreurs });
     res.status(201).json({ achat: stockage.ajouterAchat(valeurs) });
+  });
+
+  /**
+   * Import en lot : POST /api/achats/import
+   * Même contrat que l'import des recettes (voir `import-registre.js`) :
+   * simulation pour un rapport relu avant écriture, sauvegarde automatique
+   * juste avant l'import réel.
+   */
+  routeur.post('/import', (req, res) => {
+    const { erreur, rapport } = traiterImport(stockage, req.body, {
+      valider: (entree) => validerAchat(entree, modesPersonnalises()),
+      estDoublon: estDoublonAchat,
+      lister: () => stockage.listerAchats(),
+      ajouterLot: (lot) => stockage.ajouterAchats(lot),
+      resume: (v) => ({ date: v.dateReglement, tiers: v.fournisseur, montant: v.montant })
+    });
+    if (erreur) return res.status(400).json({ erreur });
+    res.json(rapport);
   });
 
   routeur.put('/:id', (req, res) => {

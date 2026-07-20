@@ -71,6 +71,10 @@ export const PARAMETRES_DEFAUT = {
   alertesNumerotation: true,
   alerteRecetteSimilaire: true,
   suiviSeuils: true,
+  // Vrai tant que le livre contient le jeu de démonstration : un bandeau
+  // propose alors de tout effacer. Retombe à faux dès que l'utilisateur
+  // enregistre ses propres paramètres.
+  jeuDemo: false,
   // Seul réglage qui autorise l'application à contacter Internet d'elle-même
   // (voir `src/maj.js`) : elle demande à GitHub s'il existe une version plus
   // récente, et rien d'autre.

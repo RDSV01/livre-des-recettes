@@ -9,7 +9,7 @@
 
 import { api } from '../api.js';
 import { etat, definirParametres, registreAchatsUtile } from '../etat.js';
-import { echapperHtml, toast } from '../ui.js';
+import { echapperHtml, toast, animerCompteurs } from '../ui.js';
 import { icone } from '../icones.js';
 import { formaterMontant } from '/partage/montants.js';
 import { libelleCategorieCourt } from '/partage/constantes.js';
@@ -63,7 +63,7 @@ function graphiqueCaMensuel(points, devise) {
     const y = ligneBase - h;
     const r = Math.min(4, largeurBarre / 2, h);
     const barre = h <= 0 ? '' : `
-      <path class="barre" d="M ${x.toFixed(1)} ${ligneBase}
+      <path class="barre barre-graphique" d="M ${x.toFixed(1)} ${ligneBase}
         L ${x.toFixed(1)} ${(y + r).toFixed(1)}
         Q ${x.toFixed(1)} ${y.toFixed(1)} ${(x + r).toFixed(1)} ${y.toFixed(1)}
         L ${(x + largeurBarre - r).toFixed(1)} ${y.toFixed(1)}
@@ -248,23 +248,33 @@ export async function vueTableauDeBord(conteneur) {
   let anneeChoisie = anneesDisponibles[0]; // la plus récente avec des données
 
   async function rendre() {
+    // Pas de squelette ici : la page précédente reste affichée le temps du
+    // calcul (quelques millisecondes en local), ce qui évite tout clignotement
+    // au changement d'année. Le squelette global couvre les chargements lents.
     const stats = await api.tableauDeBord({ annee: anneeChoisie });
     const { devise, formatDate, suiviSeuils } = etat.parametres;
     // La catégorie n'est renseignée, et n'a de sens, qu'en activité mixte.
     const estMixte = etat.parametres.typeActivite === 'mixte';
 
+    // `cible` (nombre) et `format` alimentent les compteurs animés ; la valeur
+    // affichée en découle.
+    const formaterValeur = (cible, format) => format === 'entier' ? String(cible) : formaterMontant(cible, devise);
     const cartes = [
-      { etiquette: `CA de ${nomMois(stats.mois)} ${stats.annee}`, valeur: formaterMontant(stats.caMois, devise), icone: 'billet', principale: true },
-      { etiquette: `CA de l’année ${stats.annee}`, valeur: formaterMontant(stats.caAnnee, devise), icone: 'calendrier', principale: true },
-      { etiquette: `Encaissements en ${stats.annee}`, valeur: String(stats.nombreEncaissements), icone: 'diese' },
-      { etiquette: 'Moyenne par encaissement', valeur: formaterMontant(stats.moyenneEncaissement, devise), icone: 'tendance' },
+      { etiquette: `CA de ${nomMois(stats.mois)} ${stats.annee}`, cible: stats.caMois, format: 'montant', icone: 'billet', principale: true },
+      { etiquette: `CA de l’année ${stats.annee}`, cible: stats.caAnnee, format: 'montant', icone: 'calendrier', principale: true },
+      { etiquette: `Encaissements en ${stats.annee}`, cible: stats.nombreEncaissements, format: 'entier', icone: 'diese' },
+      { etiquette: 'Moyenne par encaissement', cible: stats.moyenneEncaissement, format: 'montant', icone: 'tendance' },
+      // Total des achats : seulement quand le registre des achats est tenu.
+      ...(registreAchatsUtile() ? [
+        { etiquette: `Achats en ${stats.annee}`, cible: stats.achatsAnnee, format: 'montant', icone: 'achats' }
+      ] : []),
       // Activité mixte : le détail par catégorie, sur le mois puis sur l'année.
       // L'étiquette porte le nombre d'encaissements concernés.
       ...(estMixte ? [
-        { etiquette: `${accord(stats.nombreMoisPrestations, 'prestation')} en ${nomMois(stats.mois)}`, valeur: formaterMontant(stats.caMoisPrestations, devise), icone: 'billet' },
-        { etiquette: `${accord(stats.nombreMoisVentes, 'vente')} en ${nomMois(stats.mois)}`, valeur: formaterMontant(stats.caMoisVentes, devise), icone: 'billet' },
-        { etiquette: `${accord(stats.nombreAnneePrestations, 'prestation')} en ${stats.annee}`, valeur: formaterMontant(stats.caAnneePrestations, devise), icone: 'calendrier' },
-        { etiquette: `${accord(stats.nombreAnneeVentes, 'vente')} en ${stats.annee}`, valeur: formaterMontant(stats.caAnneeVentes, devise), icone: 'calendrier' }
+        { etiquette: `${accord(stats.nombreMoisPrestations, 'prestation')} en ${nomMois(stats.mois)}`, cible: stats.caMoisPrestations, format: 'montant', icone: 'billet' },
+        { etiquette: `${accord(stats.nombreMoisVentes, 'vente')} en ${nomMois(stats.mois)}`, cible: stats.caMoisVentes, format: 'montant', icone: 'billet' },
+        { etiquette: `${accord(stats.nombreAnneePrestations, 'prestation')} en ${stats.annee}`, cible: stats.caAnneePrestations, format: 'montant', icone: 'calendrier' },
+        { etiquette: `${accord(stats.nombreAnneeVentes, 'vente')} en ${stats.annee}`, cible: stats.caAnneeVentes, format: 'montant', icone: 'calendrier' }
       ] : [])
     ];
 
@@ -319,7 +329,7 @@ export async function vueTableauDeBord(conteneur) {
             <div class="pastille">${icone(carte.icone, { taille: 22 })}</div>
             <div>
               <div class="etiquette">${echapperHtml(carte.etiquette)}</div>
-              <div class="valeur">${echapperHtml(carte.valeur)}</div>
+              <div class="valeur" data-compteur="${carte.cible}" data-format="${carte.format}">${echapperHtml(formaterValeur(carte.cible, carte.format))}</div>
             </div>
           </div>`).join('')}
       </section>
@@ -376,6 +386,7 @@ export async function vueTableauDeBord(conteneur) {
       </section>`;
 
     installerInfobulle(conteneur);
+    animerCompteurs(conteneur, devise);
     conteneur.querySelector('#annee-tableau')?.addEventListener('change', (evenement) => {
       anneeChoisie = Number(evenement.target.value);
       rendre();

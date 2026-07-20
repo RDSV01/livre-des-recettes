@@ -19,6 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 
 const DEPOT = 'RDSV01/livre-des-recettes';
@@ -28,6 +29,9 @@ export const PAGE_VERSIONS = `https://github.com/${DEPOT}/releases/latest`;
 
 const DELAI_MS = 8000;
 const SUFFIXE_ANCIEN = '.ancien';
+// Empreinte SHA-256 publiée à côté de chaque exécutable, vérifiée avant tout
+// remplacement (voir `.github/workflows/executables.yml`).
+const SUFFIXE_EMPREINTE = '.sha256';
 // L'API publique de GitHub est limitée à 60 appels par heure et par adresse :
 // la réponse est gardée en mémoire pour ne pas la solliciter à chaque
 // ouverture de page.
@@ -93,19 +97,39 @@ export async function chercherMiseAJour(versionActuelle) {
   }
 }
 
-/** Adresse de téléchargement du fichier publié pour ce système. */
-async function adresseTelechargement() {
+/**
+ * Adresse de téléchargement d'un fichier publié, cherché par son nom exact
+ * dans la dernière version. Le fichier ne peut venir que des releases du dépôt
+ * officiel, jamais d'une URL glissée dans la réponse de l'API.
+ */
+async function adresseActif(nom) {
   const publication = await lireVersionPubliee();
-  const actif = (publication.assets ?? []).find((a) => a.name === ACTIF_ATTENDU);
+  const actif = (publication.assets ?? []).find((a) => a.name === nom);
   if (!actif) {
-    throw new Error(`Aucun fichier « ${ACTIF_ATTENDU} » dans la dernière version publiée.`);
+    throw new Error(`Aucun fichier « ${nom} » dans la dernière version publiée.`);
   }
   const adresse = String(actif.browser_download_url ?? '');
-  // Le fichier ne peut venir que des releases du dépôt officiel.
   if (!adresse.startsWith(PREFIXE_TELECHARGEMENT)) {
     throw new Error('Adresse de téléchargement inattendue : mise à jour interrompue.');
   }
   return adresse;
+}
+
+/**
+ * Empreinte SHA-256 attendue du fichier publié, calculée sur la machine de
+ * publication et jointe à la version. Le fichier `.sha256` contient le condensé
+ * hexadécimal (format `sha256sum`, éventuellement suivi du nom).
+ */
+async function empreinteAttendue() {
+  const adresse = await adresseActif(`${ACTIF_ATTENDU}${SUFFIXE_EMPREINTE}`);
+  const reponse = await fetch(adresse, {
+    headers: { 'User-Agent': 'livre-des-recettes' },
+    signal: AbortSignal.timeout(DELAI_MS)
+  });
+  if (!reponse.ok) throw new Error(`Empreinte indisponible (${reponse.status}).`);
+  const condense = (await reponse.text()).match(/[a-f0-9]{64}/i);
+  if (!condense) throw new Error('Empreinte publiée illisible : mise à jour interrompue.');
+  return condense[0].toLowerCase();
 }
 
 /**
@@ -115,6 +139,11 @@ async function adresseTelechargement() {
  * mais il peut être renommé : l'ancien est mis de côté et le nouveau prend sa
  * place. L'application tourne encore, sur son ancien fichier, jusqu'au
  * redémarrage.
+ *
+ * Le fichier téléchargé n'est écrit sur le disque qu'après vérification de son
+ * empreinte SHA-256 : elle est calculée localement, sans service tiers, et
+ * comparée à celle publiée avec la version. Un fichier altéré ou tronqué est
+ * donc rejeté avant de pouvoir remplacer l'application.
  */
 export async function appliquerMiseAJour() {
   if (!estExecutable()) {
@@ -125,13 +154,22 @@ export async function appliquerMiseAJour() {
   const nouveau = `${executable}.nouveau`;
   const ancien = `${executable}${SUFFIXE_ANCIEN}`;
 
-  const reponse = await fetch(await adresseTelechargement(), {
+  // L'empreinte est récupérée d'abord : inutile de télécharger 90 Mo si elle
+  // manque déjà.
+  const attendue = await empreinteAttendue();
+  const reponse = await fetch(await adresseActif(ACTIF_ATTENDU), {
     headers: { 'User-Agent': 'livre-des-recettes' },
     signal: AbortSignal.timeout(10 * 60_000)
   });
   if (!reponse.ok) throw new Error(`Téléchargement impossible (${reponse.status}).`);
 
-  fs.writeFileSync(nouveau, Buffer.from(await reponse.arrayBuffer()));
+  const octets = Buffer.from(await reponse.arrayBuffer());
+  const reelle = crypto.createHash('sha256').update(octets).digest('hex');
+  if (reelle !== attendue) {
+    throw new Error('L’empreinte du fichier téléchargé ne correspond pas : mise à jour interrompue par sécurité.');
+  }
+
+  fs.writeFileSync(nouveau, octets);
   fs.chmodSync(nouveau, 0o755);
 
   try {
