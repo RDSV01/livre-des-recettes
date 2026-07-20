@@ -145,7 +145,17 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
         const infos = fs.statSync(path.join(dossierSauvegardes, fichier));
         return { fichier, date: infos.mtime.toISOString(), taille: infos.size };
       })
-      .sort((a, b) => b.date.localeCompare(a.date));
+      // La copie de secours, réécrite à chaque saisie, reflète toujours l'état
+      // le plus récent : elle passe en tête, indépendamment de l'horodatage du
+      // système de fichiers. Sur Linux et macOS, deux écritures rapprochées
+      // peuvent porter le même horodatage (résolution insuffisante) ; s'en
+      // remettre à lui seul risquerait de proposer une sauvegarde plus ancienne
+      // qu'elle pour la restauration.
+      .sort((a, b) => {
+        if (a.fichier === NOM_COPIE_DE_SECOURS) return -1;
+        if (b.fichier === NOM_COPIE_DE_SECOURS) return 1;
+        return b.date.localeCompare(a.date);
+      });
   }
 
   /** Complète un contenu lu avec les valeurs par défaut manquantes. */
