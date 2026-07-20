@@ -24,6 +24,9 @@ jobs:
   construire:
     name: ${{ matrix.systeme }}
     runs-on: ${{ matrix.systeme }}
+    # Garde-fou : un blocage éventuel échoue en quelques minutes plutôt que de
+    # laisser le travail tourner jusqu'au délai maximal (6 h) de GitHub.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

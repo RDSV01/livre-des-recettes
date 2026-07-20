@@ -32,6 +32,10 @@ before(async () => {
 
 after(() => {
   serveur.close();
+  // Sans cela, les connexions gardées ouvertes par `fetch` (keep-alive)
+  // empêchent `serveur.close()` de rendre la main, et `node --test` ne se
+  // termine jamais : la CI reste bloquée sur cette étape.
+  serveur.closeAllConnections();
   fs.rmSync(dossier, { recursive: true, force: true });
   fs.rmSync(dossierSauvegardes, { recursive: true, force: true });
 });
