@@ -184,7 +184,9 @@ fs.rmSync(dossierSauvegardes, { recursive: true, force: true });
 const echecs = resultats.filter((r) => !r.ok);
 for (const r of echecs) console.error(`  ÉCHEC  ${r.nom}\n         ${r.detail}`);
 console.log(`\n${resultats.length - echecs.length}/${resultats.length} vérifications passées`);
-if (echecs.length) {
-  console.error(`${echecs.length} échec(s).`);
-  process.exitCode = 1;
-}
+if (echecs.length) console.error(`${echecs.length} échec(s).`);
+
+// Sortie explicite : le serveur est fermé, mais une connexion HTTP gardée en
+// vie par `fetch` pourrait sinon retenir le process sur les runners Unix et
+// bloquer la CI. Le rapport ci-dessus est déjà écrit.
+process.exit(echecs.length ? 1 : 0);

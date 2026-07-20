@@ -65,7 +65,11 @@ jobs:
         run: npm ci
 
       - name: Lancer les tests
-        run: npm test
+        # --test-force-exit : sur les runners Unix, une ressource laissée
+        # ouverte par un test (connexion HTTP gardée en vie) peut empêcher node
+        # de rendre la main une fois les tests passés, ce qui bloquerait la CI.
+        # On force la sortie une fois tous les tests terminés.
+        run: node --test --test-force-exit
 
       - name: Vérifier l'application de bout en bout
         run: npm run verifier
