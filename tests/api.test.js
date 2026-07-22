@@ -364,6 +364,45 @@ test('les exports exigent une année valide', async () => {
   assert.equal((await appeler('/api/exports/pdf?annee=abc')).status, 400);
   assert.equal((await appeler('/api/exports/xlsx?annee=2026&mois=13')).status, 400);
   assert.equal((await appeler('/api/exports/achats/csv')).status, 400);
+  assert.equal((await appeler('/api/exports/rapport-annuel')).status, 400);
+  assert.equal((await appeler('/api/exports/controle?annee=abc')).status, 400);
+});
+
+test('GET /api/exports/rapport-annuel produit le rapport de gestion en PDF', async () => {
+  const reponse = await appeler('/api/exports/rapport-annuel?annee=2026');
+  assert.equal(reponse.status, 200);
+  assert.match(reponse.headers.get('content-type'), /application\/pdf/);
+  assert.match(reponse.headers.get('content-disposition'), /rapport-annuel-2026\.pdf/);
+  const texte = Buffer.from(await reponse.arrayBuffer()).toString('latin1');
+  assert.equal(texte.slice(0, 5), '%PDF-');
+});
+
+test('le contrôle avant export passe les deux registres en revue', async () => {
+  const recettes = await (await appeler('/api/exports/controle?annee=2026')).json();
+  assert.ok(recettes.nombre > 0, 'des recettes à contrôler sur 2026');
+  assert.ok(Array.isArray(recettes.points) && recettes.points.length >= 6);
+  for (const point of recettes.points) {
+    assert.ok(['ok', 'attention', 'erreur'].includes(point.etat), `état connu : ${point.etat}`);
+    assert.ok(point.libelle && point.detail, 'chaque point s’explique');
+  }
+  assert.ok(
+    recettes.points.some((p) => p.libelle.startsWith('Continuité de la numérotation')),
+    'la numérotation fait partie du contrôle des recettes'
+  );
+
+  const achats = await (await appeler('/api/exports/achats/controle?annee=2026')).json();
+  assert.ok(achats.points.some((p) => p.libelle.startsWith('Référence de la pièce')));
+
+  // Le contrôle observe, il n'écrit rien.
+  const avant = (await (await appeler('/api/recettes')).json()).recettes.length;
+  await appeler('/api/exports/controle?annee=2026');
+  assert.equal((await (await appeler('/api/recettes')).json()).recettes.length, avant);
+});
+
+test('le contrôle se restreint au mois demandé', async () => {
+  const annee = await (await appeler('/api/exports/controle?annee=2026')).json();
+  const mois = await (await appeler('/api/exports/controle?annee=2026&mois=7')).json();
+  assert.ok(mois.nombre <= annee.nombre, 'un mois ne contient pas plus que son année');
 });
 
 // ---- Requêtes venues d'un autre site --------------------------------------------

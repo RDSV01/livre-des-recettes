@@ -65,10 +65,10 @@ télédéclaration.
   recettes. Un sélecteur permet de sélectionner les années précédentes.
 - **Jeu de démonstration** : au premier lancement, un livre fictif à charger en un clic
   pour découvrir l'application, effaçable d'un clic et jamais mêlé à vos vraies données.
-- **Suivi des seuils** : selon votre type d'activité (ventes, prestations ou mixte), le
-  tableau de bord suit votre progression vers le **plafond micro-entrepreneur** et le
-  **seuil de franchise en base de TVA** : montant restant, pourcentage atteint, et un
-  avertissement à l'approche du seuil.
+- **Suivi des seuils** : selon votre type d'activité (achat / revente, prestations
+  commerciales ou artisanales, activité libérale, ou mixte), le tableau de bord suit votre
+  progression vers le **plafond micro-entrepreneur** et le **seuil de franchise en base de
+  TVA** : montant restant, pourcentage atteint, et un avertissement à l'approche du seuil.
 - **Activité mixte** : chaque recette est classée vente ou prestation, et la distinction se
   retrouve partout : colonne Catégorie dans le tableau des recettes, chiffre d'affaires du
   mois et de l'année pour chacune des deux activités, un graphique par activité en plus du
@@ -76,14 +76,23 @@ télédéclaration.
   URSSAF ventilé comme la déclaration le demande, et exports distinguant les deux (colonne
   Catégorie et sous-totaux « dont ventes / dont prestations »).
 - **Déclaration URSSAF** : choisissez une année puis un mois, un trimestre ou l'année entière,
-  l'application calcule le chiffre d'affaires encaissé et le nombre d'encaissements de la période.
-  Un rappel s'affiche sur le tableau de bord quand une période à déclarer s'achève.
+  l'application calcule le chiffre d'affaires encaissé et le nombre d'encaissements de la période,
+  puis estime les **cotisations sociales** qui seront prélevées. Une activité mixte voit chaque part calculée à
+  son propre taux, selon la nature de prestations déclarée dans les paramètres. Un rappel
+  s'affiche sur le tableau de bord quand une période à déclarer s'achève.
   _Aucune connexion à l'URSSAF : c'est un simple calcul local._
 
 ### Échanges et sécurité des données
 
 - **Exports conformes** des deux registres en **PDF**, **Excel (.xlsx)** et **CSV**, avec
   les colonnes légales et les **totaux mensuels et annuel** ajoutés automatiquement.
+- **Vérification avant export** : avant chaque téléchargement, l'application repasse à
+  l'écran les points qu'un contrôleur regarderait (mentions obligatoires, continuité de la
+  numérotation, doublons). Elle vous informe, elle ne vous bloque jamais.
+- **Rapport annuel de gestion** en PDF, pour vous et non pour l'administration : chiffre
+  d'affaires et sa répartition, panier moyen, évolution mois par mois en graphique, moyens
+  de paiement, clients de l'année et meilleurs d'entre eux, comparaison avec l'année
+  précédente, puis le détail de chaque encaissement.
 - **Import CSV** des recettes **et des achats** : glissez-déposez votre historique Excel,
   correspondance des colonnes assistée, détection des doublons, rapport d'analyse avant
   tout import, et **sauvegarde automatique juste avant** pour pouvoir revenir en arrière.
@@ -205,6 +214,10 @@ src/
   validation.js        Validation des recettes, achats, clients et paramètres
   totaux.js            Calculs (totaux, CA mensuel, tableau de bord, bilan URSSAF)
   import-registre.js   Mécanique d'import en lot commune aux deux registres
+  rapport-annuel.js    Agrégats du rapport annuel de gestion (hors registres légaux)
+  controle-export.js   Contrôle d'un registre avant export (mentions, doublons)
+  cotisations.js       Estimation des cotisations sociales, au taux en vigueur le
+                       jour de chaque encaissement
   demo.js              Jeu de démonstration (données fictives)
   entreprises.js       Recherche d'entreprise par SIREN / SIRET (API publique)
   maj.js               Nouvelle version publiée : détection, empreinte et installation
@@ -212,8 +225,11 @@ src/
   verrou.js            Verrou d'instance (un seul lancement à la fois)
   partage/             Modules communs serveur + navigateur (servis sous /partage) :
                        constantes, dates, montants, texte, doublons, seuils, factures, filtres
+    bareme-seuils.js   Montants légaux : SEUL fichier à modifier quand la loi change.
+                       Seuils annuels (plafonds micro, TVA, abattements) et paliers
+                       de taux de cotisations, bornés au jour près
   routes/              API REST (recettes, achats, clients, exports, urssaf, sauvegardes, parametres, maj)
-  exports/             Générateurs PDF, Excel, CSV des deux registres
+  exports/             Générateurs PDF, Excel, CSV des deux registres, et le rapport annuel
 public/                Interface (index.html, css, js/vues, icônes, historique)
 assets/                Icône de l'exécutable Windows
 scripts/               Construction de l'exécutable (construire-exe) et vérification (verifier)

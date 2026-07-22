@@ -60,6 +60,10 @@ export const PARAMETRES_DEFAUT = {
   adresse: '',
   activite: '',
   typeActivite: '',
+  // Nature de la part « prestations » d'une activité mixte : elle décide du
+  // régime de bénéfices et du taux de cotisations de cette part. Ignorée pour
+  // les autres types d'activité, qui portent déjà la leur.
+  naturePrestations: 'prestations',
   devise: 'EUR',
   formatDate: 'JJ/MM/AAAA',
   modesPersonnalises: [],

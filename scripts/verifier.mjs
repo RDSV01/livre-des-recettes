@@ -52,7 +52,11 @@ for (const chemin of [
 }
 
 // ---- 2. Interface servie ----------------------------------------------------
-for (const chemin of ['/', '/css/style.css', '/js/app.js', '/js/preferences-vues.js', '/partage/doublons.js']) {
+for (const chemin of [
+  '/', '/css/style.css', '/js/app.js', '/js/preferences-vues.js',
+  '/js/controle-export.js', '/partage/doublons.js', '/partage/seuils.js',
+  '/partage/bareme-seuils.js'
+]) {
   await verifier(`GET ${chemin}`, 200, () => statut(chemin));
 }
 
@@ -150,6 +154,39 @@ await verifier('export CSV neutralise les formules', true, async () => {
   const texte = Buffer.from(await (await appel('/api/exports/csv?annee=2026')).arrayBuffer()).toString('utf8');
   return texte.includes(' =1+1') && !texte.includes(';=1+1');
 });
+
+// ---- 7 bis. Cotisations estimées sur le bilan URSSAF -----------------------
+// Sans type d'activité, aucun taux ne s'applique : on le renseigne d'abord,
+// comme l'aurait fait l'utilisateur.
+await verifier('sans type d’activité, aucune estimation de cotisations', null, async () =>
+  (await json('/api/urssaf?annee=2026&type=annee')).cotisations);
+await verifier('le type d’activité s’enregistre', 200, () => statut('/api/parametres', {
+  method: 'PUT',
+  body: JSON.stringify({ typeActivite: 'mixte', naturePrestations: 'liberal', devise: 'EUR', formatDate: 'JJ/MM/AAAA', modesPersonnalises: [] })
+}));
+await verifier('le bilan URSSAF porte l’estimation des cotisations', true, async () => {
+  const c = (await json('/api/urssaf?annee=2026&type=annee')).cotisations;
+  return c !== null && Number.isInteger(c.total) && c.lignes.length > 0 &&
+    c.lignes.every((l) => l.taux > 0 && Number.isInteger(l.montant) && Boolean(l.duJour));
+});
+await verifier('les cotisations ne dépassent pas le chiffre d’affaires', true, async () => {
+  const bilan = await json('/api/urssaf?annee=2026&type=annee');
+  return bilan.cotisations === null || bilan.cotisations.total <= bilan.chiffreAffaires;
+});
+
+// ---- 8 bis. Rapport annuel et contrôle avant export ------------------------
+await verifier('le rapport annuel est un PDF non vide', (n) => Number(n) > 1000, async () => {
+  const reponse = await appel('/api/exports/rapport-annuel?annee=2026');
+  return reponse.status === 200 ? (await reponse.arrayBuffer()).byteLength : 0;
+});
+await verifier('le rapport annuel exige une année', 400, () => statut('/api/exports/rapport-annuel'));
+for (const [nom, chemin] of [['recettes', '/api/exports/controle'], ['achats', '/api/exports/achats/controle']]) {
+  await verifier(`le contrôle des ${nom} rend des points exploitables`, true, async () => {
+    const rapport = await json(`${chemin}?annee=2026`);
+    return Array.isArray(rapport.points) && rapport.points.length > 0 &&
+      rapport.points.every((p) => ['ok', 'attention', 'erreur'].includes(p.etat) && p.libelle && p.detail);
+  });
+}
 
 // ---- 9. Jeu de démonstration (nouveau) -------------------------------------
 await verifier('la démo est refusée sur un livre non vide', 409, () => statut('/api/demo', { method: 'POST', body: '{}' }));

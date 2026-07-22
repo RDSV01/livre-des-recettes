@@ -8,8 +8,7 @@
 import express from 'express';
 import { validerAchat } from '../validation.js';
 import { estDoublonAchat } from '../partage/doublons.js';
-import { parDateDesc } from '../totaux.js';
-import { anneeDe } from '../partage/dates.js';
+import { parDateDesc, anneesPresentes } from '../totaux.js';
 import { traiterImport } from '../import-registre.js';
 
 export function routesAchats(stockage) {
@@ -26,9 +25,7 @@ export function routesAchats(stockage) {
 
   // Années présentes dans le registre (pour les filtres et les exports).
   routeur.get('/annees', (req, res) => {
-    const annees = [...new Set(stockage.listerAchats().map((a) => anneeDe(a.dateReglement)))]
-      .sort((a, b) => b - a);
-    res.json({ annees });
+    res.json({ annees: anneesPresentes(stockage.listerAchats(), 'dateReglement') });
   });
 
   routeur.post('/', (req, res) => {

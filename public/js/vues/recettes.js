@@ -17,7 +17,7 @@
  *  - catégorie vente / prestation demandée quand l'activité est mixte, avec
  *    reclassement groupé via la sélection multiple ;
  *  - garde-fou avant d'abandonner un formulaire modifié ;
- *  - signalement discret des anomalies de numérotation des factures ;
+ *  - signalement des anomalies de numérotation des factures, détail visible ;
  *  - chaque action (y compris groupée) est annulable (Ctrl+Z).
  */
 
@@ -622,8 +622,11 @@ export async function vueRecettes(conteneur, params) {
       nbManquants > 0 ? `${nbManquants} numéro${nbManquants > 1 ? 's' : ''} manquant${nbManquants > 1 ? 's' : ''}` : ''
     ].filter(Boolean).join(', ');
 
+    // Déplié d'emblée : savoir qu'il manque un numéro sans savoir lequel
+    // n'avance à rien, et l'utilisateur ne pensait pas toujours à cliquer.
+    // Le repli reste possible une fois l'anomalie lue.
     refs.anomalies.innerHTML = `
-      <details class="anomalies">
+      <details class="anomalies" open>
         <summary>${icone('cercle-alerte', { taille: 16 })}<span>Numérotation des factures : ${resume}.</span></summary>
         <ul>
           ${doublons.map((d) =>
@@ -673,7 +676,7 @@ export async function vueRecettes(conteneur, params) {
       <tr${idsNouveaux.has(r.id) ? ' class="ligne-nouvelle"' : ''}>
         <td class="col-case"><input type="checkbox" data-selection="${r.id}"
           ${selection.has(r.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
-        <td>${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
+        <td class="col-date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
         <td>${echapperHtml(r.client)}</td>
         <td>${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">-</span>'}</td>
         <td>${r.numeroFacture ? echapperHtml(r.numeroFacture) : '<span class="attenue">-</span>'}</td>
@@ -689,7 +692,7 @@ export async function vueRecettes(conteneur, params) {
         </td>
       </tr>`).join('') + (restantes > 0 ? `
       <tr class="ligne-vide"><td colspan="${estMixte ? 9 : 8}">
-        <button type="button" class="btn btn-discret" data-action="afficher-plus">
+        <button type="button" class="btn btn-tertiaire" data-action="afficher-plus">
           Afficher les ${restantes} recette${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''}
         </button>
       </td></tr>` : '');
@@ -762,21 +765,25 @@ export async function vueRecettes(conteneur, params) {
             <button type="button" class="btn btn-secondaire" data-classer="ventes">Classer en ventes</button>
             <button type="button" class="btn btn-secondaire" data-classer="prestations">Classer en prestations</button>` : ''}
           <button type="button" class="btn btn-danger" id="supprimer-selection">${icone('corbeille', { taille: 16 })}<span>Supprimer</span></button>
-          <button type="button" class="btn btn-discret" id="deselectionner">Tout désélectionner</button>
+          <button type="button" class="btn btn-tertiaire" id="deselectionner">Tout désélectionner</button>
         </div>
 
         <p class="resume-filtre" id="resume-filtre"></p>
 
         <table id="table-recettes">
           <colgroup>
+            ${/* La colonne des actions est fixée en pixels : elle porte trois
+                  boutons de taille constante, qu'un pourcentage laissait
+                  déborder de leur cellule dès que la fenêtre rétrécissait.
+                  Les colonnes de données se partagent le reste. */ ''}
             ${estMixte ? `
               <col style="width: 4%"><col style="width: 10%"><col style="width: 15%">
               <col style="width: 19%"><col style="width: 12%"><col style="width: 11%">
-              <col style="width: 9%"><col style="width: 11%"><col style="width: 9%">`
+              <col style="width: 9%"><col style="width: 11%"><col style="width: 108px">`
             : `
               <col style="width: 4%"><col style="width: 11%"><col style="width: 16%">
               <col style="width: 22%"><col style="width: 13%"><col style="width: 12%">
-              <col style="width: 11%"><col style="width: 11%">`}
+              <col style="width: 11%"><col style="width: 108px">`}
           </colgroup>
           <thead>
             <tr>

@@ -121,7 +121,7 @@ LDR_DATA_DIR=./data npm start     # Windows : set LDR_DATA_DIR=.\data
   `dialogueAttente`). Dans un gestionnaire d'événement, retenez l'élément
   cliqué **avant** le premier `await` : le navigateur remet `currentTarget`
   à `null` dès la fin de l'événement.
-- **Animations** : discrètes et porteuses de sens (ce qui apparaît, se remplit,
+- **Animations** : porteuses de sens (ce qui apparaît, se remplit,
   change). Aucune 3D, aucune bibliothèque. Toute animation doit se couper sous
   `@media (prefers-reduced-motion: reduce)`, déjà respecté par la feuille de
   style.

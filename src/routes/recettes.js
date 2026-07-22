@@ -9,8 +9,7 @@
 import express from 'express';
 import { validerRecette } from '../validation.js';
 import { estDoublon } from '../partage/doublons.js';
-import { parDateDesc } from '../totaux.js';
-import { anneeDe } from '../partage/dates.js';
+import { parDateDesc, anneesPresentes } from '../totaux.js';
 import { traiterImport } from '../import-registre.js';
 
 export function routesRecettes(stockage) {
@@ -27,9 +26,7 @@ export function routesRecettes(stockage) {
 
   // Années présentes dans le livre (pour les exports, l'URSSAF, le tableau de bord).
   routeur.get('/annees', (req, res) => {
-    const annees = [...new Set(stockage.listerRecettes().map((r) => anneeDe(r.dateEncaissement)))]
-      .sort((a, b) => b - a);
-    res.json({ annees });
+    res.json({ annees: anneesPresentes(stockage.listerRecettes(), 'dateEncaissement') });
   });
 
   routeur.post('/', (req, res) => {

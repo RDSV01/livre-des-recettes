@@ -11,7 +11,7 @@
 
 import { api } from '../api.js';
 import { etat, registreAchatsUtile } from '../etat.js';
-import { echapperHtml, toast } from '../ui.js';
+import { echapperHtml, toast, infobulle } from '../ui.js';
 import { icone } from '../icones.js';
 import { analyserCsv, lireFichierCsv } from '../csv.js';
 import { analyserDateSouple } from '/partage/dates.js';
@@ -297,7 +297,11 @@ export async function vueImport(conteneur) {
 
     refs.etapeRapport.hidden = false;
     refs.etapeRapport.innerHTML = `
-      <h2>3. Vérifier puis importer</h2>
+      <h2>3. Vérifier puis importer${infobulle(
+        'Une sauvegarde de vos données est créée automatiquement juste avant l’import : ' +
+        'en cas de problème, restaurez-la depuis les paramètres.',
+        'l’import'
+      )}</h2>
       <div class="compteurs-import">
         <div class="compteur ok"><strong>${rapport.valides}</strong> ${accord(rapport.valides)} prêt${rapport.valides > 1 ? 's' : ''} à importer</div>
         <div class="compteur attention"><strong>${rapport.doublons.length}</strong> doublons détectés</div>
@@ -324,12 +328,6 @@ export async function vueImport(conteneur) {
           ).join('')}
           ${rapport.erreurs.length > 15 ? `<li>… et ${rapport.erreurs.length - 15} autres.</li>` : ''}
         </ul>` : ''}
-
-      <p class="note-legale">
-        ${icone('info', { taille: 16 })}
-        <span>Une sauvegarde de vos données est créée automatiquement juste avant l’import :
-        en cas de problème, restaurez-la depuis les paramètres.</span>
-      </p>
 
       <div class="pied-dialogue" style="justify-content: flex-start;">
         <button type="button" class="btn btn-primaire" id="bouton-importer"

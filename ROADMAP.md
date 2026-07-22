@@ -6,6 +6,44 @@ est jugée à cette aune.
 
 ## Déjà livré
 
+### v1.5
+
+- Rapport annuel de gestion en PDF pour le dirigeant : chiffre d'affaires et sa répartition, panier moyen,
+  évolution mois par mois en graphique, moyens de paiement, clients de l'année
+  et meilleurs d'entre eux, comparaison avec l'année précédente, puis le détail
+  de chaque encaissement. Les deux registres légaux restent inchangés.
+- Vérification avant chaque export : les points qu'un contrôleur regarderait
+  (mentions obligatoires, continuité de la numérotation, doublons). Informe seulement sans bloquer le téléchargement.
+- Intitulés plus précis : le type d'activité distingue désormais l'activité
+  libérale (BNC) des prestations commerciales ou artisanales (BIC), et rappelle
+  le régime de bénéfices et l'abattement forfaitaire qui s'y attachent.
+- Suivi des seuils réorganisé en deux blocs distincts, qui disent chacun sur
+  quel montant ils portent. Les deux réglementations se franchissent
+  indépendamment : on peut rester en micro tout en devenant redevable de la
+  TVA, et l'écran l'énonce désormais explicitement. Le dépassement du seuil de
+  base de TVA se distingue de celui du seuil majoré, dont les conséquences ne
+  sont pas les mêmes.
+- Estimation des cotisations sociales sur l'écran URSSAF : à côté du chiffre
+  d'affaires à déclarer, ce qui sera prélevé, au taux de l'activité. Le détail
+  montre la base et le taux appliqués. Une activité mixte calcule chaque part
+  au sien, ce qui n'est pas catégorisé est signalé plutôt que compté au
+  hasard.
+- Le type d'activité distingue désormais les professions libérales affiliées à
+  la CIPAV des autres, leurs taux de cotisation différant. Une activité mixte
+  précise en outre la nature de ses prestations (commerciales ou artisanales,
+  libérales, libérales CIPAV) : les plafonds sont les mêmes, mais ni le régime
+  de bénéfices ni le taux de cotisations.
+- Montants légaux sortis du code et regroupés dans un barème daté
+  (`src/partage/bareme-seuils.js`) : mettre à jour les seuils après une loi de
+  finances ne demande plus que d'y ajouter un bloc. Les exercices passés
+  gardent les seuils de leur époque, et une année sans barème connu est
+  signalée au lieu d'être mesurée avec de faux montants.
+- Les taux de cotisations y sont bornés au jour près, et non à l'année : un
+  relèvement au 1er juillet se déclare tel quel. Chaque encaissement cotise au
+  taux en vigueur le jour où il a été encaissé, si bien qu'une période à
+  déclarer qui enjambe un changement se répartit toute seule, une ligne par
+  taux, avec sa date d'entrée en vigueur.
+
 ### v1.4
 
 - Import CSV du registre des achats, sur le modèle de l'import des recettes
@@ -24,7 +62,7 @@ est jugée à cette aune.
 - Lien vers les nouveautés dans le bandeau de mise à jour.
 - Date en toutes lettres (« 28 mai 2026 ») affichée sous chaque champ date, sans
   changer la façon de la saisir.
-- Squelettes de chargement (blocs qui miroitent) et micro-animations discrètes
+- Squelettes de chargement (blocs qui miroitent) et micro-animations
   (compteurs, jauges, barres du graphique).
 - Vérification de bout en bout intégrée (`npm run verifier`).
 
@@ -86,7 +124,6 @@ est jugée à cette aune.
 
 ### v1.0
 
-- Saisie des recettes limitée aux six colonnes légales, avec validation.
 - Carnet de clients et recherche automatique par SIREN / SIRET (annuaire public).
 - Tableau de bord, recherche et filtres, tri par date.
 - Bilan URSSAF par mois, trimestre ou année.
@@ -98,6 +135,7 @@ est jugée à cette aune.
 
 - [ ] **Gestion multi entreprises**
 - [ ] **Un exécutable pour Mac Intel**
+- [ ] **Rendre plus voyant resume-filtre dans recettes et achats pour avoir une meilleure vue sur le nombre de recettes et le total en prix (pas aussi gros que dans le tableau de bord mais juste plus voyant)** (une première tentative, un bandeau à deux blocs chiffrés, a été écartée : présentation trop lourde. À reprendre autrement.)
 - [ ] **Possibilité de choisir dans les paramètres ce qu'on affiche dans le tableau de bord**
 
 ## À l'étude (pas engagé)

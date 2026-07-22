@@ -5,39 +5,24 @@
  * tableau avec en-tête répété à chaque saut de page, totaux mensuels et
  * annuel en gras sur fond grisé, numérotation des pages.
  *
- * Les polices standard du PDF (Helvetica) utilisent l'encodage WinAnsi :
- * les espaces insécables produits par `Intl.NumberFormat` (U+202F, U+00A0)
- * doivent être remplacés par des espaces simples avant écriture.
+ * Les polices standard du PDF (Helvetica) utilisent l'encodage WinAnsi : les
+ * espaces insécables produits par `Intl.NumberFormat` (U+202F, U+00A0) doivent
+ * être remplacés avant écriture, d'où le passage systématique par `texteSur`
+ * (voir `pdf-commun.js`, partagé avec le rapport annuel).
  */
 
 import PDFDocument from 'pdfkit';
 import { formaterDate } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
+import { texteSur, MARGE, COULEURS } from './pdf-commun.js';
 
-const MARGE = 40;
 const TAILLE_TEXTE = 9;
 const REMPLISSAGE_CELLULE = 5;
-const COULEUR_TEXTE = '#1c2333';
-const COULEUR_SECONDAIRE = '#6b7280';
-const COULEUR_FOND_ENTETE = '#e9edf5';
-const COULEUR_FOND_TOTAL = '#f3f5fa';
-const COULEUR_BORDURE = '#d7dbe4';
-
-/**
- * Espaces produits par `Intl.NumberFormat` (« 1 500,00 € ») que l'encodage
- * WinAnsi ne connaît pas : insécable étroite, insécable, fine, tabulaire.
- *
- * Ils sont écrits en séquences d'échappement et non en caractères, qui sont
- * invisibles à la relecture : remplacés un jour par de simples espaces, un
- * montant s'imprimerait « 1/500,00 € » (PDFKit ne garde alors que l'octet de
- * poids faible de U+202F, qui est celui de « / »).
- */
-const ESPACES_HORS_WINANSI = /[\u202F\u00A0\u2009\u2007]/g;
-
-/** Remplace les caractères hors encodage WinAnsi par des équivalents sûrs. */
-export function texteSur(texte) {
-  return String(texte ?? '').replace(ESPACES_HORS_WINANSI, ' ');
-}
+const COULEUR_TEXTE = COULEURS.texte;
+const COULEUR_SECONDAIRE = COULEURS.secondaire;
+const COULEUR_FOND_ENTETE = COULEURS.fondEntete;
+const COULEUR_FOND_TOTAL = COULEURS.fondTotal;
+const COULEUR_BORDURE = COULEURS.bordure;
 
 /**
  * Écrit le registre en PDF dans le flux donné (réponse HTTP ou fichier).

@@ -7,7 +7,9 @@
 
 import { api } from './api.js';
 import { chargerEtat, etat, registreAchatsUtile } from './etat.js';
-import { echapperHtml, toast, confirmer, dialogueAttente, chargeur } from './ui.js';
+import {
+  echapperHtml, toast, confirmer, dialogueAttente, chargeur, installerInfobulles
+} from './ui.js';
 import { icone } from './icones.js';
 import { annuler, retablir } from './historique.js';
 import { vueTableauDeBord } from './vues/tableau-de-bord.js';
@@ -142,7 +144,7 @@ async function afficherVue() {
       <div class="carte">
         <h2>Oups</h2>
         <p>Impossible de charger cette page : ${echapperHtml(erreur.message)}</p>
-        <p>Vérifiez que l’application est bien lancée, puis rechargez.</p>
+        <p>Veuillez recharger la page.</p>
       </div>`;
     revelerEnFondu(conteneur);
   } finally {
@@ -169,8 +171,8 @@ function rendreBandeauDemo() {
   conteneur.insertAdjacentHTML('afterbegin', `
     <div class="bandeau-rappel bandeau-demo">
       ${icone('info', { taille: 18 })}
-      <span>Vous explorez un <strong>jeu de démonstration</strong>. Effacez-le quand vous voulez commencer votre vrai livre.</span>
-      <button type="button" class="btn btn-discret" id="effacer-demo">${icone('corbeille', { taille: 16 })}<span>Tout effacer</span></button>
+      <span>Vous explorez un <strong>jeu de démonstration</strong>. Effacez-le quand vous voulez commencer votre vrai livre des recettes.</span>
+      <button type="button" class="btn btn-tertiaire" id="effacer-demo">${icone('corbeille', { taille: 16 })}<span>Tout effacer</span></button>
     </div>`);
   document.getElementById('effacer-demo')?.addEventListener('click', async (evenement) => {
     const bouton = evenement.currentTarget;
@@ -197,7 +199,7 @@ function rendreBandeauDemo() {
 let miseAJour = null;
 
 /**
- * Bandeau discret annonçant une nouvelle version, ajouté en tête de la vue
+ * Bandeau annonçant une nouvelle version, ajouté en tête de la vue
  * courante (donc visible quel que soit l'onglet). L'exécutable sait se
  * remplacer lui-même ; une installation depuis les sources renvoie vers la
  * page des versions.
@@ -208,9 +210,9 @@ function rendreBandeauMaj() {
   // Un exécutable se met à jour tout seul, mais on propose toujours de lire
   // ce que la version apporte avant de l'installer.
   const action = miseAJour.remplacable
-    ? `<a class="lien-discret" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Nouveautés</a>
-       <button type="button" class="btn btn-discret" id="lancer-maj">Mettre à jour</button>`
-    : `<a class="btn btn-discret" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Voir la nouvelle version</a>`;
+    ? `<a class="lien-attenue" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Nouveautés</a>
+       <button type="button" class="btn btn-tertiaire" id="lancer-maj">Mettre à jour</button>`
+    : `<a class="btn btn-tertiaire" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Voir la nouvelle version</a>`;
 
   conteneur.insertAdjacentHTML('afterbegin', `
     <div class="bandeau-rappel">
@@ -230,8 +232,7 @@ async function appliquerMiseAJour(evenement) {
 
   const accord = await confirmer({
     titre: `Installer la version ${miseAJour.version} ?`,
-    message: 'L’application va se mettre à jour puis redémarrer. Vos données ne sont pas ' +
-      'touchées, et la version actuelle est conservée le temps du remplacement.',
+    message: 'L’application va se mettre à jour puis redémarrer.',
     boutonOk: 'Mettre à jour',
     danger: false,
     iconeOk: 'exports'
@@ -348,7 +349,7 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
           <span>Vous aviez supprimé ces données volontairement ? Repartez d’un livre vide :
           les sauvegardes ci-dessus resteront disponibles.</span>
         </p>
-        <button type="button" class="btn btn-discret" id="repartir-de-zero">Repartir d’un livre vide</button>` : ''}
+        <button type="button" class="btn btn-tertiaire" id="repartir-de-zero">Repartir d’un livre vide</button>` : ''}
     </div>`;
 
   conteneur.querySelector('#repartir-de-zero')?.addEventListener('click', async () => {
@@ -392,6 +393,9 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
 
 appliquerTheme(themeInitial());
 construireNavigation();
+// Écouteurs délégués : posés une fois, ils valent pour toutes les vues, qui
+// se redessinent entièrement à chaque navigation.
+installerInfobulles();
 
 window.addEventListener('hashchange', afficherVue);
 

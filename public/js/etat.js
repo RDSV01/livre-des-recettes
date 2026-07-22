@@ -4,6 +4,7 @@
  */
 
 import { api } from './api.js';
+import { activiteAvecRevente } from '/partage/seuils.js';
 
 export const etat = {
   parametres: null,
@@ -27,9 +28,10 @@ export function definirParametres(parametres) {
 
 /**
  * Le registre des achats n'est obligatoire que pour les activités qui
- * vendent des marchandises : il est masqué pour une activité de pure
- * prestation, sauf s'il contient déjà des achats (rien ne disparaît).
+ * revendent des marchandises : il est masqué pour une pure prestation de
+ * services ou une activité libérale, sauf s'il contient déjà des achats
+ * (rien ne disparaît).
  */
 export function registreAchatsUtile() {
-  return etat.parametres?.typeActivite !== 'prestations' || Boolean(etat.systeme?.aDesAchats);
+  return activiteAvecRevente(etat.parametres?.typeActivite) || Boolean(etat.systeme?.aDesAchats);
 }

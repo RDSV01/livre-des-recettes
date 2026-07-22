@@ -30,6 +30,17 @@ export function filtrerParPeriode(lignes, { annee, mois, trimestre } = {}, cleDa
 }
 
 /**
+ * Années présentes dans un registre, de la plus récente à la plus ancienne.
+ * Alimente les sélecteurs d'année : exports, rapport annuel, URSSAF,
+ * tableau de bord.
+ */
+export function anneesPresentes(lignes, cleDate = 'dateEncaissement') {
+  return [...new Set(lignes.map((l) => anneeDe(l[cleDate])))]
+    .filter(Number.isInteger)
+    .sort((a, b) => b - a);
+}
+
+/**
  * Ordre d'affichage d'un tableau : date décroissante, puis création
  * décroissante (les dates ISO se comparent lexicographiquement).
  * S'utilise ainsi : `recettes.sort(parDateDesc('dateEncaissement'))`.
@@ -126,33 +137,45 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
 }
 
 /**
- * Bilan d'une période au choix, pour aider à remplir la déclaration URSSAF :
- * chiffre d'affaires encaissé et nombre d'encaissements, avec la ventilation
- * par catégorie (la déclaration d'une activité mixte distingue les ventes
- * des prestations de services).
+ * Recettes d'une période à déclarer, et son intitulé. Extrait de `bilanPeriode`
+ * pour que l'estimation des cotisations puisse travailler sur les mêmes
+ * encaissements, dont elle a besoin ligne à ligne (chacun cotise au taux en
+ * vigueur le jour de son encaissement).
  *
  * @param {object} periode `{ annee, type: 'mois'|'trimestre'|'annee', valeur }`
  *   où `valeur` est le numéro de mois (1-12) ou de trimestre (1-4).
  */
-export function bilanPeriode(recettes, { annee, type, valeur }) {
-  let selection;
-  let libellePeriode;
+export function selectionPeriode(recettes, { annee, type, valeur }) {
   switch (type) {
     case 'mois':
-      selection = filtrerParPeriode(recettes, { annee, mois: valeur });
-      libellePeriode = `${nomMois(valeur)} ${annee}`;
-      break;
+      return {
+        selection: filtrerParPeriode(recettes, { annee, mois: valeur }),
+        libellePeriode: `${nomMois(valeur)} ${annee}`
+      };
     case 'trimestre':
-      selection = filtrerParPeriode(recettes, { annee, trimestre: valeur });
-      libellePeriode = `${valeur}${valeur === 1 ? 'er' : 'e'} trimestre ${annee}`;
-      break;
+      return {
+        selection: filtrerParPeriode(recettes, { annee, trimestre: valeur }),
+        libellePeriode: `${valeur}${valeur === 1 ? 'er' : 'e'} trimestre ${annee}`
+      };
     case 'annee':
-      selection = filtrerParPeriode(recettes, { annee });
-      libellePeriode = `année ${annee}`;
-      break;
+      return {
+        selection: filtrerParPeriode(recettes, { annee }),
+        libellePeriode: `année ${annee}`
+      };
     default:
       throw new Error(`Type de période inconnu : ${type}`);
   }
+}
+
+/**
+ * Bilan d'une période au choix, pour aider à remplir la déclaration URSSAF :
+ * chiffre d'affaires encaissé et nombre d'encaissements, avec la ventilation
+ * par catégorie (la déclaration d'une activité mixte distingue les ventes des
+ * prestations de services).
+ */
+export function bilanPeriode(recettes, periode) {
+  const { selection, libellePeriode } = selectionPeriode(recettes, periode);
+  const { annee, type, valeur } = periode;
 
   const partie = (filtre) => {
     const groupe = selection.filter(filtre);

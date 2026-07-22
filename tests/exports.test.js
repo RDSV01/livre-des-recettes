@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { texteSur } from '../src/exports/pdf.js';
+import { texteSur } from '../src/exports/pdf-commun.js';
 import { genererCsv } from '../src/exports/csv.js';
 import { formaterMontant } from '../src/partage/montants.js';
 

@@ -269,6 +269,79 @@ export function installerApercuDate(champ) {
   return rafraichir;
 }
 
+/**
+ * Bulle d'aide : un « i » posé à côté d'un titre, dont le texte n'apparaît
+ * qu'au survol ou au focus clavier.
+ *
+ * Réservée à ce qui éclaire sans rien demander. Un avertissement qui appelle
+ * une action de l'utilisateur (des recettes à catégoriser, une sauvegarde qui
+ * a échoué) doit rester visible : le cacher derrière un survol reviendrait à
+ * ne pas le dire.
+ *
+ * @param {string} texte contenu de la bulle.
+ * @param {string} [pour] ce que la bulle explique, pour les lecteurs d'écran.
+ */
+export function infobulle(texte, pour = 'ce réglage') {
+  return `<span class="infobulle">
+      <button type="button" class="declencheur-infobulle" aria-label="En savoir plus sur ${echapperHtml(pour)}">
+        ${icone('info', { taille: 15 })}
+      </button>
+      <span class="bulle" role="tooltip">${echapperHtml(texte)}</span>
+    </span>`;
+}
+
+/**
+ * Fait apparaître les bulles d'aide au survol et au focus clavier, en les
+ * plaçant elles-mêmes dans la fenêtre.
+ *
+ * Le placement ne peut pas être laissé au CSS seul : une bulle ancrée sous
+ * son icône déborde dès que celle-ci est près du bord droit, et la carte qui
+ * la contient la rogne. On la positionne donc en coordonnées de fenêtre, puis
+ * on la ramène à l'intérieur si elle dépasse.
+ *
+ * Écouteurs délégués posés une fois pour toutes : les vues se redessinent
+ * entièrement à chaque navigation, des écouteurs par élément seraient perdus.
+ */
+export function installerInfobulles() {
+  const MARGE = 8;
+
+  const montrer = (declencheur) => {
+    const bulle = declencheur.nextElementSibling;
+    if (!bulle?.classList.contains('bulle')) return;
+    // Mesurable même cachée : `visibility` conserve la mise en page.
+    const ancre = declencheur.getBoundingClientRect();
+    const taille = bulle.getBoundingClientRect();
+    const gauche = Math.max(
+      MARGE,
+      Math.min(ancre.left, window.innerWidth - taille.width - MARGE)
+    );
+    bulle.style.left = `${gauche}px`;
+    bulle.style.top = `${ancre.bottom + MARGE}px`;
+    bulle.classList.add('visible');
+  };
+
+  const cacher = (declencheur) => {
+    declencheur.nextElementSibling?.classList.remove('visible');
+  };
+
+  for (const [entree, sortie] of [['pointerover', 'pointerout'], ['focusin', 'focusout']]) {
+    document.addEventListener(entree, (evenement) => {
+      const declencheur = evenement.target.closest?.('.declencheur-infobulle');
+      if (declencheur) montrer(declencheur);
+    });
+    document.addEventListener(sortie, (evenement) => {
+      const declencheur = evenement.target.closest?.('.declencheur-infobulle');
+      if (declencheur) cacher(declencheur);
+    });
+  }
+
+  // Une bulle placée en coordonnées de fenêtre suivrait mal un défilement :
+  // autant la refermer.
+  window.addEventListener('scroll', () => {
+    document.querySelectorAll('.bulle.visible').forEach((b) => b.classList.remove('visible'));
+  }, true);
+}
+
 /** Place la flèche de tri sur la colonne active du tableau. */
 export function majIndicateursTri(entetes, tri) {
   entetes.querySelectorAll('th.triable').forEach((th) => {

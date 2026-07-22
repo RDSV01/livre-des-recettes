@@ -7,12 +7,12 @@
 import { api } from '../api.js';
 import { etat, definirParametres } from '../etat.js';
 import {
-  toast, echapperHtml, confirmer,
+  toast, echapperHtml, confirmer, infobulle,
   afficherErreursFormulaire, effacerErreursFormulaire
 } from '../ui.js';
 import { icone } from '../icones.js';
 import { DEVISES, FORMATS_DATE, MODES_REGLEMENT } from '/partage/constantes.js';
-import { TYPES_ACTIVITE } from '/partage/seuils.js';
+import { TYPES_ACTIVITE, NATURES_PRESTATIONS } from '/partage/seuils.js';
 
 export async function vueParametres(conteneur) {
   const p = etat.parametres;
@@ -34,7 +34,7 @@ export async function vueParametres(conteneur) {
       <p>Avant votre première recette, prenez une minute pour renseigner votre entreprise :
       ces informations apparaissent en tête de vos exports, le type d’activité active le
       suivi de vos plafonds et de la franchise de TVA, et la périodicité de déclaration
-      active un rappel discret sur le tableau de bord.</p>
+      active un rappel sur le tableau de bord.</p>
       <p>Envie de voir l’application en action d’abord ?</p>
       <button type="button" class="btn btn-secondaire" id="charger-demo">
         ${icone('etincelle', { taille: 16 })}<span>Découvrir avec un jeu de démonstration</span>
@@ -73,23 +73,41 @@ export async function vueParametres(conteneur) {
           <span class="erreur-champ"></span>
         </div>
         <div class="champ" data-champ="typeActivite">
-          <label for="param-type-activite">Type d’activité (pour le suivi des seuils)</label>
+          <label for="param-type-activite">Type d’activité${infobulle(
+            'Détermine le plafond micro-entrepreneur et le seuil de franchise de TVA suivis ' +
+            'sur le tableau de bord, ainsi que le taux de cotisations estimé.',
+            'le type d’activité'
+          )}</label>
           <select id="param-type-activite" name="typeActivite">
             ${TYPES_ACTIVITE.map((t) =>
               `<option value="${t.code}" ${t.code === p.typeActivite ? 'selected' : ''}>${echapperHtml(t.libelle)}</option>`
             ).join('')}
           </select>
-          <span class="indication">Détermine le plafond micro-entrepreneur et le seuil de franchise de TVA affichés sur le tableau de bord.</span>
+          <span class="erreur-champ"></span>
+        </div>
+        <div class="champ" data-champ="naturePrestations" id="champ-nature-prestations">
+          <label for="param-nature-prestations">Nature de vos prestations${infobulle(
+            'Les plafonds sont les mêmes pour toutes les prestations, mais le régime de ' +
+            'bénéfices et le taux de cotisations diffèrent.',
+            'la nature des prestations'
+          )}</label>
+          <select id="param-nature-prestations" name="naturePrestations">
+            ${NATURES_PRESTATIONS.map((n) =>
+              `<option value="${n.code}" ${n.code === p.naturePrestations ? 'selected' : ''}>${echapperHtml(n.libelle)}</option>`
+            ).join('')}
+          </select>
           <span class="erreur-champ"></span>
         </div>
         <div class="champ" data-champ="periodiciteUrssaf">
-          <label for="param-periodicite">Déclaration URSSAF</label>
+          <label for="param-periodicite">Déclaration URSSAF${infobulle(
+            'Active un rappel sur le tableau de bord quand une période à déclarer est écoulée.',
+            'la périodicité de déclaration'
+          )}</label>
           <select id="param-periodicite" name="periodiciteUrssaf">
             <option value="" ${p.periodiciteUrssaf === '' ? 'selected' : ''}>Non renseignée</option>
             <option value="mois" ${p.periodiciteUrssaf === 'mois' ? 'selected' : ''}>Mensuelle</option>
             <option value="trimestre" ${p.periodiciteUrssaf === 'trimestre' ? 'selected' : ''}>Trimestrielle</option>
           </select>
-          <span class="indication">Active un rappel sur le tableau de bord quand une période à déclarer est écoulée.</span>
           <span class="erreur-champ"></span>
         </div>
         <div class="champ" data-champ="devise">
@@ -133,7 +151,11 @@ export async function vueParametres(conteneur) {
         </label>
       </div>
 
-      <h2 style="margin-top: 24px;">Modes de règlement personnalisés</h2>
+      <h2 style="margin-top: 24px;">Modes de règlement personnalisés${infobulle(
+        `Les modes par défaut (${MODES_REGLEMENT.map((m) => m.libelle).join(', ')}) restent ` +
+        'toujours disponibles. Un mode utilisé par des recettes peut être renommé, mais pas supprimé.',
+        'les modes de règlement'
+      )}</h2>
       <div class="champ pleine-largeur" data-champ="modesPersonnalises">
         <div id="liste-modes"></div>
         <div>
@@ -141,10 +163,6 @@ export async function vueParametres(conteneur) {
             ${icone('plus', { taille: 16 })}<span>Ajouter un mode</span>
           </button>
         </div>
-        <span class="indication">
-          Les modes par défaut (${MODES_REGLEMENT.map((m) => m.libelle).join(', ')}) restent
-          toujours disponibles. Un mode utilisé par des recettes peut être renommé mais pas supprimé.
-        </span>
         <span class="erreur-champ"></span>
       </div>
 
@@ -221,6 +239,16 @@ export async function vueParametres(conteneur) {
     listeModes.appendChild(ligne);
     ligne.querySelector('input').focus();
   });
+
+  // ---- Nature des prestations ------------------------------------------------------
+  // La question ne se pose que pour une activité mixte : les autres types
+  // portent déjà la nature de leurs prestations dans leur intitulé.
+  const selectActivite = conteneur.querySelector('#param-type-activite');
+  const champNature = conteneur.querySelector('#champ-nature-prestations');
+
+  const majNature = () => { champNature.hidden = selectActivite.value !== 'mixte'; };
+  selectActivite.addEventListener('change', majNature);
+  majNature();
 
   // ---- Enregistrement --------------------------------------------------------------
   const formulaire = conteneur.querySelector('#formulaire-parametres');

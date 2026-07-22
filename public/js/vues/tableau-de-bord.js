@@ -9,12 +9,12 @@
 
 import { api } from '../api.js';
 import { etat, definirParametres, registreAchatsUtile } from '../etat.js';
-import { echapperHtml, toast, animerCompteurs } from '../ui.js';
+import { echapperHtml, toast, animerCompteurs, infobulle } from '../ui.js';
 import { icone } from '../icones.js';
 import { formaterMontant } from '/partage/montants.js';
 import { libelleCategorieCourt } from '/partage/constantes.js';
 import { formaterDate, nomMois, dernierePeriodeEchue } from '/partage/dates.js';
-import { bilanSeuils, seuilsValentPour, ANNEE_SEUILS } from '/partage/seuils.js';
+import { bilanSeuils, seuilsValentPour, libelleActivite, periodeSeuils } from '/partage/seuils.js';
 
 /** Abréviations françaises des mois, pour l'axe du graphique. */
 const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
@@ -25,7 +25,7 @@ const accord = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? 's' : ''}`;
 /**
  * Graphique à barres du CA mensuel (une seule série, teinte accent).
  * SVG généré à la main : barres fines aux coins supérieurs arrondis ancrées
- * sur la ligne de base, grille discrète, info-bulle native par colonne.
+ * sur la ligne de base, grille de repères, info-bulle par colonne.
  */
 function graphiqueCaMensuel(points, devise) {
   const largeur = 720;
@@ -155,75 +155,125 @@ function jauge({ titre, ca, progression, devise, messageAttention, messageDepass
 
 /** Carte de suivi des seuils, selon le type d'activité choisi. */
 function carteSeuils(stats, devise) {
-  const bilan = bilanSeuils(stats.caAnnee, etat.parametres.typeActivite, stats.caAnneePrestations);
+  const bilan = bilanSeuils(
+    stats.caAnnee, etat.parametres.typeActivite, stats.caAnneePrestations, stats.annee
+  );
   if (!bilan) {
+    // Deux raisons de ne rien pouvoir mesurer, qui n'appellent pas la même
+    // réponse : l'activité n'est pas renseignée, ou aucun barème ne couvre
+    // l'année consultée (voir `partage/bareme-seuils.js`).
+    const sansBareme = etat.parametres.typeActivite !== '' && !seuilsValentPour(stats.annee);
     return `
-      <h2>Plafond et franchise de TVA</h2>
+      <h2>Plafond micro-entrepreneur et franchise de TVA</h2>
       <div class="etat-vide">
-        <div class="grande-icone">${icone('tendance', { taille: 32 })}</div>
-        Indiquez votre type d’activité pour suivre votre plafond micro-entrepreneur
-        et votre éligibilité à la franchise de TVA.<br>
-        <a class="btn btn-secondaire" href="#/parametres">${icone('parametres', { taille: 16 })}<span>Choisir mon activité</span></a>
+        <div class="grande-icone">${icone(sansBareme ? 'cercle-alerte' : 'tendance', { taille: 32 })}</div>
+        ${sansBareme ? `
+          Aucun barème de seuils n’est enregistré pour ${stats.annee}. Plutôt que de mesurer
+          cette année avec les montants d’une autre période, l’application préfère ne rien
+          afficher.`
+        : `
+          Indiquez votre type d’activité pour suivre votre plafond micro-entrepreneur
+          et votre éligibilité à la franchise de TVA.<br>
+          <a class="btn btn-secondaire" href="#/parametres">${icone('parametres', { taille: 16 })}<span>Choisir mon activité</span></a>`}
       </div>`;
   }
 
   const estMixte = bilan.typeActivite === 'mixte';
+
+  // Le suivi porte toujours sur le chiffre d'affaires encaissé de l'année. En
+  // activité mixte, deux conditions se cumulent dans chaque régime : le total
+  // et, à l'intérieur, la seule part « prestations », plus étroitement plafonnée.
+  const titreTotal = estMixte ? 'CA total (ventes + prestations)' : 'Chiffre d’affaires';
+  const titrePart = 'Part prestations de services';
+  const deuxConditions = 'Les deux conditions doivent être respectées simultanément.';
+
+  /** Un régime et ses jauges, sous un intitulé qui dit à quoi il sert. */
+  const groupe = (titre, explication, jauges) => `
+    <section class="groupe-seuils">
+      <h3>${titre}</h3>
+      <p class="explication-groupe">${explication}</p>
+      ${jauges}
+    </section>`;
+
+  /**
+   * Message de dépassement d'un seuil de TVA. Franchir le seuil de base et
+   * franchir le seuil majoré n'ont pas du tout les mêmes conséquences : dans
+   * le premier cas la franchise court jusqu'à la fin de l'année, dans le
+   * second elle tombe immédiatement. Les confondre induirait en erreur.
+   */
+  const finFranchise = (ca, seuilMajore) => (ca > seuilMajore
+    ? `Vous avez dépassé le seuil majoré de ${formaterMontant(seuilMajore, devise)} : ` +
+      'la franchise a cessé dès la date du dépassement, la TVA est due à compter de cette date.'
+    : 'Vous avez dépassé le seuil de base de franchise TVA. La franchise reste applicable ' +
+      'jusqu’au 31 décembre de l’année en cours. Si votre chiffre d’affaires dépasse le seuil ' +
+      `majoré de ${formaterMontant(seuilMajore, devise)}, la franchise cesse dès la date du dépassement.`);
+
   return `
-    <h2>Plafond et franchise de TVA (${stats.annee})</h2>
-    ${jauge({
-      titre: estMixte ? 'Plafond micro-entrepreneur (ventes + prestations)' : 'Plafond micro-entrepreneur',
-      ca: stats.caAnnee,
-      progression: bilan.plafondMicro,
-      devise,
-      messageAttention: '{p} % du plafond annuel atteint.',
-      messageDepasse: 'Plafond dépassé. Le régime micro ne prend fin qu’après deux années consécutives de dépassement.'
-    })}
-    ${jauge({
-      titre: estMixte ? 'Franchise en base de TVA (ventes + prestations)' : 'Franchise en base de TVA',
-      ca: stats.caAnnee,
-      progression: bilan.franchiseTva,
-      devise,
-      messageAttention: 'Vous approchez du seuil de franchise de TVA ({p} %).',
-      messageDepasse: `Seuil dépassé : la franchise prend fin au 1er janvier prochain. Au-delà de ${formaterMontant(bilan.franchiseTva.seuilMajore, devise)}, elle cesse dès le jour du dépassement.`
-    })}
-    ${bilan.prestations ? `
-    ${jauge({
-      titre: 'Part prestations : plafond micro',
-      ca: bilan.prestations.chiffreAffaires,
-      progression: bilan.prestations.plafondMicro,
-      devise,
-      messageAttention: '{p} % du plafond des prestations atteint.',
-      messageDepasse: 'Plafond des prestations dépassé. Le régime micro ne prend fin qu’après deux années consécutives de dépassement.'
-    })}
-    ${jauge({
-      titre: 'Part prestations : franchise de TVA',
-      ca: bilan.prestations.chiffreAffaires,
-      progression: bilan.prestations.franchiseTva,
-      devise,
-      messageAttention: 'La part prestations approche de son seuil de TVA ({p} %).',
-      messageDepasse: `Seuil dépassé : la franchise prend fin au 1er janvier prochain. Au-delà de ${formaterMontant(bilan.prestations.franchiseTva.seuilMajore, devise)}, elle cesse dès le jour du dépassement.`
-    })}` : ''}
+    <h2>Plafond micro-entrepreneur et franchise de TVA (${stats.annee})${infobulle(
+      'Les seuils micro-entreprise et les seuils de TVA sont indépendants : une entreprise ' +
+      'peut rester en micro-entreprise tout en devenant redevable de la TVA. Suivi purement ' +
+      `informatif, basé sur le barème ${periodeSeuils(stats.annee)} ; en cas de doute, ` +
+      'vérifiez les valeurs en vigueur sur economie.gouv.fr.',
+      'le suivi des seuils'
+    )}</h2>
+    <p class="resume-filtre">${echapperHtml(libelleActivite(etat.parametres))}</p>
+
+    ${groupe(
+      'Rester en micro-entreprise',
+      estMixte
+        ? deuxConditions
+        : 'Au-delà, le régime micro prend fin après deux années consécutives de dépassement.',
+      jauge({
+        titre: titreTotal,
+        ca: stats.caAnnee,
+        progression: bilan.plafondMicro,
+        devise,
+        messageAttention: '{p} % du plafond annuel atteint.',
+        messageDepasse: 'Plafond dépassé. Le régime micro ne prend fin qu’après deux années consécutives de dépassement.'
+      }) + (bilan.prestations ? jauge({
+        titre: titrePart,
+        ca: bilan.prestations.chiffreAffaires,
+        progression: bilan.prestations.plafondMicro,
+        devise,
+        messageAttention: '{p} % du plafond propre aux prestations atteint.',
+        messageDepasse: 'Plafond des prestations dépassé. Même règle : la sortie du régime micro n’intervient qu’après deux années consécutives.'
+      }) : '')
+    )}
+
+    ${groupe(
+      'Franchise en base de TVA',
+      estMixte
+        ? deuxConditions
+        : 'Tant que ce seuil tient, vous ne facturez pas la TVA à vos clients.',
+      jauge({
+        titre: titreTotal,
+        ca: stats.caAnnee,
+        progression: bilan.franchiseTva,
+        devise,
+        messageAttention: 'Vous approchez du seuil de franchise de TVA ({p} %).',
+        messageDepasse: finFranchise(stats.caAnnee, bilan.franchiseTva.seuilMajore)
+      }) + (bilan.prestations ? jauge({
+        titre: titrePart,
+        ca: bilan.prestations.chiffreAffaires,
+        progression: bilan.prestations.franchiseTva,
+        devise,
+        messageAttention: 'La part prestations approche de son propre seuil de TVA ({p} %).',
+        messageDepasse: finFranchise(
+          bilan.prestations.chiffreAffaires, bilan.prestations.franchiseTva.seuilMajore
+        )
+      }) : '')
+    )}
     ${estMixte && stats.nombreNonCategorisees > 0 ? `
       <p class="note-legale">
         ${icone('cercle-alerte', { taille: 16 })}
         <span>${stats.nombreNonCategorisees} recette${stats.nombreNonCategorisees > 1 ? 's' : ''} de ${stats.annee}
         sans catégorie : modifiez-les (vente ou prestation) pour un suivi fiable de la part prestations.</span>
       </p>` : ''}
-    ${seuilsValentPour(stats.annee) ? '' : `
-      <p class="note-legale">
-        ${icone('cercle-alerte', { taille: 16 })}
-        <span>Les seuils ci-dessus sont ceux de la période ${ANNEE_SEUILS} : ceux applicables
-        en ${stats.annee} étaient différents, ces jauges ne valent donc pas pour cette année.</span>
-      </p>`}
-    <p class="note-legale">
-      ${icone('info', { taille: 16 })}
-      <span>Suivi purement informatif, basé sur les seuils ${ANNEE_SEUILS}. En cas de doute,
-      vérifiez les valeurs en vigueur (economie.gouv.fr).</span>
-    </p>`;
+    `;
 }
 
 /**
- * Rappel discret de déclaration URSSAF : affiché quand une période est
+ * Rappel de déclaration URSSAF : affiché quand une période est
  * entièrement écoulée et n'a pas été marquée « déclarée » via le bouton
  * « C'est fait » (mémorisé dans les paramètres).
  */
@@ -235,8 +285,8 @@ function bandeauRappelUrssaf() {
     <div class="bandeau-rappel">
       ${icone('urssaf', { taille: 18 })}
       <span>Déclaration URSSAF de ${echapperHtml(periode.libelle)} : pensez à la faire si ce n’est pas déjà fait.</span>
-      <a class="btn btn-discret" href="#/urssaf">Voir le montant</a>
-      <button type="button" class="btn btn-discret" id="declaration-faite" data-periode="${periode.id}">
+      <a class="btn btn-tertiaire" href="#/urssaf">Voir le montant</a>
+      <button type="button" class="btn btn-tertiaire" id="declaration-faite" data-periode="${periode.id}">
         ${icone('cercle-valide', { taille: 16 })}<span>C’est fait</span>
       </button>
     </div>`;
@@ -262,7 +312,6 @@ export async function vueTableauDeBord(conteneur) {
     const cartes = [
       { etiquette: `CA de ${nomMois(stats.mois)} ${stats.annee}`, cible: stats.caMois, format: 'montant', icone: 'billet', principale: true },
       { etiquette: `CA de l’année ${stats.annee}`, cible: stats.caAnnee, format: 'montant', icone: 'calendrier', principale: true },
-      { etiquette: `Encaissements en ${stats.annee}`, cible: stats.nombreEncaissements, format: 'entier', icone: 'diese' },
       { etiquette: 'Moyenne par encaissement', cible: stats.moyenneEncaissement, format: 'montant', icone: 'tendance' },
       // Total des achats : seulement quand le registre des achats est tenu.
       ...(registreAchatsUtile() ? [
@@ -314,7 +363,7 @@ export async function vueTableauDeBord(conteneur) {
             <select id="annee-tableau" aria-label="Année affichée" class="selecteur-annee">
               ${anneesDisponibles.map((a) => `<option value="${a}" ${a === anneeChoisie ? 'selected' : ''}>${a}</option>`).join('')}
             </select>` : ''}
-          <a class="btn btn-discret" href="#/exports">${icone('exports', { taille: 16 })}<span>Exporter le livre des recettes</span></a>
+          <a class="btn btn-tertiaire" href="#/exports">${icone('exports', { taille: 16 })}<span>Exporter le livre des recettes</span></a>
           ${registreAchatsUtile() ? `
             <a class="btn btn-secondaire" href="#/achats?nouveau=1">${icone('plus', { taille: 16 })}<span>Nouvel achat</span></a>` : ''}
           <a class="btn btn-primaire" href="#/recettes?nouvelle=1">${icone('plus', { taille: 16 })}<span>Nouvelle recette</span></a>

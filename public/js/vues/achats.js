@@ -410,7 +410,7 @@ export async function vueAchats(conteneur, params) {
       <tr${idsNouveaux.has(a.id) ? ' class="ligne-nouvelle"' : ''}>
         <td class="col-case"><input type="checkbox" data-selection="${a.id}"
           ${selection.has(a.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
-        <td>${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>
+        <td class="col-date">${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>
         <td>${echapperHtml(a.fournisseur)}</td>
         <td>${a.referenceFacture ? echapperHtml(a.referenceFacture) : '<span class="attenue">-</span>'}</td>
         <td><span class="badge">${echapperHtml(libelleMode(a.modeReglement, modesPersonnalises))}</span></td>
@@ -422,7 +422,7 @@ export async function vueAchats(conteneur, params) {
         </td>
       </tr>`).join('') + (restants > 0 ? `
       <tr class="ligne-vide"><td colspan="7">
-        <button type="button" class="btn btn-discret" data-action="afficher-plus">
+        <button type="button" class="btn btn-tertiaire" data-action="afficher-plus">
           Afficher les ${restants} achat${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}
         </button>
       </td></tr>` : '');
@@ -478,16 +478,19 @@ export async function vueAchats(conteneur, params) {
         <div class="barre-selection" id="barre-selection" hidden>
           <span id="compte-selection"></span>
           <button type="button" class="btn btn-danger" id="supprimer-selection">${icone('corbeille', { taille: 16 })}<span>Supprimer</span></button>
-          <button type="button" class="btn btn-discret" id="deselectionner">Tout désélectionner</button>
+          <button type="button" class="btn btn-tertiaire" id="deselectionner">Tout désélectionner</button>
         </div>
 
         <p class="resume-filtre" id="resume-filtre"></p>
 
         <table id="table-achats">
           <colgroup>
+            ${/* La colonne des actions est fixée en pixels : elle porte trois
+                  boutons de taille constante, qu'un pourcentage laissait
+                  déborder de leur cellule dès que la fenêtre rétrécissait. */ ''}
             <col style="width: 4%"><col style="width: 13%"><col style="width: 27%">
             <col style="width: 20%"><col style="width: 14%"><col style="width: 12%">
-            <col style="width: 10%">
+            <col style="width: 108px">
           </colgroup>
           <thead>
             <tr>

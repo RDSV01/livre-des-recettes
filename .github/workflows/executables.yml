@@ -1,6 +1,6 @@
 # Construit les exécutables autonomes et les attache à la version publiée.
 #
-# Déclenchement : un tag « v1.4.0 » poussé sur le dépôt. Chaque système
+# Déclenchement : un tag de version (« v1.5.0 ») poussé sur le dépôt. Chaque système
 # construit son propre fichier (un exécutable ne peut pas être fabriqué pour
 # un autre système), puis un dernier travail rassemble les trois et crée la
 # version publiée : la création est ainsi faite une seule fois, sans que les

@@ -31,17 +31,33 @@ export function sommeMontants(montants) {
  */
 const formateurs = new Map();
 
-function formateur(devise) {
-  const existant = formateurs.get(devise);
+function formateur(devise, decimales) {
+  const cle = decimales === undefined ? devise : `${devise}/${decimales}`;
+  const existant = formateurs.get(cle);
   if (existant) return existant;
-  const nouveau = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: devise });
-  formateurs.set(devise, nouveau);
+  const options = { style: 'currency', currency: devise };
+  if (decimales !== undefined) {
+    options.minimumFractionDigits = decimales;
+    options.maximumFractionDigits = decimales;
+  }
+  const nouveau = new Intl.NumberFormat('fr-FR', options);
+  formateurs.set(cle, nouveau);
   return nouveau;
 }
 
 /** Formate un montant pour l'affichage : `1 234,56 €`. */
 export function formaterMontant(montant, devise = 'EUR') {
   return formateur(devise).format(Number(montant) || 0);
+}
+
+/**
+ * Formate un montant sans centimes : `316 €`. Réservé aux sommes qui sont par
+ * nature des euros entiers, comme les cotisations sociales : afficher
+ * « 316,00 € » laisserait croire à une précision au centime que l'arrondi
+ * légal a justement fait disparaître.
+ */
+export function formaterMontantEntier(montant, devise = 'EUR') {
+  return formateur(devise, 0).format(Number(montant) || 0);
 }
 
 /** Symbole d'une devise (`EUR` donne `€`), avec repli sur le code lui-même. */
@@ -66,9 +82,11 @@ export function analyserMontant(valeur) {
   }
   if (valeur == null) return null;
 
-  // Espaces (y compris insécables U+00A0 et fines U+202F) et devises retirés.
+  // Espaces et devises retirés. `\s` couvre déjà les espaces insécables
+  // (U+00A0) et fines (U+202F) : les écrire en clair ici les rendrait
+  // invisibles à la relecture, sans rien apporter.
   let texte = String(valeur)
-    .replace(/[\s  ]/g, '')
+    .replace(/\s/g, '')
     .replace(/(€|\$|£|EUR|CHF|USD|GBP|CAD)/gi, '')
     .trim();
   if (!texte) return null;

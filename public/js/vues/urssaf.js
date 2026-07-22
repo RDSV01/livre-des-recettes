@@ -5,10 +5,61 @@
 
 import { api } from '../api.js';
 import { etat } from '../etat.js';
-import { echapperHtml, toast } from '../ui.js';
+import { echapperHtml, toast, infobulle } from '../ui.js';
 import { icone } from '../icones.js';
-import { formaterMontant } from '/partage/montants.js';
-import { NOMS_MOIS } from '/partage/dates.js';
+import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
+import { NOMS_MOIS, formaterDate } from '/partage/dates.js';
+
+/** « 12,3 » plutôt que « 12.3 ». */
+const pourcentage = (taux) => `${String(taux).replace('.', ',')} %`;
+
+/**
+ * Estimation des cotisations sociales à côté du montant à déclarer. Le détail
+ * par taux est affiché : l'utilisateur voit sur quelle base et à quel taux
+ * chaque part est calculée, plutôt qu'un total tombé du ciel.
+ */
+function blocCotisations(cotisations, devise, formatDate) {
+  if (!cotisations) return '';
+
+  // Quand un taux a changé pendant la période, la même activité revient à deux
+  // taux : préciser depuis quand lève l'ambiguïté. Inutile sinon.
+  const plusieursPaliers = new Set(cotisations.lignes.map((l) => l.duJour)).size > 1;
+  const depuis = (l) => (plusieursPaliers
+    ? ` <span class="palier-cotisation">à partir du ${echapperHtml(formaterDate(l.duJour, formatDate))}</span>`
+    : '');
+
+  // Les montants dus sont des euros entiers (arrondi légal) ; la base, elle,
+  // garde ses centimes puisqu'elle vient du chiffre d'affaires encaissé.
+  const lignes = cotisations.lignes.map((l) => `
+    <div class="ligne-cotisation">
+      <span>${echapperHtml(l.libelle)}${depuis(l)}</span>
+      <span class="base-cotisation">${echapperHtml(formaterMontant(l.base, devise))} × ${pourcentage(l.taux)}</span>
+      <span class="montant-cotisation">${echapperHtml(formaterMontantEntier(l.montant, devise))}</span>
+    </div>`).join('');
+
+  return `
+    <section class="bloc-cotisations">
+      <div class="entete-cotisations">
+        <h3>Cotisations URSSAF que vous paierez :</h3>
+        <strong>${echapperHtml(formaterMontantEntier(cotisations.total, devise))}</strong>
+        ${infobulle(
+          'Estimation des seules cotisations sociales. La contribution à la formation ' +
+          'professionnelle et, si vous l’avez choisi, le versement libératoire de l’impôt sur ' +
+          'le revenu s’y ajoutent. Le montant exact reste celui calculé par l’URSSAF.',
+          'l’estimation des cotisations'
+        )}
+      </div>
+      ${lignes}
+      ${cotisations.horsEstimation > 0 ? `
+        <p class="note-legale">
+          ${icone('cercle-alerte', { taille: 16 })}
+          <span>${echapperHtml(formaterMontant(cotisations.horsEstimation, devise))} ne sont pas
+          comptés, faute de taux applicable : recettes sans catégorie, ou encaissées avant le
+          plus ancien taux connu. Classez ces recettes en vente ou en prestation pour une
+          estimation complète.</span>
+        </p>` : ''}
+    </section>`;
+}
 
 export async function vueUrssaf(conteneur) {
   const { annees } = await api.listerAnnees();
@@ -27,7 +78,7 @@ export async function vueUrssaf(conteneur) {
     </header>
 
     <div class="carte">
-      <h2>Choisir la période</h2>
+      <h2>Choisir la période à déclarer</h2>
       <div class="barre-outils">
         <div class="champ">
           <label for="urssaf-annee">Année</label>
@@ -49,12 +100,6 @@ export async function vueUrssaf(conteneur) {
       </div>
 
       <div id="resultat-urssaf"></div>
-
-      <p class="note-legale">
-        ${icone('info', { taille: 16 })}
-        <span>Ces montants vous aident à remplir votre déclaration sur autoentrepreneur.urssaf.fr.
-        Aucune donnée n’est transmise.</span>
-      </p>
     </div>`;
 
   const refs = {
@@ -105,6 +150,8 @@ export async function vueUrssaf(conteneur) {
           </div>
         </div>`;
 
+      const { formatDate } = etat.parametres;
+
       refs.resultat.innerHTML = `
         <div class="resultat-bilan">
           ${carte(`CA encaissé (${bilan.libellePeriode})`, bilan.chiffreAffaires, true)}
@@ -125,7 +172,8 @@ export async function vueUrssaf(conteneur) {
             <span>${bilan.nonCategorise.nombreEncaissements} recette${bilan.nonCategorise.nombreEncaissements > 1 ? 's' : ''}
             sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
             modifiez-les pour une ventilation exacte entre ventes et prestations.</span>
-          </p>` : ''}`;
+          </p>` : ''}
+        ${blocCotisations(bilan.cotisations, devise, formatDate)}`;
     } catch (erreur) {
       toast(erreur.message, 'erreur');
     }

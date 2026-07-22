@@ -65,6 +65,10 @@ export const api = {
   tableauDeBord: (params) => requete(`/api/tableau-de-bord${chaineRequete(params)}`),
   bilanUrssaf: (params) => requete(`/api/urssaf${chaineRequete(params)}`),
 
+  // Contrôle d'un registre avant export (`registre` : '' ou '/achats')
+  controlerExport: (periode, registre = '') =>
+    requete(`/api/exports${registre}/controle${chaineRequete(periode)}`),
+
   // Paramètres et système
   obtenirParametres: () => requete('/api/parametres'),
   enregistrerParametres: (parametres) => requete('/api/parametres', { methode: 'PUT', corps: parametres }),
@@ -81,4 +85,9 @@ export const api = {
  */
 export function urlExport(format, periode, registre = '') {
   return `/api/exports${registre}/${format}${chaineRequete(periode)}`;
+}
+
+/** URL de téléchargement du rapport annuel de gestion (PDF uniquement). */
+export function urlRapportAnnuel(annee) {
+  return `/api/exports/rapport-annuel${chaineRequete({ annee })}`;
 }

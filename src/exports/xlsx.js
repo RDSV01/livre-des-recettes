@@ -80,7 +80,7 @@ export async function genererXlsx(registre, parametres) {
         }
       });
     } else {
-      // Ventilation « dont … » : discrète, en italique.
+      // Ventilation « dont … » : en italique.
       const rangee = feuille.addRow(cellulesResume(ligne));
       rangee.font = { italic: true, size: 10 };
       rangee.getCell(indexMontant + 1).numFmt = formatMontant;

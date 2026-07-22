@@ -10,7 +10,7 @@
 
 import crypto from 'node:crypto';
 import { MODES_REGLEMENT, DEVISES, FORMATS_DATE, CATEGORIES_RECETTE } from './partage/constantes.js';
-import { TYPES_ACTIVITE } from './partage/seuils.js';
+import { TYPES_ACTIVITE, NATURES_PRESTATIONS } from './partage/seuils.js';
 import { estDateIso } from './partage/dates.js';
 import { analyserMontant } from './partage/montants.js';
 import { normaliserTexte } from './partage/texte.js';
@@ -295,6 +295,14 @@ export function validerParametres(entree) {
     erreurs.typeActivite = 'Type d’activité inconnu.';
   }
 
+  // Nature de la part « prestations », utile à la seule activité mixte. Un
+  // champ vide reprend le cas courant plutôt que de refuser l'enregistrement :
+  // les livres d'avant cette option ne portent pas encore ce réglage.
+  const naturePrestations = texte(e.naturePrestations) || 'prestations';
+  if (!NATURES_PRESTATIONS.some((n) => n.code === naturePrestations)) {
+    erreurs.naturePrestations = 'Nature de prestations inconnue.';
+  }
+
   const periodiciteUrssaf = texte(e.periodiciteUrssaf);
   if (!['', 'mois', 'trimestre'].includes(periodiciteUrssaf)) {
     erreurs.periodiciteUrssaf = 'Périodicité inconnue (mensuelle ou trimestrielle).';
@@ -326,7 +334,7 @@ export function validerParametres(entree) {
   return {
     erreurs: null,
     valeurs: {
-      nomEntreprise, siren, siret, adresse, activite, typeActivite,
+      nomEntreprise, siren, siret, adresse, activite, typeActivite, naturePrestations,
       devise, formatDate, modesPersonnalises: modes.valeurs,
       periodiciteUrssaf, dernierePeriodeDeclaree,
       alertesNumerotation: booleen(e.alertesNumerotation, true),

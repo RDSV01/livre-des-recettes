@@ -7,7 +7,8 @@
  */
 
 import express from 'express';
-import { bilanPeriode } from '../totaux.js';
+import { bilanPeriode, selectionPeriode } from '../totaux.js';
+import { cotisationsUrssaf } from '../cotisations.js';
 
 export function routesUrssaf(stockage) {
   const routeur = express.Router();
@@ -30,7 +31,16 @@ export function routesUrssaf(stockage) {
         return res.status(400).json({ erreur: `Paramètre « valeur » invalide (1 à ${max}).` });
       }
     }
-    res.json(bilanPeriode(stockage.listerRecettes(), { annee, type, valeur }));
+    // L'estimation des cotisations se fait ici, et non dans le navigateur :
+    // chaque encaissement cotise au taux en vigueur le jour où il a été
+    // encaissé, ce qui demande les recettes ligne à ligne.
+    const recettes = stockage.listerRecettes();
+    const periode = { annee, type, valeur };
+    const { selection } = selectionPeriode(recettes, periode);
+    res.json({
+      ...bilanPeriode(recettes, periode),
+      cotisations: cotisationsUrssaf(selection, stockage.obtenirParametres())
+    });
   });
 
   return routeur;
