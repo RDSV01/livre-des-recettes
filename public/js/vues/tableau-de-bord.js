@@ -14,7 +14,9 @@ import { icone } from '../icones.js';
 import { formaterMontant } from '/partage/montants.js';
 import { libelleCategorieCourt } from '/partage/constantes.js';
 import { formaterDate, nomMois, dernierePeriodeEchue } from '/partage/dates.js';
-import { bilanSeuils, seuilsValentPour, libelleActivite, periodeSeuils } from '/partage/seuils.js';
+import {
+  bilanSeuils, seuilsValentPour, libelleActivite, periodeSeuils
+} from '/partage/seuils.js';
 
 /** Abréviations françaises des mois, pour l'axe du graphique. */
 const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
@@ -22,40 +24,49 @@ const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'ao
 /** « 4 prestations », « 1 vente » : le nombre suivi du mot accordé. */
 const accord = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? 's' : ''}`;
 
-/**
- * Graphique à barres du CA mensuel (une seule série, teinte accent).
- * SVG généré à la main : barres fines aux coins supérieurs arrondis ancrées
- * sur la ligne de base, grille de repères, info-bulle par colonne.
- */
-function graphiqueCaMensuel(points, devise) {
-  const largeur = 720;
-  const hauteur = 210;
-  const margeGauche = 56;
-  const margeHaut = 10;
-  const margeBas = 26;
-  const zoneHauteur = hauteur - margeHaut - margeBas;
-  const zoneLargeur = largeur - margeGauche - 8;
+/** Dimensions communes aux deux graphiques mensuels. */
+const GRAPHE = { largeur: 720, hauteur: 210, margeGauche: 56, margeHaut: 10, margeBas: 26 };
 
-  const maxBrut = Math.max(...points.map((p) => p.total));
-  // Plafond « rond » de l'axe : multiple lisible juste au-dessus du maximum.
+/** Plafond « rond » de l'axe : multiple lisible juste au-dessus du maximum. */
+function plafondAxe(maxBrut) {
+  if (maxBrut <= 0) return 1;
   const etage = 10 ** Math.floor(Math.log10(maxBrut));
-  const plafond = Math.ceil(maxBrut / (etage / 2)) * (etage / 2);
+  return Math.ceil(maxBrut / (etage / 2)) * (etage / 2);
+}
 
+/** Grille horizontale (base, moitié, plafond) et ses libellés d'axe. */
+function grilleAxe(plafond, devise) {
+  const { largeur, margeGauche, margeHaut, hauteur, margeBas } = GRAPHE;
+  const zoneHauteur = hauteur - margeHaut - margeBas;
+  const ligneBase = margeHaut + zoneHauteur;
   const compact = new Intl.NumberFormat('fr-FR', {
     style: 'currency', currency: devise, maximumFractionDigits: 0
   });
-
-  const pasX = zoneLargeur / points.length;
-  const largeurBarre = Math.min(38, Math.max(8, pasX - 10));
-  const ligneBase = margeHaut + zoneHauteur;
-
-  // Grille : ligne de base, moitié, plafond.
-  const grille = [0, 0.5, 1].map((part) => {
+  return [0, 0.5, 1].map((part) => {
     const y = (ligneBase - part * zoneHauteur).toFixed(1);
     return `
       <line class="grille" x1="${margeGauche}" y1="${y}" x2="${largeur - 4}" y2="${y}"/>
       <text x="${margeGauche - 8}" y="${Number(y) + 4}" text-anchor="end">${echapperHtml(compact.format(part * plafond))}</text>`;
   }).join('');
+}
+
+/**
+ * Graphique à barres du CA mensuel, une seule série en teinte accent. SVG
+ * généré à la main : barres fines aux coins supérieurs arrondis ancrées sur la
+ * ligne de base, grille de repères, info-bulle par colonne.
+ */
+function graphiqueCaMensuel(points, devise) {
+  const { largeur, hauteur, margeGauche, margeHaut, margeBas } = GRAPHE;
+  const zoneHauteur = hauteur - margeHaut - margeBas;
+  const zoneLargeur = largeur - margeGauche - 8;
+
+  const plafond = plafondAxe(Math.max(...points.map((p) => p.total)));
+
+  const pasX = zoneLargeur / points.length;
+  const largeurBarre = Math.min(38, Math.max(8, pasX - 10));
+  const ligneBase = margeHaut + zoneHauteur;
+
+  const grille = grilleAxe(plafond, devise);
 
   const colonnes = points.map((p, i) => {
     const x = margeGauche + i * pasX + (pasX - largeurBarre) / 2;
@@ -88,6 +99,81 @@ function graphiqueCaMensuel(points, devise) {
       ${grille}
       ${colonnes}
     </svg>`;
+}
+
+/**
+ * Graphique du chiffre d'affaires mensuel ventilé en une seule barre par mois :
+ * ventes (bleu) et prestations (vert) empilées, plus le non catégorisé (gris)
+ * s'il y en a. Remplace, en activité mixte, les trois graphiques distincts par
+ * un seul où la répartition d'un mois se lit d'un coup d'œil.
+ *
+ * `total` de chaque série vient du serveur ; le non catégorisé se déduit du
+ * total global, arrondi au centime pour ne pas traîner l'imprécision des
+ * flottants (un « reste » de -0,004 € ne doit pas dessiner de segment).
+ */
+function graphiqueCaEmpile(pointsGlobal, ventesPts, prestationsPts, devise) {
+  const { largeur, hauteur, margeGauche, margeHaut, margeBas } = GRAPHE;
+  const zoneHauteur = hauteur - margeHaut - margeBas;
+  const zoneLargeur = largeur - margeGauche - 8;
+  const ligneBase = margeHaut + zoneHauteur;
+
+  const plafond = plafondAxe(Math.max(...pointsGlobal.map((p) => p.total)));
+  const grille = grilleAxe(plafond, devise);
+
+  const pasX = zoneLargeur / pointsGlobal.length;
+  const largeurBarre = Math.min(38, Math.max(8, pasX - 10));
+  const GAP = 1.5; // léger espace entre deux segments empilés
+
+  const nonCat = (i) => Math.max(0,
+    Math.round((pointsGlobal[i].total - ventesPts[i].total - prestationsPts[i].total) * 100) / 100);
+  const auMoinsUnNonCat = pointsGlobal.some((_, i) => nonCat(i) > 0);
+
+  const series = (i) => [
+    { libelle: 'Ventes', classe: 'seg-vente', valeur: ventesPts[i].total },
+    { libelle: 'Prestations', classe: 'seg-prestation', valeur: prestationsPts[i].total },
+    { libelle: 'Non catégorisé', classe: 'seg-neutre', valeur: nonCat(i) }
+  ];
+
+  const colonnes = pointsGlobal.map((p, i) => {
+    const x = margeGauche + i * pasX + (pasX - largeurBarre) / 2;
+    let sommet = ligneBase;
+    const segments = series(i)
+      .filter((s) => s.valeur > 0)
+      .map((s) => {
+        const h = (s.valeur / plafond) * zoneHauteur;
+        const y = sommet - h;
+        sommet = y - GAP;
+        const r = Math.min(2, largeurBarre / 2, h / 2);
+        return `<rect class="segment ${s.classe}" x="${x.toFixed(1)}" y="${y.toFixed(1)}"
+          width="${largeurBarre.toFixed(1)}" height="${h.toFixed(1)}" rx="${r.toFixed(1)}"/>`;
+      }).join('');
+
+    const detail = series(i).filter((s) => s.valeur > 0)
+      .map((s) => `${s.libelle} : ${formaterMontant(s.valeur, devise)}`).join('\n');
+    const info = `${nomMois(p.mois)} ${p.annee}\n${detail || 'Aucun encaissement'}` +
+      (detail ? `\nTotal : ${formaterMontant(p.total, devise)}` : '');
+
+    return `
+      <g class="colonne" data-info="${echapperHtml(info)}">
+        <rect x="${(margeGauche + i * pasX).toFixed(1)}" y="${margeHaut}" width="${pasX.toFixed(1)}" height="${zoneHauteur + margeBas}" fill="transparent"/>
+        ${segments}
+        <text x="${(x + largeurBarre / 2).toFixed(1)}" y="${hauteur - 8}" text-anchor="middle">${echapperHtml(MOIS_ABREGES[p.mois - 1])}</text>
+      </g>`;
+  }).join('');
+
+  const legende = [
+    { libelle: 'Ventes', classe: 'seg-vente' },
+    { libelle: 'Prestations', classe: 'seg-prestation' },
+    ...(auMoinsUnNonCat ? [{ libelle: 'Non catégorisé', classe: 'seg-neutre' }] : [])
+  ].map((s) => `<span class="entree-legende"><span class="pastille-legende ${s.classe}"></span>${s.libelle}</span>`).join('');
+
+  return `
+    <svg class="graphique-ca" viewBox="0 0 ${largeur} ${hauteur}" role="img"
+      aria-label="Chiffre d’affaires mensuel ventilé par activité">
+      ${grille}
+      ${colonnes}
+    </svg>
+    <div class="legende-graphique">${legende}</div>`;
 }
 
 /**
@@ -125,10 +211,16 @@ function suivrePointeur(svg, bulle) {
   svg.addEventListener('pointerleave', () => { bulle.hidden = true; });
 }
 
-/** Une jauge de progression vers un seuil, avec son message d'état. */
-function jauge({ titre, ca, progression, devise, messageAttention, messageDepasse }) {
+/**
+ * Une jauge de progression vers un seuil, avec son message d'état.
+ *
+ * `teinte` colore la barre à l'état normal selon le langage d'activité (une
+ * part prestations en vert). L'alerte prime toujours : proche ou dépassé, la
+ * jauge passe orange puis rouge quelle que soit la teinte.
+ */
+function jauge({ titre, ca, progression, devise, messageAttention, messageDepasse, teinte = '' }) {
   const pourcentage = progression.pourcentage;
-  const etatJauge = pourcentage >= 100 ? 'depasse' : pourcentage >= 80 ? 'attention' : '';
+  const etatJauge = pourcentage >= 100 ? 'depasse' : pourcentage >= 80 ? 'attention' : teinte;
 
   let detail;
   if (etatJauge === 'depasse') {
@@ -139,13 +231,25 @@ function jauge({ titre, ca, progression, devise, messageAttention, messageDepass
     detail = `Il reste ${formaterMontant(progression.restant, devise)} (${pourcentage} % atteints).`;
   }
 
+  // Les seuils de TVA ont deux étages : un seuil de base, et un seuil majoré au
+  // -delà duquel la franchise tombe immédiatement. Quand il existe, la jauge se
+  // gradue jusqu'au majoré et un repère marque le seuil de base : la zone entre
+  // les deux, la tolérance, devient visible au lieu d'être seulement décrite.
+  const majore = progression.seuilMajore;
+  const reference = majore ?? progression.seuil;
+  const largeur = Math.min(100, (ca / reference) * 100);
+  const repere = majore ? `
+    <i class="repere-seuil" style="left: ${(progression.seuil / majore) * 100}%"
+      title="Seuil de base : ${echapperHtml(formaterMontant(progression.seuil, devise))} · seuil majoré : ${echapperHtml(formaterMontant(majore, devise))}"></i>` : '';
+
   return `
     <div class="ligne-jauge">
       <div class="entete-jauge">
         <span>${echapperHtml(titre)}</span>
-        <span class="valeur-jauge"><strong>${echapperHtml(formaterMontant(ca, devise))}</strong> / ${echapperHtml(formaterMontant(progression.seuil, devise))}</span>
+        <span class="valeur-jauge"><strong>${echapperHtml(formaterMontant(ca, devise))}</strong> / ${echapperHtml(formaterMontant(progression.seuil, devise))}${
+          majore ? `<small class="seuil-majore"> (majoré ${echapperHtml(formaterMontant(majore, devise))})</small>` : ''}</span>
       </div>
-      <div class="jauge ${etatJauge}"><span style="width: ${Math.min(100, pourcentage)}%"></span></div>
+      <div class="jauge ${etatJauge}"><span style="width: ${largeur}%"></span>${repere}</div>
       <div class="detail-jauge ${etatJauge}">
         ${etatJauge ? icone('cercle-alerte', { taille: 15 }) : ''}
         <span>${echapperHtml(detail)}</span>
@@ -168,9 +272,9 @@ function carteSeuils(stats, devise) {
       <div class="etat-vide">
         <div class="grande-icone">${icone(sansBareme ? 'cercle-alerte' : 'tendance', { taille: 32 })}</div>
         ${sansBareme ? `
-          Aucun barème de seuils n’est enregistré pour ${stats.annee}. Plutôt que de mesurer
-          cette année avec les montants d’une autre période, l’application préfère ne rien
-          afficher.`
+          Aucun barème de seuils n’est enregistré pour ${stats.annee}, année antérieure au plus
+          ancien connu. Ses montants étaient différents de ceux d’aujourd’hui : les appliquer
+          donnerait un résultat faux.`
         : `
           Indiquez votre type d’activité pour suivre votre plafond micro-entrepreneur
           et votre éligibilité à la franchise de TVA.<br>
@@ -236,7 +340,8 @@ function carteSeuils(stats, devise) {
         progression: bilan.prestations.plafondMicro,
         devise,
         messageAttention: '{p} % du plafond propre aux prestations atteint.',
-        messageDepasse: 'Plafond des prestations dépassé. Même règle : la sortie du régime micro n’intervient qu’après deux années consécutives.'
+        messageDepasse: 'Plafond des prestations dépassé. Même règle : la sortie du régime micro n’intervient qu’après deux années consécutives.',
+        teinte: 'prestation'
       }) : '')
     )}
 
@@ -260,7 +365,8 @@ function carteSeuils(stats, devise) {
         messageAttention: 'La part prestations approche de son propre seuil de TVA ({p} %).',
         messageDepasse: finFranchise(
           bilan.prestations.chiffreAffaires, bilan.prestations.franchiseTva.seuilMajore
-        )
+        ),
+        teinte: 'prestation'
       }) : '')
     )}
     ${estMixte && stats.nombreNonCategorisees > 0 ? `
@@ -327,77 +433,37 @@ export async function vueTableauDeBord(conteneur) {
       ] : [])
     ];
 
-    /** Une carte de graphique, ou un message tant qu'il n'y a rien à tracer. */
-    const carteGraphique = (titre, points, messageVide) => `
+    // En activité mixte, un seul graphique empilé montre la répartition
+    // vente / prestation de chaque mois ; ailleurs, un graphique simple du CA.
+    const aDesRecettes = stats.caParMois.some((p) => p.total > 0);
+    const corpsGraphique = !aDesRecettes
+      ? `<div class="etat-vide">
+           <div class="grande-icone">${icone('tendance', { taille: 32 })}</div>
+           Le graphique apparaîtra dès vos premiers encaissements.
+         </div>`
+      : estMixte
+        ? graphiqueCaEmpile(stats.caParMois, stats.caParMoisVentes, stats.caParMoisPrestations, devise)
+        : graphiqueCaMensuel(stats.caParMois, devise);
+
+    const graphiquePrincipal = `
       <div class="carte">
-        <h2>${echapperHtml(titre)}</h2>
-        ${points.some((p) => p.total > 0) ? graphiqueCaMensuel(points, devise) : `
-          <div class="etat-vide">
-            <div class="grande-icone">${icone('tendance', { taille: 32 })}</div>
-            ${echapperHtml(messageVide)}
-          </div>`}
+        <h2>Chiffre d’affaires mensuel (${stats.annee})</h2>
+        ${corpsGraphique}
       </div>`;
 
-    const graphiquePrincipal = carteGraphique(
-      `Chiffre d’affaires mensuel (${stats.annee})`,
-      stats.caParMois,
-      'Le graphique apparaîtra dès vos premiers encaissements.'
-    );
+    // La carte des seuils est toujours plus haute que le graphique seul (ses
+    // jauges portent des messages détaillés, et l'activité mixte y ajoute deux
+    // régimes) : à côté, le graphique laisserait un grand vide en dessous. On
+    // regroupe donc le graphique et les dernières recettes dans la colonne de
+    // gauche, la carte des seuils occupant toute la droite : les deux colonnes
+    // s'équilibrent, quel que soit le type d'activité. On ne le fait que quand
+    // cette carte est bien affichée (activité renseignée et barème connu) ;
+    // sinon elle est courte et la disposition pleine largeur reste préférable.
+    const empilerAGauche = suiviSeuils
+      && etat.parametres.typeActivite !== ''
+      && seuilsValentPour(stats.annee);
 
-    // Activité mixte : le détail par activité, sous le graphique global et à
-    // la même largeur, pour que les trois se comparent d'un coup d'œil.
-    const graphiquesParActivite = !estMixte ? '' : `
-      ${carteGraphique(`Prestations de services (${stats.annee})`, stats.caParMoisPrestations,
-        `Aucune prestation encaissée en ${stats.annee}.`)}
-      ${carteGraphique(`Ventes de marchandises (${stats.annee})`, stats.caParMoisVentes,
-        `Aucune vente encaissée en ${stats.annee}.`)}`;
-
-    conteneur.innerHTML = `
-      <header class="entete-vue">
-        <div>
-          <h1>Tableau de bord</h1>
-          <p>Votre activité en un coup d’œil.</p>
-        </div>
-        <div class="actions-vue">
-          ${anneesDisponibles.length > 1 ? `
-            <select id="annee-tableau" aria-label="Année affichée" class="selecteur-annee">
-              ${anneesDisponibles.map((a) => `<option value="${a}" ${a === anneeChoisie ? 'selected' : ''}>${a}</option>`).join('')}
-            </select>` : ''}
-          <a class="btn btn-tertiaire" href="#/exports">${icone('exports', { taille: 16 })}<span>Exporter le livre des recettes</span></a>
-          ${registreAchatsUtile() ? `
-            <a class="btn btn-secondaire" href="#/achats?nouveau=1">${icone('plus', { taille: 16 })}<span>Nouvel achat</span></a>` : ''}
-          <a class="btn btn-primaire" href="#/recettes?nouvelle=1">${icone('plus', { taille: 16 })}<span>Nouvelle recette</span></a>
-        </div>
-      </header>
-
-      ${bandeauRappelUrssaf()}
-
-      <section class="grille-stats">
-        ${cartes.map((carte) => `
-          <div class="carte-stat ${carte.principale ? 'principale' : ''}">
-            <div class="pastille">${icone(carte.icone, { taille: 22 })}</div>
-            <div>
-              <div class="etiquette">${echapperHtml(carte.etiquette)}</div>
-              <div class="valeur" data-compteur="${carte.cible}" data-format="${carte.format}">${echapperHtml(formaterValeur(carte.cible, carte.format))}</div>
-            </div>
-          </div>`).join('')}
-      </section>
-
-      ${suiviSeuils ? `
-      <section class="grille-deux">
-        <div>
-          ${graphiquePrincipal}
-          ${graphiquesParActivite}
-        </div>
-        <div class="carte">
-          ${carteSeuils(stats, devise)}
-        </div>
-      </section>` : `
-      <section>
-        ${graphiquePrincipal}
-        ${graphiquesParActivite}
-      </section>`}
-
+    const blocDernieresRecettes = `
       <section class="carte">
         <h2>Dernières recettes${stats.annee === new Date().getFullYear() ? '' : ` de ${stats.annee}`}</h2>
         ${stats.dernieresRecettes.length === 0 ? `
@@ -433,6 +499,57 @@ export async function vueTableauDeBord(conteneur) {
             <a href="#/recettes">Voir toutes les recettes</a>
           </p>`}
       </section>`;
+
+    conteneur.innerHTML = `
+      <header class="entete-vue">
+        <div>
+          <h1>Tableau de bord</h1>
+          <p>Votre activité en un coup d’œil.</p>
+        </div>
+        <div class="actions-vue">
+          ${anneesDisponibles.length > 1 ? `
+            <select id="annee-tableau" aria-label="Année affichée" class="selecteur-annee">
+              ${anneesDisponibles.map((a) => `<option value="${a}" ${a === anneeChoisie ? 'selected' : ''}>${a}</option>`).join('')}
+            </select>` : ''}
+          <a class="btn btn-tertiaire" href="#/exports">${icone('exports', { taille: 16 })}<span>Exporter le livre des recettes</span></a>
+          ${registreAchatsUtile() ? `
+            <a class="btn btn-secondaire" href="#/achats?nouveau=1">${icone('plus', { taille: 16 })}<span>Nouvel achat</span></a>` : ''}
+          <a class="btn btn-primaire" href="#/recettes?nouvelle=1">${icone('plus', { taille: 16 })}<span>Nouvelle recette</span></a>
+        </div>
+      </header>
+
+      ${bandeauRappelUrssaf()}
+
+      <section class="grille-stats">
+        ${cartes.map((carte) => {
+          // Une tuile secondaire à zéro (« 0 vente en juillet ») n'apporte rien :
+          // atténuée, elle laisse ressortir les chiffres qui comptent. Les deux
+          // tuiles principales gardent leur poids, un CA nul y étant une info.
+          const vide = carte.cible === 0 && !carte.principale;
+          return `
+          <div class="carte-stat ${carte.principale ? 'principale' : ''} ${vide ? 'vide' : ''}">
+            <div class="pastille">${icone(carte.icone, { taille: 22 })}</div>
+            <div>
+              <div class="etiquette">${echapperHtml(carte.etiquette)}</div>
+              <div class="valeur" data-compteur="${carte.cible}" data-format="${carte.format}">${echapperHtml(formaterValeur(carte.cible, carte.format))}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </section>
+
+      ${suiviSeuils ? `
+      <section class="grille-deux">
+        <div${empilerAGauche ? ' class="pile-gauche"' : ''}>
+          ${graphiquePrincipal}
+          ${empilerAGauche ? blocDernieresRecettes : ''}
+        </div>
+        <div class="carte">
+          ${carteSeuils(stats, devise)}
+        </div>
+      </section>` : `
+      <section>${graphiquePrincipal}</section>`}
+
+      ${empilerAGauche ? '' : blocDernieresRecettes}`;
 
     installerInfobulle(conteneur);
     animerCompteurs(conteneur, devise);

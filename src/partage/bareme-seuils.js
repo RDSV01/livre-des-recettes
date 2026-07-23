@@ -39,9 +39,13 @@
  *
  * Les périodes doivent se suivre sans trou ni chevauchement : un test le
  * vérifie. Les anciens barèmes restent en place, si bien que consulter un
- * exercice passé affiche les seuils qui valaient vraiment cette année-là. Une
- * année couverte par aucun barème est signalée à l'écran plutôt que mesurée
- * avec de faux montants.
+ * exercice passé affiche les seuils qui valaient vraiment cette année-là.
+ *
+ * Passé la dernière période connue, le barème le plus récent est RECONDUIT et
+ * l'écran le signale : l'application reste utilisable l'année où la loi change
+ * sans que ce fichier ait été mis à jour. Une année ANTÉRIEURE au plus ancien
+ * barème, en revanche, n'affiche rien : ses montants ont réellement existé et
+ * différaient, les remplacer serait faux à coup sûr.
  *
  * Deux jeux de montants suffisent : la loi distingue la vente de marchandises
  * des prestations de services. Une activité libérale suit les seuils des

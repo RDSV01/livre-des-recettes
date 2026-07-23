@@ -100,10 +100,32 @@ export const TYPES_ACTIVITE = [
   ...Object.entries(ACTIVITES).map(([code, a]) => ({ code, libelle: a.libelle }))
 ];
 
-/** Barème applicable à une année civile, ou `null` si aucun ne la couvre. */
+/** Le plus récent barème enregistré. */
+const dernierBareme = () => BAREMES.reduce((a, b) => (b.aPartirDe > a.aPartirDe ? b : a));
+
+/**
+ * Barème applicable à une année civile.
+ *
+ * Passé la période du dernier barème connu, celui-ci est reconduit plutôt que
+ * de ne rien afficher : les seuils changent rarement, l'application reste ainsi
+ * utilisable l'année où la loi évolue, en attendant la mise à jour qui apporte
+ * le nouveau barème. La note de bas de carte annonce toujours la période du
+ * barème appliqué, ce qui suffit à voir qu'il date. C'est le même parti que les
+ * taux de cotisations, dont le dernier palier court « jusqu'à nouvel ordre ».
+ *
+ * Une année ANTÉRIEURE au plus ancien barème ne reçoit rien, elle : ses seuils
+ * ont réellement existé et étaient différents : les remplacer par ceux
+ * d'aujourd'hui serait faux à coup sûr, là où reconduire vers l'avenir n'est
+ * qu'un pari raisonnable.
+ *
+ * @returns {object|null} le barème, ou `null` pour une année trop ancienne.
+ */
 export function baremePour(annee) {
-  return BAREMES.find((b) =>
-    annee >= b.aPartirDe && (b.jusqua === null || annee <= b.jusqua)) ?? null;
+  const exact = BAREMES.find((b) =>
+    annee >= b.aPartirDe && (b.jusqua === null || annee <= b.jusqua));
+  if (exact) return exact;
+  const dernier = dernierBareme();
+  return annee > dernier.jusqua ? dernier : null;
 }
 
 /**

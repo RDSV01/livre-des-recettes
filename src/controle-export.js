@@ -19,7 +19,7 @@
 import { estDateIso } from './partage/dates.js';
 import { MODES_REGLEMENT } from './partage/constantes.js';
 import { analyserNumerotation } from './partage/factures.js';
-import { estDoublon, estDoublonAchat } from './partage/doublons.js';
+import { compterDoublonsRecettes, compterDoublonsAchats } from './partage/doublons.js';
 import { filtrerParPeriode } from './totaux.js';
 
 /** Accorde « 3 lignes » / « 1 ligne ». */
@@ -40,25 +40,9 @@ function mentionObligatoire(lignes, { libelle, present, nom }) {
   };
 }
 
-/**
- * Compte les lignes qui font double emploi avec une ligne précédente. La liste
- * déjà parcourue est réutilisée telle quelle, plutôt que recopiée à chaque
- * tour : sur un registre chargé, la comparaison reste la même mais sans les
- * allocations inutiles.
- */
-function compterDoublons(lignes, estDoublonDe) {
-  const vues = [];
-  let total = 0;
-  for (const ligne of lignes) {
-    if (estDoublonDe(ligne, vues)) total += 1;
-    vues.push(ligne);
-  }
-  return total;
-}
-
 /** Point de contrôle « aucun doublon » commun aux deux registres. */
-function controleDoublons(lignes, estDoublonDe, nom) {
-  const doublons = compterDoublons(lignes, estDoublonDe);
+function controleDoublons(lignes, compterDoublons, nom) {
+  const doublons = compterDoublons(lignes);
   return {
     libelle: 'Absence de doublons',
     etat: doublons === 0 ? 'ok' : 'attention',
@@ -134,7 +118,7 @@ export function controlerRecettes(recettes, periode, parametres = {}) {
       ].filter(Boolean).join(', ') + '.'
   });
 
-  points.push(controleDoublons(selection, estDoublon, 'recette'));
+  points.push(controleDoublons(selection, compterDoublonsRecettes, 'recette'));
 
   // La ventilation ventes / prestations ne concerne que les activités mixtes :
   // ailleurs, une catégorie vide est normale et ne mérite aucun signalement.
@@ -195,7 +179,7 @@ export function controlerAchats(achats, periode, parametres = {}) {
           ? 'Chaque achat renvoie à une facture ou à un justificatif.'
           : `${pluriel(sansReference, 'achat')} sans référence de justificatif.`
       },
-      controleDoublons(selection, estDoublonAchat, 'achat')
+      controleDoublons(selection, compterDoublonsAchats, 'achat')
     ]
   };
 }

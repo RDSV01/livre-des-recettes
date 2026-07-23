@@ -227,8 +227,17 @@ export function genererRapportPdf(rapport, parametres, flux) {
       const y = doc.y;
       let x = MARGE;
       cellules.forEach((texte, i) => {
-        doc.text(texte, x + REMPLISSAGE, y + REMPLISSAGE, {
-          width: colonnes[i].largeur - REMPLISSAGE * 2,
+        // Pastille de couleur optionnelle en tête de cellule (langage
+        // d'activité), suivie d'un texte indenté pour lui laisser la place.
+        const couleur = colonnes[i].puce?.(entree);
+        let decalage = 0;
+        if (couleur) {
+          doc.roundedRect(x + REMPLISSAGE, y + REMPLISSAGE + 1, 6, 6, 1.5).fill(couleur);
+          doc.fillColor(COULEURS.texte);
+          decalage = 11;
+        }
+        doc.text(texte, x + REMPLISSAGE + decalage, y + REMPLISSAGE, {
+          width: colonnes[i].largeur - REMPLISSAGE * 2 - decalage,
           align: colonnes[i].montant ? 'right' : 'left'
         });
         x += colonnes[i].largeur;
@@ -305,9 +314,15 @@ export function genererRapportPdf(rapport, parametres, flux) {
   // Une seule ligne ne fait pas une répartition : la section n'a de sens que
   // si le chiffre d'affaires se partage entre plusieurs natures.
   if (repartition.length > 1) {
+    // Chaque nature d'activité porte sa couleur du langage commun, en pastille.
+    const couleurNature = {
+      'Vente de marchandises': COULEURS.vente,
+      'Prestation de services': COULEURS.prestation,
+      'Non catégorisé': COULEURS.neutre
+    };
     section('Répartition par activité');
     tableau([
-      { titre: 'Activité', largeur: 245, texte: (e) => texteSur(e.nom) },
+      { titre: 'Activité', largeur: 245, texte: (e) => texteSur(e.nom), puce: (e) => couleurNature[e.nom] ?? null },
       { titre: 'Encaissements', largeur: 90, texte: (e) => String(e.nombre) },
       { titre: 'Montant', largeur: 100, montant: true, texte: (e) => euros(e.montant) },
       { titre: 'Part', largeur: 80, montant: true, texte: (e) => `${String(e.part).replace('.', ',')} %` }

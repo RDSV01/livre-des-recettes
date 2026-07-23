@@ -6,6 +6,31 @@ est jugée à cette aune.
 
 ## Déjà livré
 
+### v1.6
+
+- Graphique du chiffre d'affaires mensuel ventilé : en activité mixte, une
+  seule barre par mois empile ventes et prestations (et le non catégorisé s'il
+  y en a), là où trois graphiques distincts se répartissaient l'écran. La
+  composition d'un mois se lit d'un coup d'œil, détail au survol.
+- Langage de couleur unifié : le bleu désigne toujours une vente, le vert une
+  prestation, partout, des badges du tableau aux jauges, au graphique et au
+  rapport annuel.
+- Seuil majoré de la franchise de TVA rendu visible : les jauges se graduent
+  jusqu'à lui, un repère marque le seuil de base, et la zone de tolérance entre
+  les deux se voit au lieu d'être seulement décrite.
+- Registres distingués d'un coup d'œil : une pastille colorée devant chaque
+  titre, bleue pour les recettes, violette pour les achats.
+- Interface adaptée aux écrans étroits : sous une certaine largeur, les deux
+  registres passent en cartes empilées, une par ligne, plutôt qu'en colonnes
+  illisibles.
+- Détails de lecture : le montant ressort davantage dans les tableaux, et les
+  tuiles à zéro s'effacent derrière les chiffres qui comptent.
+- Barème des seuils reconduit au-delà de sa dernière période connue :
+  l'application reste utilisable l'année où la loi change, en attendant la mise
+  à jour qui apporte le nouveau barème, plutôt que d'afficher un écran vide.
+- Vérification avant export accélérée : sur un registre de plusieurs milliers
+  de lignes, la recherche de doublons ne fige plus l'écran.
+
 ### v1.5
 
 - Rapport annuel de gestion en PDF pour le dirigeant : chiffre d'affaires et sa répartition, panier moyen,

@@ -9,7 +9,9 @@ import {
 } from '../src/partage/dates.js';
 import { analyserMontant, sommeMontants, enCentimes } from '../src/partage/montants.js';
 import { normaliserTexte } from '../src/partage/texte.js';
-import { estDoublon, estDoublonAchat, chercherSimilaire } from '../src/partage/doublons.js';
+import {
+  estDoublon, estDoublonAchat, chercherSimilaire, compterDoublonsRecettes
+} from '../src/partage/doublons.js';
 import {
   bilanSeuils, seuilsValentPour, regimeFiscal, activiteAvecRevente,
   seuilsDe, baremePour, periodeSeuils
@@ -208,6 +210,49 @@ test('estDoublonAchat compare la date de règlement, le fournisseur et la réfé
   ), false);
 });
 
+test('le comptage groupé des doublons donne le même résultat que la comparaison exhaustive', () => {
+  // Le comptage range les lignes par date, montant et tiers avant de comparer,
+  // pour ne pas confronter chacune à toutes les précédentes. Le raccourci ne
+  // vaut que s'il compte exactement pareil : on le confronte ici à la méthode
+  // naïve, sur des jeux truffés de collisions, d'accents et de références
+  // partielles.
+  const exhaustif = (lignes) => {
+    let total = 0;
+    for (let i = 1; i < lignes.length; i += 1) {
+      if (estDoublon(lignes[i], lignes.slice(0, i))) total += 1;
+    }
+    return total;
+  };
+
+  const dates = ['2026-01-05', '2026-01-06'];
+  const clients = ['Alpha', 'alpha', 'ALPHA ', 'Bêta'];
+  const montants = [100, 100.0, 200];
+  const references = ['', '', 'F-1', 'F-2'];
+
+  // Toutes les combinaisons possibles sur quatre lignes :
+  // les cas limites y passent tous.
+  const lignes = [];
+  for (const dateEncaissement of dates) {
+    for (const client of clients) {
+      for (const montant of montants) {
+        for (const numeroFacture of references) {
+          lignes.push({ dateEncaissement, client, montant, numeroFacture, modeReglement: 'virement' });
+        }
+      }
+    }
+  }
+  assert.equal(compterDoublonsRecettes(lignes), exhaustif(lignes));
+
+  // Et sur des sous-ensembles, pour varier l'ordre de rencontre.
+  for (const debut of [0, 7, 23, 41]) {
+    const morceau = lignes.slice(debut, debut + 20);
+    assert.equal(
+      compterDoublonsRecettes(morceau), exhaustif(morceau),
+      `sous-ensemble à partir de ${debut}`
+    );
+  }
+});
+
 // ---- Seuils micro et franchise de TVA ---------------------------------------
 
 // Une année réellement couverte par le barème du projet : les tests suivent
@@ -303,8 +348,8 @@ test('chaque année retenue tombe sur le barème qui la couvre', () => {
   assert.equal(baremePour(bareme.aPartirDe), bareme);
   assert.equal(seuilsValentPour(bareme.aPartirDe), true);
 
-  // Une année antérieure au plus ancien barème n'est mesurée par rien : mieux
-  // vaut ne rien afficher que des jauges fausses.
+  // Une année antérieure au plus ancien barème n'est mesurée par rien : ses
+  // montants ont existé et différaient, les remplacer serait faux à coup sûr.
   const plusAncienne = Math.min(...BAREMES.map((b) => b.aPartirDe));
   assert.equal(baremePour(plusAncienne - 1), null);
   assert.equal(seuilsValentPour(plusAncienne - 1), false);
@@ -312,12 +357,36 @@ test('chaque année retenue tombe sur le barème qui la couvre', () => {
   assert.equal(seuilsDe('prestations', plusAncienne - 1), null);
 });
 
-test('un barème borné ne déborde pas sur les années suivantes', () => {
-  const borne = BAREMES.find((b) => b.jusqua !== null);
-  if (!borne) return; // tous les barèmes sont ouverts : rien à vérifier
-  assert.equal(baremePour(borne.jusqua), borne);
-  const suivant = baremePour(borne.jusqua + 1);
-  assert.notEqual(suivant, borne, 'l’année suivante relève d’un autre barème, ou d’aucun');
+test('passé la dernière période connue, le barème le plus récent est reconduit', () => {
+  // Le cas qui compte : la loi change, le fichier n'a pas encore été mis à
+  // jour. L'application doit rester utilisable, avec les derniers seuils connus.
+  const dernier = BAREMES.reduce((a, b) => (b.aPartirDe > a.aPartirDe ? b : a));
+  if (dernier.jusqua === null) return; // barème déjà ouvert : rien à reconduire
+  const apres = dernier.jusqua + 1;
+
+  assert.equal(baremePour(apres), dernier, 'le dernier barème continue de s’appliquer');
+  assert.equal(seuilsValentPour(apres), true, 'les jauges restent affichées');
+
+  // Les seuils servis sont bien ceux du dernier barème, pas des valeurs vides.
+  assert.deepEqual(seuilsDe('ventes', apres), dernier.marchandises);
+  assert.equal(bilanSeuils(1000, 'prestations', null, apres).plafondMicro.seuil,
+    dernier.services.plafondMicro);
+  // Y compris dix ans plus tard : la reconduction n'a pas de limite.
+  assert.equal(baremePour(dernier.jusqua + 10), dernier);
+});
+
+test('un barème intermédiaire ne déborde pas sur le suivant', () => {
+  // La reconduction ne vaut que pour le dernier barème : entre deux périodes
+  // connues, chaque année doit tomber sur la sienne, sans empiétement.
+  const dernier = BAREMES.reduce((a, b) => (b.aPartirDe > a.aPartirDe ? b : a));
+  for (const bareme of BAREMES) {
+    if (bareme === dernier || bareme.jusqua === null) continue;
+    assert.equal(baremePour(bareme.jusqua), bareme, 'sa dernière année lui revient');
+    assert.notEqual(
+      baremePour(bareme.jusqua + 1), bareme,
+      `le barème ${bareme.aPartirDe}-${bareme.jusqua} ne doit pas couvrir ${bareme.jusqua + 1}`
+    );
+  }
 });
 
 test('periodeSeuils nomme la période du barème appliqué', () => {

@@ -410,11 +410,11 @@ export async function vueAchats(conteneur, params) {
       <tr${idsNouveaux.has(a.id) ? ' class="ligne-nouvelle"' : ''}>
         <td class="col-case"><input type="checkbox" data-selection="${a.id}"
           ${selection.has(a.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
-        <td class="col-date">${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>
-        <td>${echapperHtml(a.fournisseur)}</td>
-        <td>${a.referenceFacture ? echapperHtml(a.referenceFacture) : '<span class="attenue">-</span>'}</td>
-        <td><span class="badge">${echapperHtml(libelleMode(a.modeReglement, modesPersonnalises))}</span></td>
-        <td class="montant">${echapperHtml(formaterMontant(a.montant, devise))}</td>
+        <td class="col-date" data-label="Réglé le">${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>
+        <td data-label="Fournisseur">${echapperHtml(a.fournisseur)}</td>
+        <td data-label="Référence">${a.referenceFacture ? echapperHtml(a.referenceFacture) : '<span class="attenue">-</span>'}</td>
+        <td data-label="Paiement"><span class="badge">${echapperHtml(libelleMode(a.modeReglement, modesPersonnalises))}</span></td>
+        <td class="montant" data-label="Montant">${echapperHtml(formaterMontant(a.montant, devise))}</td>
         <td class="actions">
           <button type="button" class="btn-icone" data-action="dupliquer" data-id="${a.id}" title="Dupliquer (achat récurrent)" aria-label="Dupliquer">${icone('copier', { taille: 16 })}</button>
           <button type="button" class="btn-icone" data-action="modifier" data-id="${a.id}" title="Modifier" aria-label="Modifier">${icone('crayon', { taille: 16 })}</button>
@@ -441,9 +441,12 @@ export async function vueAchats(conteneur, params) {
 
     return `
       <header class="entete-vue">
-        <div>
-          <h1>Achats</h1>
-          <p>Le registre chronologique de vos achats, exigible si vous vendez des marchandises.</p>
+        <div class="titre-registre">
+          <span class="puce-registre registre-achats">${icone('achats', { taille: 20 })}</span>
+          <div>
+            <h1>Achats</h1>
+            <p>Le registre chronologique de vos achats, exigible si vous vendez des marchandises.</p>
+          </div>
         </div>
         <button type="button" class="btn btn-primaire" id="nouvel-achat">${icone('plus', { taille: 16 })}<span>Nouvel achat</span></button>
       </header>

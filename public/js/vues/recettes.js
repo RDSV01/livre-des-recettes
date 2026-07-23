@@ -676,15 +676,15 @@ export async function vueRecettes(conteneur, params) {
       <tr${idsNouveaux.has(r.id) ? ' class="ligne-nouvelle"' : ''}>
         <td class="col-case"><input type="checkbox" data-selection="${r.id}"
           ${selection.has(r.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
-        <td class="col-date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
-        <td>${echapperHtml(r.client)}</td>
-        <td>${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">-</span>'}</td>
-        <td>${r.numeroFacture ? echapperHtml(r.numeroFacture) : '<span class="attenue">-</span>'}</td>
-        <td><span class="badge">${echapperHtml(libelleMode(r.modeReglement, modesPersonnalises))}</span></td>
-        ${estMixte ? `<td>${r.categorie
+        <td class="col-date" data-label="Encaissé le">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
+        <td data-label="Client">${echapperHtml(r.client)}</td>
+        <td data-label="Libellé">${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">-</span>'}</td>
+        <td data-label="Facture">${r.numeroFacture ? echapperHtml(r.numeroFacture) : '<span class="attenue">-</span>'}</td>
+        <td data-label="Paiement"><span class="badge">${echapperHtml(libelleMode(r.modeReglement, modesPersonnalises))}</span></td>
+        ${estMixte ? `<td data-label="Catégorie">${r.categorie
           ? `<span class="badge categorie-${r.categorie}">${echapperHtml(libelleCategorieCourt(r.categorie))}</span>`
           : '<span class="attenue">-</span>'}</td>` : ''}
-        <td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td>
+        <td class="montant" data-label="Montant">${echapperHtml(formaterMontant(r.montant, devise))}</td>
         <td class="actions">
           <button type="button" class="btn-icone" data-action="dupliquer" data-id="${r.id}" title="Dupliquer (paiement récurrent)" aria-label="Dupliquer">${icone('copier', { taille: 16 })}</button>
           <button type="button" class="btn-icone" data-action="modifier" data-id="${r.id}" title="Modifier" aria-label="Modifier">${icone('crayon', { taille: 16 })}</button>
@@ -714,9 +714,12 @@ export async function vueRecettes(conteneur, params) {
 
     return `
       <header class="entete-vue">
-        <div>
-          <h1>Recettes</h1>
-          <p>Le registre chronologique de vos encaissements.</p>
+        <div class="titre-registre">
+          <span class="puce-registre registre-recettes">${icone('recettes', { taille: 20 })}</span>
+          <div>
+            <h1>Recettes</h1>
+            <p>Le registre chronologique de vos encaissements.</p>
+          </div>
         </div>
         <button type="button" class="btn btn-primaire" id="nouvelle-recette">${icone('plus', { taille: 16 })}<span>Nouvelle recette</span></button>
       </header>

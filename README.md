@@ -71,10 +71,10 @@ télédéclaration.
   TVA** : montant restant, pourcentage atteint, et un avertissement à l'approche du seuil.
 - **Activité mixte** : chaque recette est classée vente ou prestation, et la distinction se
   retrouve partout : colonne Catégorie dans le tableau des recettes, chiffre d'affaires du
-  mois et de l'année pour chacune des deux activités, un graphique par activité en plus du
-  graphique global, suivi de la part « prestations » (qui a ses propres plafonds), bilan
-  URSSAF ventilé comme la déclaration le demande, et exports distinguant les deux (colonne
-  Catégorie et sous-totaux « dont ventes / dont prestations »).
+  mois et de l'année pour chacune des deux activités, graphique du CA mensuel, suivi de la part « prestations »
+  (qui a ses propres plafonds), bilan URSSAF ventilé comme la déclaration le demande, et
+  exports distinguant les deux (colonne Catégorie et sous-totaux « dont ventes / dont
+  prestations »).
 - **Déclaration URSSAF** : choisissez une année puis un mois, un trimestre ou l'année entière,
   l'application calcule le chiffre d'affaires encaissé et le nombre d'encaissements de la période,
   puis estime les **cotisations sociales** qui seront prélevées. Une activité mixte voit chaque part calculée à

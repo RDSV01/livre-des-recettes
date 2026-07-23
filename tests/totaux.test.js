@@ -48,7 +48,7 @@ test('statistiquesTableauDeBord calcule le mois et l’année en cours', () => {
   const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 0, 25) });
   assert.equal(stats.caMois, 300.10);
   assert.equal(stats.caAnnee, 600.40);
-  assert.equal(stats.nombreEncaissements, 5);
+  // La moyenne porte la trace du nombre d'encaissements : 600,40 / 5.
   assert.equal(stats.moyenneEncaissement, 120.08);
   assert.equal(stats.dernieresRecettes.length, 5);
   // Triées par date décroissante.
@@ -67,14 +67,11 @@ test('statistiquesTableauDeBord additionne les achats de la période', () => {
   ];
   const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16), achats });
   assert.equal(stats.achatsAnnee, 250, 'les deux achats de 2026, pas celui de 2025');
-  assert.equal(stats.achatsMois, 200, 'seul l’achat de juillet');
-  assert.equal(stats.nombreAchatsAnnee, 2);
 });
 
 test('statistiquesTableauDeBord met les achats à zéro quand il n’y en a pas', () => {
   const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16) });
   assert.equal(stats.achatsAnnee, 0);
-  assert.equal(stats.nombreAchatsAnnee, 0);
 });
 
 test('statistiquesTableauDeBord sait revenir sur une année passée', () => {
@@ -83,7 +80,6 @@ test('statistiquesTableauDeBord sait revenir sur une année passée', () => {
   assert.equal(stats.mois, 12); // année passée : décembre mis en avant
   assert.equal(stats.caAnnee, 999);
   assert.equal(stats.caMois, 999);
-  assert.equal(stats.nombreEncaissements, 1);
   // Le graphique couvre janvier à décembre de l'année choisie.
   assert.deepEqual(stats.caParMois[0], { annee: 2025, mois: 1, total: 0 });
   assert.deepEqual(stats.caParMois.at(-1), { annee: 2025, mois: 12, total: 999 });
@@ -126,8 +122,10 @@ test('statistiquesTableauDeBord ventile aussi le mois et les graphiques', () => 
   assert.equal(stats.caAnneeVentes, 240);
   assert.equal(stats.nombreAnneePrestations, 2);
   assert.equal(stats.nombreAnneeVentes, 2);
-  // La recette sans catégorie n'entre dans aucune des deux parts.
-  assert.equal(stats.nombreEncaissements, 5);
+  // Cinq recettes pour deux ventes et deux prestations : la cinquième n'entre
+  // dans aucune des deux parts, et c'est ce compteur qui la signale.
+  assert.equal(stats.nombreNonCategorisees, 1);
+  assert.equal(stats.caAnneePrestations + stats.caAnneeVentes < stats.caAnnee, true);
 
   // Un graphique par catégorie, sur les mêmes douze mois que le graphique global.
   const juillet = (points) => points.find((p) => p.mois === 7).total;

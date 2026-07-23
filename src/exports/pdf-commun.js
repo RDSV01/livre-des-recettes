@@ -15,7 +15,12 @@ const COULEURS = {
   accent: '#2563eb',
   fondEntete: '#e9edf5',
   fondTotal: '#f3f5fa',
-  bordure: '#d7dbe4'
+  bordure: '#d7dbe4',
+  // Langage de couleur des activités, identique à l'interface : bleu pour la
+  // vente, vert pour la prestation, gris pour le non catégorisé.
+  vente: '#2563eb',
+  prestation: '#16a34a',
+  neutre: '#6b7280'
 };
 
 /**

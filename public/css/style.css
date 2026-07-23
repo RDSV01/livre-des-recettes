@@ -30,6 +30,20 @@
   --danger: #dc2626;
   --danger-doux: #fee2e2;
   --neutre-doux: #eef1f6;
+  /* Langage de couleur des activités : le bleu désigne toujours une vente, le
+     vert une prestation. Repris à l'identique par les badges, les graphiques,
+     la jauge « part prestations » et le rapport annuel, pour qu'une même
+     couleur veuille dire la même chose partout. */
+  --vente: var(--accent);
+  --vente-doux: var(--accent-doux);
+  --prestation: var(--succes);
+  --prestation-doux: var(--succes-doux);
+  /* Chaque registre a sa teinte, pour se repérer d'un coup d'œil : les recettes
+     empruntent l'accent (bleu), les achats un violet distinct. */
+  --recettes: var(--accent);
+  --recettes-doux: var(--accent-doux);
+  --achats: #7c3aed;
+  --achats-doux: #ede9fe;
   --ombre: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.06);
   --rayon: 12px;
   --rayon-petit: 8px;
@@ -57,6 +71,14 @@
   --danger: #ef4444;
   --danger-doux: rgba(239, 68, 68, 0.16);
   --neutre-doux: rgba(148, 163, 184, 0.16);
+  --vente: var(--accent);
+  --vente-doux: var(--accent-doux);
+  --prestation: var(--succes);
+  --prestation-doux: var(--succes-doux);
+  --recettes: var(--accent);
+  --recettes-doux: var(--accent-doux);
+  --achats: #a78bfa;
+  --achats-doux: rgba(167, 139, 250, 0.16);
   --ombre: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
@@ -219,6 +241,30 @@ a {
   margin: 0;
   font-size: 24px;
 }
+
+/* Titre de registre précédé d'une puce colorée : le repère immédiat qui dit
+   d'un coup d'œil si l'on est sur les recettes (bleu) ou les achats (violet). */
+.titre-registre {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.puce-registre {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--rayon-petit);
+  flex-shrink: 0;
+}
+.puce-registre.registre-recettes {
+  background: var(--recettes-doux);
+  color: var(--recettes);
+}
+.puce-registre.registre-achats {
+  background: var(--achats-doux);
+  color: var(--achats);
+}
 .entete-vue p {
   margin: 4px 0 0;
   color: var(--texte-secondaire);
@@ -349,6 +395,12 @@ h2 {
 .carte-stat.principale .pastille {
   background: var(--accent-doux);
   color: var(--accent);
+}
+
+/* Tuile secondaire à zéro : présente mais en retrait, pour ne pas peser autant
+   qu'un chiffre significatif. */
+.carte-stat.vide {
+  opacity: 0.55;
 }
 
 .carte-stat .etiquette {
@@ -615,6 +667,14 @@ th.montant {
   white-space: nowrap;
   font-weight: 600;
 }
+/* Le montant est la colonne la plus regardée : un cran plus fort et plus sombre
+   que le reste de la ligne, pour l'accrocher du regard. L'en-tête, lui, ne
+   change pas. */
+td.montant {
+  font-weight: 700;
+  color: var(--texte);
+  font-size: 14.5px;
+}
 
 /* Une date coupée en deux lignes (« 18/07/202 » puis « 6 ») se lit mal. */
 td.col-date {
@@ -625,13 +685,11 @@ td.actions {
   text-align: right;
   white-space: nowrap;
   /*
-   * La colonne doit contenir ses boutons. Trop étroite, elle les laissait
-   * déborder : invisible au repos, où leur fond est transparent, mais net au
-   * survol, où il se peint hors de la cellule. La marge intérieure gauche est
-   * réduite d'autant, l'alignement à droite suffisant à séparer de la colonne
-   * précédente.
+   * La largeur de la colonne est fixée en pixels dans le `colgroup` des deux
+   * registres : trop étroite, elle laissait le fond des boutons déborder au
+   * survol. Ici, la marge intérieure gauche est réduite pour lui laisser la
+   * place, l'alignement à droite suffisant à séparer de la colonne précédente.
    */
-  min-width: 104px;
   padding-left: 4px;
 }
 td.actions .btn-icone {
@@ -703,14 +761,14 @@ th.triable .icone {
   white-space: nowrap;
 }
 
-/* Vente ou prestation : deux teintes pour distinguer d'un coup d'œil. */
+/* Vente ou prestation : les deux couleurs du langage d'activité. */
 .badge.categorie-ventes {
-  background: var(--accent-doux);
-  color: var(--accent);
+  background: var(--vente-doux);
+  color: var(--vente);
 }
 .badge.categorie-prestations {
-  background: var(--succes-doux);
-  color: var(--succes);
+  background: var(--prestation-doux);
+  color: var(--prestation);
 }
 
 /* ---- État vide ----------------------------------------------------------- */
@@ -1254,12 +1312,15 @@ dialog::backdrop {
 .entete-jauge .valeur-jauge strong {
   color: var(--texte);
 }
+.entete-jauge .seuil-majore {
+  font-size: 11.5px;
+}
 
 .jauge {
-  height: 8px;
+  position: relative;
+  height: 9px;
   border-radius: 999px;
   background: var(--neutre-doux);
-  overflow: hidden;
 }
 
 .jauge > span {
@@ -1270,6 +1331,21 @@ dialog::backdrop {
   transition: width 0.2s ease;
 }
 
+/* Repère du seuil de base sur une jauge graduée jusqu'au seuil majoré. */
+.repere-seuil {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--texte);
+  transform: translateX(-50%);
+}
+
+/* Teinte d'activité à l'état normal : une part prestations reste verte. */
+.jauge.prestation > span {
+  background: var(--prestation);
+}
 .jauge.attention > span {
   background: var(--alerte);
 }
@@ -1313,6 +1389,51 @@ dialog::backdrop {
   font-size: 11px;
 }
 
+/* Segments empilés : chaque activité garde sa couleur du langage commun. */
+.graphique-ca .seg-vente {
+  fill: var(--vente);
+}
+.graphique-ca .seg-prestation {
+  fill: var(--prestation);
+}
+.graphique-ca .seg-neutre {
+  fill: var(--texte-secondaire);
+}
+/* Le survol éclaire toute la pile du mois, sans changer les couleurs. */
+.graphique-ca .colonne:hover .segment {
+  filter: brightness(1.12);
+}
+
+/* Légende du graphique empilé. */
+.legende-graphique {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
+}
+.entree-legende {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pastille-legende {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.pastille-legende.seg-vente {
+  background: var(--vente);
+}
+.pastille-legende.seg-prestation {
+  background: var(--prestation);
+}
+.pastille-legende.seg-neutre {
+  background: var(--texte-secondaire);
+}
+
 .grille-deux {
   display: grid;
   grid-template-columns: 3fr 2fr;
@@ -1321,15 +1442,34 @@ dialog::backdrop {
      un grand vide sous les barres pour s'aligner sur les jauges. */
   align-items: start;
 }
-.grille-deux > .carte {
+.grille-deux > .carte,
+.grille-deux > .pile-gauche {
   margin-bottom: 20px;
+}
+
+/* Le graphique et les dernières recettes se regroupent dans la colonne de
+   gauche pour remplir la hauteur de la carte des seuils, plus haute, au lieu de
+   laisser un vide sous le graphique. `min-width: 0` laisse le tableau des
+   dernières recettes se rétrécir dans la colonne sans déborder. */
+.pile-gauche {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+/* Seul le `gap` de la pile espace ces cartes : sans cela, la marge basse propre
+   à `.carte` s'y ajouterait et l'écart au-dessus des dernières recettes serait
+   deux fois plus grand que les autres. */
+.pile-gauche > .carte {
+  margin-bottom: 0;
 }
 
 @media (max-width: 1080px) {
   .grille-deux {
     grid-template-columns: 1fr;
   }
-  .grille-deux > .carte {
+  .grille-deux > .carte,
+  .grille-deux > .pile-gauche {
     margin-bottom: 0;
   }
 }
@@ -1501,9 +1641,12 @@ code.chemin {
   border: 1px solid var(--bordure);
   border-radius: var(--rayon-petit);
   box-shadow: var(--ombre);
-  padding: 6px 10px;
-  font-size: 13px;
-  white-space: nowrap;
+  padding: 7px 11px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  /* Le détail par activité est multiligne : les retours à la ligne portés par
+     `data-info` doivent être respectés. */
+  white-space: pre-line;
   pointer-events: none;
 }
 
@@ -1582,6 +1725,110 @@ code.chemin {
   }
   .grille-formulaire {
     grid-template-columns: 1fr;
+  }
+}
+
+/*
+ * Sous 700 px, les registres (recettes, achats) ne tiennent plus en colonnes :
+ * chaque ligne devient une carte où le libellé de colonne, porté par
+ * `data-label`, précède sa valeur. Ciblé sur ces deux tableaux seulement ;
+ * ceux qui ont peu de colonnes gardent leur défilement horizontal.
+ */
+@media (max-width: 700px) {
+  #table-recettes,
+  #table-recettes tbody,
+  #table-achats,
+  #table-achats tbody {
+    display: block;
+  }
+  #table-recettes thead,
+  #table-achats thead {
+    display: none;
+  }
+  #table-recettes colgroup,
+  #table-achats colgroup {
+    display: none;
+  }
+
+  #table-recettes tbody tr,
+  #table-achats tbody tr {
+    display: block;
+    border: 1px solid var(--bordure);
+    border-radius: var(--rayon-petit);
+    padding: 6px 14px;
+    margin-bottom: 10px;
+  }
+  /* En carte, le survol de ligne entière n'a plus de sens. */
+  #table-recettes tbody tr:hover,
+  #table-achats tbody tr:hover {
+    background: transparent;
+  }
+
+  #table-recettes td,
+  #table-achats td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 7px 0;
+    border: none;
+    border-bottom: 1px solid var(--bordure-douce);
+    text-align: right;
+    white-space: normal;
+  }
+  #table-recettes tr td:last-child,
+  #table-achats tr td:last-child {
+    border-bottom: none;
+  }
+  #table-recettes td::before,
+  #table-achats td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--texte-secondaire);
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* Case de sélection en tête de carte, actions en pied : ni l'une ni les
+     autres n'ont de libellé à afficher. */
+  #table-recettes td.col-case,
+  #table-achats td.col-case {
+    justify-content: flex-start;
+  }
+  #table-recettes td.actions,
+  #table-achats td.actions {
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  #table-recettes td.col-case::before,
+  #table-recettes td.actions::before,
+  #table-achats td.col-case::before,
+  #table-achats td.actions::before {
+    content: none;
+  }
+  /* Le montant, mis en avant, occupe seul sa ligne dans la carte. */
+  #table-recettes td.montant,
+  #table-achats td.montant {
+    font-size: 16px;
+  }
+
+  /* Ligne « Afficher plus » / « aucun résultat » : un bloc centré, sans carte. */
+  #table-recettes .ligne-vide,
+  #table-achats .ligne-vide {
+    border: none;
+    padding: 0;
+  }
+  #table-recettes .ligne-vide td,
+  #table-achats .ligne-vide td {
+    justify-content: center;
+    border: none;
+    text-align: center;
+  }
+  #table-recettes .ligne-vide td::before,
+  #table-achats .ligne-vide td::before {
+    content: none;
   }
 }
 
