@@ -1,0 +1,2920 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>
+      Livre des recettes micro-entrepreneur : logiciel gratuit et local
+    </title>
+    <meta
+      name="description"
+      content="Le livre des recettes des micro-entrepreneurs, sans tableur. Application gratuite : exports PDF, Excel, CSV et suivi des seuils. Vos données restent chez vous."
+    />
+    <link rel="canonical" href="https://rdsv01.github.io/livre-des-recettes/" />
+    <meta name="author" content="RDSV01" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#1e3a8a" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:site_name" content="Livre des recettes" />
+    <meta
+      property="og:title"
+      content="Livre des recettes micro-entrepreneur : logiciel gratuit et local"
+    />
+    <meta
+      property="og:description"
+      content="Tenez vos registres légaux sans tableur. Gratuit, open source, et vos données ne quittent jamais votre ordinateur."
+    />
+    <meta
+      property="og:url"
+      content="https://rdsv01.github.io/livre-des-recettes/"
+    />
+    <meta
+      property="og:image"
+      content="https://rdsv01.github.io/livre-des-recettes/img/partage.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Tableau de bord de l’application Livre des recettes"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Livre des recettes micro-entrepreneur : logiciel gratuit et local"
+    />
+    <meta
+      name="twitter:description"
+      content="Tenez vos registres légaux sans tableur. Gratuit, open source, et vos données ne quittent jamais votre ordinateur."
+    />
+    <meta
+      name="twitter:image"
+      content="https://rdsv01.github.io/livre-des-recettes/img/partage.png"
+    />
+
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z'/%3E%3Cpath d='M14 8H8'/%3E%3Cpath d='M16 12H8'/%3E%3Cpath d='M13 16H8'/%3E%3C/svg%3E"
+    />
+
+    <!-- Police servie depuis le site, jamais depuis un serveur tiers : une page qui
+     promet que rien ne sort de votre machine ne peut pas appeler Google Fonts. -->
+    <link
+      rel="preload"
+      href="polices/plus-jakarta-sans-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "name": "Livre des recettes",
+            "applicationCategory": "FinanceApplication",
+            "applicationSubCategory": "Comptabilité micro-entrepreneur",
+            "operatingSystem": "Windows, macOS, Linux",
+            "url": "https://rdsv01.github.io/livre-des-recettes/",
+            "downloadUrl": "https://github.com/RDSV01/livre-des-recettes/releases",
+            "softwareVersion": "1.6.0",
+            "inLanguage": "fr",
+            "license": "https://opensource.org/licenses/MIT",
+            "isAccessibleForFree": true,
+            "description": "Application locale et gratuite pour tenir le livre des recettes et le registre des achats des micro-entrepreneurs français : saisie guidée, exports PDF, Excel et CSV, suivi des seuils de TVA et du plafond micro, estimation des cotisations URSSAF.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR"
+            },
+            "author": {
+              "@type": "Person",
+              "name": "RDSV01",
+              "url": "https://github.com/RDSV01"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Le livre des recettes est-il obligatoire pour un micro-entrepreneur ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. Tout micro-entrepreneur doit tenir un livre des recettes présentant, dans l’ordre chronologique des encaissements, le montant et l’origine des recettes, le mode de règlement et les références des pièces justificatives. Les activités d’achat et de revente de marchandises doivent en plus tenir un registre des achats. Ces documents doivent pouvoir être présentés en cas de contrôle et conservés pendant dix ans."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "L’application est-elle vraiment gratuite ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui, entièrement et sans contrepartie : aucun compte à créer, aucune version payante, aucune fonctionnalité réservée, aucune publicité. Le code source est publié sous licence MIT et peut être consulté, copié et modifié librement."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Mes données comptables sont-elles envoyées sur Internet ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Non. L’application s’exécute sur votre ordinateur et enregistre tout dans un fichier local, dans votre dossier Documents. Aucune donnée comptable n’est transmise. Deux fonctions seulement contactent l’extérieur, sans rien envoyer de vos écritures : la recherche d’un client par SIRET dans l’annuaire public des entreprises, que vous déclenchez vous-même, et la vérification d’une nouvelle version, désactivable dans les paramètres."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Faut-il installer un logiciel ou créer un compte ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Non. Vous téléchargez un fichier unique et vous le lancez : l’application s’ouvre dans votre navigateur. Il n’y a ni installation, ni compte, ni abonnement, ni base de données à configurer."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Puis-je reprendre mon historique tenu sous Excel ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. Exportez votre tableur en CSV puis importez-le : l’application vous fait associer vos colonnes aux champs du registre, détecte les doublons, affiche un rapport avant de valider, et crée une sauvegarde juste avant l’import."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Que deviennent mes données si je change d’ordinateur ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Tout tient dans un seul fichier : il suffit de copier le dossier « Livre des recettes » sur le nouveau poste. L’application tient aussi des sauvegardes automatiques rangées hors du dossier de données, avec une copie de secours mise à jour à chaque saisie."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Cette application remplace-t-elle un expert-comptable ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Non. Elle vous aide à tenir vos registres et à suivre vos seuils, mais elle ne constitue ni un conseil comptable ou juridique, ni un logiciel de caisse certifié, ni un outil de télédéclaration. En cas de doute sur vos obligations, rapprochez-vous de l’URSSAF ou d’un professionnel."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+
+    <style>
+      /*
+ * Page de présentation du projet.
+ * Thème clair unique, assumé. La page reprend les couleurs, la police et le
+ * langage de couleur de l'application (voir public/css/style.css), dont elle
+ * est le prolongement direct. Aucune ressource chargée depuis l'extérieur :
+ * cohérence oblige avec la promesse « rien ne sort de votre machine ».
+ */
+
+      /* Plus Jakarta Sans, variable, sous licence SIL Open Font License 1.1.
+   Hébergée avec le site : aucune requête vers un service tiers. */
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("polices/plus-jakarta-sans-latin.woff2") format("woff2");
+        font-weight: 200 800;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: light;
+
+        --titre:
+          "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+          sans-serif;
+        --fond: #ffffff;
+        --fond-doux: #f6f8fc;
+        --surface: #ffffff;
+        --encre: #0b1424;
+        --encre-douce: #47536b;
+        --encre-tenue: #67748d;
+        --trait: #e4e9f2;
+        --trait-fin: #edf1f8;
+
+        --accent: #2563eb;
+        --accent-fort: #1d4ed8;
+        --accent-clair: #60a5fa;
+        --accent-doux: #eff5ff;
+        --marine: #16255c;
+        --marine-clair: #223a86;
+        --marine-profond: #0d1836;
+
+        --prestation: #16a34a;
+        --prestation-doux: #dcfce7;
+        --achats: #7c3aed;
+        --achats-doux: #f0e9ff;
+
+        --rayon: 16px;
+        --rayon-petit: 10px;
+        --page: 1140px;
+
+        /* Ombres en couches : une ligne de contact nette, puis une diffusion large.
+     C'est ce qui distingue une carte posée d'une carte simplement encadrée. */
+        --ombre-fine:
+          0 1px 2px rgba(11, 20, 36, 0.05), 0 1px 1px rgba(11, 20, 36, 0.04);
+        --ombre:
+          0 1px 2px rgba(11, 20, 36, 0.05),
+          0 6px 16px -4px rgba(11, 20, 36, 0.07),
+          0 16px 32px -12px rgba(11, 20, 36, 0.08);
+        --ombre-haute:
+          0 2px 4px rgba(11, 20, 36, 0.05),
+          0 12px 28px -8px rgba(11, 20, 36, 0.1),
+          0 40px 72px -24px rgba(16, 37, 92, 0.22);
+        --mono:
+          ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--fond);
+        color: var(--encre);
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          "Helvetica Neue",
+          Arial,
+          sans-serif;
+        font-size: 17px;
+        line-height: 1.62;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: var(--titre);
+        text-wrap: balance;
+        letter-spacing: -0.028em;
+        line-height: 1.14;
+        font-weight: 700;
+      }
+      h1 {
+        font-size: clamp(2.25rem, 1.5rem + 3vw, 3.75rem);
+        letter-spacing: -0.034em;
+        line-height: 1.08;
+      }
+      h2 {
+        font-size: clamp(1.7rem, 1.25rem + 1.9vw, 2.5rem);
+      }
+      h3 {
+        font-size: 1.14rem;
+        letter-spacing: -0.014em;
+        line-height: 1.36;
+        font-weight: 600;
+      }
+      p {
+        margin: 0;
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+      a {
+        color: var(--accent);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 5px;
+      }
+
+      .page {
+        width: 100%;
+        max-width: var(--page);
+        margin-inline: auto;
+        padding-inline: 24px;
+      }
+
+      .bande {
+        padding-block: clamp(64px, 8.5vw, 118px);
+        position: relative;
+      }
+      .bande--doux {
+        background: var(--fond-doux);
+        border-block: 1px solid var(--trait-fin);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--titre);
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 18px;
+      }
+      .eyebrow::before {
+        content: "";
+        width: 22px;
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(
+          90deg,
+          var(--accent),
+          color-mix(in srgb, var(--accent) 15%, transparent)
+        );
+      }
+
+      .intro {
+        color: var(--encre-douce);
+        font-size: 1.1rem;
+        max-width: 62ch;
+        margin-top: 18px;
+      }
+
+      /* ---- Révélation au défilement (sans JS, tout reste visible) --------------- */
+
+      .js .revele {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      .js .revele.vu {
+        opacity: 1;
+        transform: none;
+        transition:
+          opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .js .revele.d1.vu {
+        transition-delay: 0.07s;
+      }
+      .js .revele.d2.vu {
+        transition-delay: 0.14s;
+      }
+      .js .revele.d3.vu {
+        transition-delay: 0.21s;
+      }
+
+      /* ---- En-tête -------------------------------------------------------------- */
+
+      .entete {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: saturate(1.8) blur(14px);
+        -webkit-backdrop-filter: saturate(1.8) blur(14px);
+        border-bottom: 1px solid transparent;
+        transition:
+          border-color 0.25s ease,
+          background-color 0.25s ease;
+      }
+      .entete.colle {
+        border-bottom-color: var(--trait);
+        background: rgba(255, 255, 255, 0.88);
+      }
+      .entete .page {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        min-height: 68px;
+      }
+
+      .marque {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--titre);
+        font-weight: 700;
+        letter-spacing: -0.022em;
+        color: var(--encre);
+        text-decoration: none;
+        font-size: 1.04rem;
+        white-space: nowrap;
+      }
+      .marque-jeton {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        /* Le degrade demarre au bleu plein, et non au bleu clair : l'icone blanche
+     garderait sinon un contraste insuffisant sur sa partie la plus claire. */
+        background: linear-gradient(
+          145deg,
+          #3b82f6,
+          var(--accent) 55%,
+          var(--marine-clair)
+        );
+        box-shadow:
+          0 2px 6px rgba(37, 99, 235, 0.32),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+
+      .nav {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .nav a {
+        color: var(--encre-douce);
+        text-decoration: none;
+        font-family: var(--titre);
+        font-size: 0.93rem;
+        font-weight: 500;
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition:
+          color 0.16s ease,
+          background-color 0.16s ease;
+      }
+      .nav a:hover {
+        color: var(--encre);
+        background: var(--trait-fin);
+      }
+      /* Le bouton de la barre reste un bouton : sans cette reprise, la couleur des
+   liens de navigation l'emporterait sur la sienne (spécificité plus forte)
+   et son libellé s'afficherait en gris sur le fond bleu. */
+      .nav a.btn--primaire,
+      .nav a.btn--primaire:hover {
+        color: #fff;
+      }
+      .nav a.btn--primaire:hover {
+        background: linear-gradient(
+          180deg,
+          var(--accent-fort) 0%,
+          #1a45c0 100%
+        );
+      }
+      @media (max-width: 780px) {
+        .nav a.masquable {
+          display: none;
+        }
+      }
+
+      /* ---- Boutons -------------------------------------------------------------- */
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        padding: 13px 22px;
+        border-radius: var(--rayon-petit);
+        font-family: var(--titre);
+        font-size: 0.97rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.18s ease,
+          background-color 0.18s ease,
+          border-color 0.18s ease;
+      }
+      .btn svg {
+        flex-shrink: 0;
+      }
+
+      .btn--primaire {
+        color: #fff;
+        background: linear-gradient(
+          180deg,
+          var(--accent) 0%,
+          var(--accent-fort) 100%
+        );
+        box-shadow:
+          0 1px 2px rgba(11, 20, 36, 0.08),
+          0 6px 16px -4px rgba(37, 99, 235, 0.42),
+          inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      }
+      .btn--primaire:hover {
+        transform: translateY(-1px);
+        box-shadow:
+          0 2px 4px rgba(11, 20, 36, 0.1),
+          0 12px 24px -6px rgba(37, 99, 235, 0.5),
+          inset 0 1px 0 rgba(255, 255, 255, 0.28);
+      }
+      .btn--second {
+        background: var(--surface);
+        color: var(--encre);
+        border-color: var(--trait);
+        box-shadow: var(--ombre-fine);
+      }
+      .btn--second:hover {
+        transform: translateY(-1px);
+        border-color: #cdd7e8;
+        box-shadow: var(--ombre);
+      }
+      .btn--compact {
+        padding: 9px 16px;
+        font-size: 0.92rem;
+      }
+
+      /* ---- Ouverture ------------------------------------------------------------ */
+
+      .hero {
+        padding-top: clamp(44px, 5.5vw, 78px);
+        padding-bottom: 0;
+        overflow: hidden;
+      }
+
+      /* Halo diffus et trame fine : de la matière derrière le titre, sans motif qui
+   attire l'œil. La trame s'efface avant d'atteindre le texte. */
+      .hero::before,
+      .hero::after {
+        content: "";
+        position: absolute;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .hero::before {
+        inset: -180px 0 auto 0;
+        height: 780px;
+        background:
+          radial-gradient(
+            58% 52% at 22% 8%,
+            rgba(37, 99, 235, 0.13),
+            transparent 68%
+          ),
+          radial-gradient(
+            46% 46% at 88% 0%,
+            rgba(124, 58, 237, 0.09),
+            transparent 70%
+          );
+      }
+      .hero::after {
+        inset: 0 0 auto 0;
+        height: 640px;
+        background-image:
+          linear-gradient(
+            to right,
+            rgba(11, 20, 36, 0.045) 1px,
+            transparent 1px
+          ),
+          linear-gradient(
+            to bottom,
+            rgba(11, 20, 36, 0.045) 1px,
+            transparent 1px
+          );
+        background-size: 62px 62px;
+        mask-image: radial-gradient(
+          72% 62% at 50% 12%,
+          #000 8%,
+          transparent 76%
+        );
+        -webkit-mask-image: radial-gradient(
+          72% 62% at 50% 12%,
+          #000 8%,
+          transparent 76%
+        );
+      }
+      .hero .page {
+        position: relative;
+        z-index: 1;
+      }
+
+      .pilule {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 15px 6px 7px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid var(--trait);
+        box-shadow: var(--ombre-fine);
+        font-size: 0.86rem;
+        font-weight: 550;
+        color: var(--encre-douce);
+        margin-bottom: 26px;
+      }
+      .pilule b {
+        font-family: var(--titre);
+        font-weight: 700;
+        font-size: 0.78rem;
+        letter-spacing: 0.02em;
+        color: var(--accent-fort);
+        background: var(--accent-doux);
+        border-radius: 999px;
+        padding: 3px 10px;
+      }
+      .pilule span {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .pilule i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--prestation);
+        box-shadow: 0 0 0 3px
+          color-mix(in srgb, var(--prestation) 18%, transparent);
+      }
+
+      /* Ouverture centrée, la capture juste en dessous : le titre ne laisse plus
+   une moitié de page vide à sa droite. */
+      .hero .page {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .hero h1 {
+        max-width: 19ch;
+      }
+      .hero h1 em {
+        font-style: normal;
+        color: var(--accent);
+      }
+      .hero .intro {
+        font-size: 1.15rem;
+        max-width: 58ch;
+      }
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 34px;
+        justify-content: center;
+      }
+      .hero-note {
+        margin-top: 18px;
+        font-size: 0.89rem;
+        color: var(--encre-tenue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-align: left;
+      }
+      .hero-note svg {
+        color: var(--prestation);
+        flex-shrink: 0;
+      }
+
+      /* ---- Fenêtre applicative et extraits détachés ----------------------------- */
+
+      .scene {
+        position: relative;
+        margin: clamp(48px, 6vw, 76px) 0 0;
+      }
+      .scene::before {
+        content: "";
+        position: absolute;
+        inset: 18% 8% -4% 8%;
+        background: radial-gradient(
+          50% 50% at 50% 50%,
+          rgba(30, 58, 138, 0.28),
+          transparent 72%
+        );
+        filter: blur(46px);
+        z-index: 0;
+      }
+
+      .fenetre {
+        position: relative;
+        z-index: 1;
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon);
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: var(--ombre-haute);
+      }
+      .fenetre-barre {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--trait-fin);
+        background: linear-gradient(180deg, #fbfcfe, #f5f7fb);
+      }
+      .feux {
+        display: flex;
+        gap: 7px;
+      }
+      .feux i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        display: block;
+      }
+      .feux i:nth-child(1) {
+        background: #f0655c;
+      }
+      .feux i:nth-child(2) {
+        background: #f4be4f;
+      }
+      .feux i:nth-child(3) {
+        background: #61c454;
+      }
+      .barre-url {
+        flex: 1;
+        max-width: 320px;
+        margin-inline: auto;
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        color: var(--encre-tenue);
+        background: #fff;
+        border: 1px solid var(--trait-fin);
+        border-radius: 7px;
+        padding: 4px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+      }
+      .barre-url svg {
+        color: var(--prestation);
+        flex-shrink: 0;
+      }
+      .fenetre img {
+        width: 100%;
+      }
+
+      .legende {
+        margin-top: 20px;
+        font-size: 0.85rem;
+        color: var(--encre-tenue);
+        text-align: center;
+      }
+
+      /* ---- Chiffres ------------------------------------------------------------- */
+
+      .faits {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        margin: clamp(58px, 7vw, 92px) 0 0;
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon);
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: var(--ombre-fine);
+      }
+      .fait {
+        padding: 26px 24px;
+        border-right: 1px solid var(--trait-fin);
+      }
+      .fait:last-child {
+        border-right: 0;
+      }
+      .fait dt {
+        font-size: 0.81rem;
+        color: var(--encre-tenue);
+        font-weight: 550;
+      }
+      .fait dd {
+        margin: 7px 0 0;
+        font-size: 1.62rem;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        font-variant-numeric: tabular-nums;
+        color: var(--encre);
+        font-family: var(--titre);
+      }
+      @media (max-width: 820px) {
+        .faits {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .fait:nth-child(2) {
+          border-right: 0;
+        }
+        .fait:nth-child(1),
+        .fait:nth-child(2) {
+          border-bottom: 1px solid var(--trait-fin);
+        }
+      }
+
+      /* ---- Tableur : avant, après ----------------------------------------------- */
+
+      .duo {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+        margin-top: 46px;
+      }
+      @media (max-width: 840px) {
+        .duo {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .panneau {
+        border-radius: var(--rayon);
+        padding: 28px 26px;
+        border: 1px solid var(--trait);
+      }
+      .panneau--avant {
+        background: var(--fond-doux);
+        border-style: dashed;
+      }
+      .panneau--apres {
+        background: var(--surface);
+        box-shadow: var(--ombre);
+      }
+      .panneau h3 {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+      .panneau h3 .rond {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+      }
+      .panneau--avant .rond {
+        background: #e8ecf4;
+        color: var(--encre-tenue);
+      }
+      .panneau--apres .rond {
+        background: linear-gradient(145deg, var(--accent-clair), var(--accent));
+        color: #fff;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+      }
+      .panneau ul {
+        margin: 20px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 13px;
+      }
+      .panneau li {
+        display: grid;
+        grid-template-columns: 19px 1fr;
+        gap: 12px;
+        align-items: start;
+        font-size: 0.97rem;
+        color: var(--encre-douce);
+        line-height: 1.5;
+      }
+      .panneau li svg {
+        margin-top: 3px;
+      }
+      .panneau--avant li svg {
+        color: #93a0b8;
+      }
+      .panneau--apres li svg {
+        color: var(--prestation);
+      }
+
+      /* ---- Fonctionnalités ------------------------------------------------------ */
+
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 48px;
+      }
+      @media (max-width: 940px) {
+        .bento {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 620px) {
+        .bento {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .tuile {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon);
+        padding: 26px 24px;
+        box-shadow: var(--ombre-fine);
+        transition:
+          transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.22s ease,
+          border-color 0.22s ease;
+      }
+      .tuile:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--ombre);
+        border-color: #d6dfee;
+      }
+      .tuile .pastille {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        background: var(--accent-doux);
+        color: var(--accent);
+        margin-bottom: 17px;
+        border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .tuile.verte .pastille {
+        background: var(--prestation-doux);
+        color: #15803d;
+        border-color: color-mix(in srgb, var(--prestation) 18%, transparent);
+      }
+      .tuile.violette .pastille {
+        background: var(--achats-doux);
+        color: var(--achats);
+        border-color: color-mix(in srgb, var(--achats) 16%, transparent);
+      }
+      .tuile p {
+        margin-top: 10px;
+        color: var(--encre-douce);
+        font-size: 0.955rem;
+        line-height: 1.56;
+      }
+
+      /* La tuile maîtresse occupe deux colonnes et porte un extrait de registre. */
+      .tuile--large {
+        grid-column: span 2;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 26px;
+        align-items: center;
+      }
+      @media (max-width: 620px) {
+        .tuile--large {
+          grid-column: span 1;
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .mini-registre {
+        border: 1px solid var(--trait-fin);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--fond-doux);
+      }
+      .mini-registre .entete-mini,
+      .mini-registre .ligne-mini {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        align-items: center;
+      }
+      .mini-registre .entete-mini {
+        padding: 9px 14px;
+        background: #fff;
+        border-bottom: 1px solid var(--trait-fin);
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--encre-tenue);
+      }
+      .mini-registre .ligne-mini {
+        padding: 10px 14px;
+        font-size: 0.79rem;
+        border-bottom: 1px solid var(--trait-fin);
+      }
+      .mini-registre .ligne-mini:last-child {
+        border-bottom: 0;
+      }
+      .mini-registre .date {
+        font-variant-numeric: tabular-nums;
+        color: var(--encre-tenue);
+      }
+      .mini-registre .mt {
+        font-weight: 700;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---- Vie privée (le moment fort de la page) ------------------------------- */
+
+      .confiance {
+        position: relative;
+        overflow: hidden;
+        border: 0;
+        color: #eaf0fb;
+        background:
+          radial-gradient(64% 88% at 8% 0%, #26418f 0%, transparent 58%),
+          radial-gradient(58% 82% at 96% 100%, #2c1e6b 0%, transparent 60%),
+          linear-gradient(158deg, var(--marine) 0%, var(--marine-profond) 100%);
+      }
+      .confiance::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0.05) 1px,
+            transparent 1px
+          ),
+          linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.05) 1px,
+            transparent 1px
+          );
+        background-size: 58px 58px;
+        mask-image: radial-gradient(78% 68% at 50% 42%, #000, transparent 78%);
+        -webkit-mask-image: radial-gradient(
+          78% 68% at 50% 42%,
+          #000,
+          transparent 78%
+        );
+        pointer-events: none;
+      }
+      .confiance .page {
+        position: relative;
+        z-index: 1;
+      }
+      .confiance .eyebrow {
+        color: #9dbcfa;
+      }
+      .confiance .eyebrow::before {
+        background: linear-gradient(90deg, #9dbcfa, transparent);
+      }
+      .confiance h2 {
+        color: #fff;
+      }
+      .confiance .intro {
+        color: #c2d1ef;
+      }
+
+      .confiance-grille {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin-top: 48px;
+      }
+      @media (max-width: 860px) {
+        .confiance-grille {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .garantie {
+        background: rgba(255, 255, 255, 0.055);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: var(--rayon);
+        padding: 24px 22px;
+      }
+      .garantie .rond {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        background: rgba(147, 180, 245, 0.16);
+        border: 1px solid rgba(147, 180, 245, 0.26);
+        color: #c3d6fc;
+        margin-bottom: 15px;
+      }
+      .garantie h3 {
+        color: #fff;
+      }
+      .garantie p {
+        margin-top: 9px;
+        color: #c2d1ef;
+        font-size: 0.95rem;
+      }
+      .confiance code {
+        font-family: var(--mono);
+        font-size: 0.85em;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2px 7px;
+        border-radius: 6px;
+        color: #dce7fb;
+      }
+
+      /* ---- Aperçus -------------------------------------------------------------- */
+
+      .apercus {
+        display: grid;
+        gap: clamp(44px, 5vw, 68px);
+        margin-top: 50px;
+      }
+      .apercu {
+        display: grid;
+        grid-template-columns: 5fr 7fr;
+        gap: 40px;
+        align-items: center;
+      }
+      .apercu:nth-child(even) .apercu-texte {
+        order: 2;
+      }
+      @media (max-width: 880px) {
+        .apercu {
+          grid-template-columns: 1fr;
+          gap: 26px;
+        }
+        .apercu:nth-child(even) .apercu-texte {
+          order: 0;
+        }
+      }
+      .apercu h3 {
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .apercu h3 .puce {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .puce--recettes {
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-doux);
+      }
+      .puce--achats {
+        background: var(--achats);
+        box-shadow: 0 0 0 4px var(--achats-doux);
+      }
+      .apercu p {
+        margin-top: 13px;
+        color: var(--encre-douce);
+        font-size: 0.99rem;
+      }
+      .apercu .cadre-image {
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon);
+        overflow: hidden;
+        box-shadow: var(--ombre-haute);
+        background: var(--surface);
+      }
+
+      /* ---- Téléchargement ------------------------------------------------------- */
+
+      .telechargements {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 44px;
+      }
+      @media (max-width: 820px) {
+        .telechargements {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .systeme {
+        position: relative;
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon);
+        padding: 26px 24px;
+        background: var(--surface);
+        box-shadow: var(--ombre-fine);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        text-decoration: none;
+        color: inherit;
+        overflow: hidden;
+        transition:
+          transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.22s ease,
+          border-color 0.22s ease;
+      }
+      .systeme::before {
+        content: "";
+        position: absolute;
+        inset: -1px -1px auto -1px;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          var(--accent-clair),
+          var(--accent),
+          var(--achats)
+        );
+        opacity: 0;
+        transition: opacity 0.22s ease;
+      }
+      .systeme:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--ombre);
+        border-color: #d6dfee;
+      }
+      .systeme:hover::before {
+        opacity: 1;
+      }
+      .systeme .nom {
+        font-family: var(--titre);
+        font-weight: 600;
+        font-size: 1.06rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .systeme .nom svg {
+        color: var(--encre-douce);
+      }
+      .systeme .fichier {
+        font-family: var(--mono);
+        font-size: 0.79rem;
+        color: var(--encre-tenue);
+        word-break: break-all;
+      }
+      .systeme .action {
+        margin-top: 12px;
+        font-size: 0.93rem;
+        font-weight: 600;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .systeme .action svg {
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .systeme:hover .action svg {
+        transform: translateX(3px);
+      }
+
+      .avis {
+        margin-top: 32px;
+        border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--trait));
+        border-radius: var(--rayon);
+        padding: 20px 22px;
+        background: linear-gradient(180deg, var(--accent-doux), #f9fbff);
+        display: grid;
+        grid-template-columns: 20px 1fr;
+        gap: 14px;
+        font-size: 0.94rem;
+        color: var(--encre-douce);
+      }
+      .avis svg {
+        margin-top: 3px;
+        color: var(--accent);
+      }
+      .avis strong {
+        color: var(--encre);
+      }
+
+      .bloc-code {
+        margin-top: 26px;
+        background: linear-gradient(
+          158deg,
+          var(--marine) 0%,
+          var(--marine-profond) 100%
+        );
+        border-radius: var(--rayon);
+        padding: 22px 24px;
+        overflow-x: auto;
+        box-shadow: var(--ombre);
+      }
+      .bloc-code pre {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 0.86rem;
+        line-height: 1.8;
+        color: #dae5fb;
+      }
+      .bloc-code .invite,
+      .bloc-code .comm {
+        color: #8ba5e0;
+      }
+      .bloc-code .invite {
+        user-select: none;
+      }
+
+      /* ---- Cadre légal ---------------------------------------------------------- */
+
+      .legal-grille {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 44px;
+      }
+      @media (max-width: 840px) {
+        .legal-grille {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .registre-legal {
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon);
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: var(--ombre-fine);
+      }
+      .registre-legal header {
+        padding: 19px 24px;
+        border-bottom: 1px solid var(--trait-fin);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: linear-gradient(180deg, #fbfcfe, #f7f9fd);
+      }
+      .registre-legal header .puce {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .registre-legal header h3 {
+        font-size: 1.07rem;
+      }
+      .registre-legal ol {
+        margin: 0;
+        padding: 10px 24px 16px;
+        list-style: none;
+        counter-reset: colonne;
+      }
+      .registre-legal li {
+        counter-increment: colonne;
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 13px;
+        padding: 11px 0;
+        border-bottom: 1px solid var(--trait-fin);
+        font-size: 0.95rem;
+        color: var(--encre-douce);
+        align-items: start;
+      }
+      .registre-legal li:last-child {
+        border-bottom: 0;
+      }
+      .registre-legal li::before {
+        content: counter(colonne);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--encre-tenue);
+        background: var(--fond-doux);
+        border: 1px solid var(--trait-fin);
+        border-radius: 6px;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        font-variant-numeric: tabular-nums;
+        margin-top: 2px;
+      }
+      .registre-legal .mention {
+        padding: 16px 24px;
+        font-size: 0.87rem;
+        color: var(--encre-tenue);
+        border-top: 1px solid var(--trait-fin);
+        background: var(--fond-doux);
+      }
+
+      /* ---- Questions ------------------------------------------------------------ */
+
+      .faq {
+        margin-top: 44px;
+        display: grid;
+        gap: 12px;
+      }
+      .faq details {
+        border: 1px solid var(--trait);
+        border-radius: var(--rayon-petit);
+        background: var(--surface);
+        box-shadow: var(--ombre-fine);
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .faq details[open] {
+        border-color: color-mix(in srgb, var(--accent) 26%, var(--trait));
+        box-shadow: var(--ombre);
+      }
+      .faq summary {
+        cursor: pointer;
+        padding: 19px 54px 19px 22px;
+        font-family: var(--titre);
+        font-weight: 600;
+        font-size: 1.03rem;
+        letter-spacing: -0.014em;
+        list-style: none;
+        position: relative;
+        color: var(--encre);
+      }
+      .faq summary::-webkit-details-marker {
+        display: none;
+      }
+      .faq summary::after {
+        content: "";
+        position: absolute;
+        right: 22px;
+        top: 50%;
+        width: 9px;
+        height: 9px;
+        margin-top: -7px;
+        border-right: 2px solid var(--encre-tenue);
+        border-bottom: 2px solid var(--encre-tenue);
+        transform: rotate(45deg);
+        transition:
+          transform 0.22s ease,
+          border-color 0.22s ease;
+      }
+      .faq details[open] summary::after {
+        transform: rotate(-135deg);
+        margin-top: -3px;
+        border-color: var(--accent);
+      }
+      .faq summary:hover {
+        color: var(--accent);
+      }
+      .faq .reponse {
+        padding: 0 24px 22px;
+        color: var(--encre-douce);
+        font-size: 0.99rem;
+        max-width: 82ch;
+      }
+      .faq .reponse p + p {
+        margin-top: 12px;
+      }
+
+      /* ---- Appel final ---------------------------------------------------------- */
+
+      .final {
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+      .final::before {
+        content: "";
+        position: absolute;
+        inset: auto 0 -40% 0;
+        height: 460px;
+        background: radial-gradient(
+          46% 60% at 50% 50%,
+          rgba(37, 99, 235, 0.13),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .final .page {
+        position: relative;
+        z-index: 1;
+      }
+      .final .eyebrow {
+        justify-content: center;
+      }
+      .final h2 {
+        max-width: 20ch;
+        margin-inline: auto;
+      }
+      .final .intro {
+        margin-inline: auto;
+        text-align: center;
+      }
+      .final .hero-actions {
+        justify-content: center;
+      }
+
+      /* ---- Pied de page --------------------------------------------------------- */
+
+      .pied {
+        border-top: 1px solid var(--trait);
+        padding-block: 44px 52px;
+        background: var(--fond-doux);
+      }
+      .pied .page {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        justify-content: space-between;
+      }
+      .pied-liens {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px;
+        align-items: center;
+      }
+      .pied-liens a {
+        color: var(--encre-douce);
+        text-decoration: none;
+        font-size: 0.93rem;
+      }
+      .pied-liens a:hover {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+      .pied-mention {
+        font-size: 0.87rem;
+        color: var(--encre-tenue);
+        max-width: 58ch;
+      }
+      .pied-mention p + p {
+        margin-top: 8px;
+      }
+      .pied-mention strong {
+        color: var(--encre-douce);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        .js .revele {
+          opacity: 1;
+          transform: none;
+        }
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header class="entete" id="entete">
+      <div class="page">
+        <a class="marque" href="#haut">
+          <span class="marque-jeton">
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"
+              />
+              <path d="M14 8H8" />
+              <path d="M16 12H8" />
+              <path d="M13 16H8" />
+            </svg>
+          </span>
+          Livre des recettes
+        </a>
+        <nav class="nav" aria-label="Navigation principale">
+          <a class="masquable" href="#fonctionnalites">Fonctionnalités</a>
+          <a class="masquable" href="#donnees">Vos données</a>
+          <a class="masquable" href="#loi">Obligations</a>
+          <a class="masquable" href="#questions">Questions</a>
+          <a class="btn btn--primaire btn--compact" href="#telecharger"
+            >Télécharger</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main id="haut">
+      <!-- ---- Ouverture ---- -->
+      <section class="bande hero">
+        <div class="page">
+          <p class="pilule revele">
+            <b>Version 1.6</b>
+            <span
+              ><i aria-hidden="true"></i> Gratuit, open source, hors ligne</span
+            >
+          </p>
+
+          <h1 class="revele d1">
+            Votre livre des recettes, <em>simplifié et sans tableur</em>
+          </h1>
+
+          <p class="intro revele d2">
+            L’application gratuite qui tient le livre des recettes et le
+            registre des achats des micro-entrepreneurs français. Elle
+            s’installe en un fichier, fonctionne hors ligne, et vos données ne
+            quittent jamais votre ordinateur.
+          </p>
+
+          <div class="hero-actions revele d3">
+            <a class="btn btn--primaire" href="#telecharger">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M12 15V3" />
+              </svg>
+              Télécharger gratuitement
+            </a>
+            <a
+              class="btn btn--second"
+              href="https://github.com/RDSV01/livre-des-recettes"
+              rel="noopener"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.7.82.58A12 12 0 0 0 24 12.5C24 5.87 18.63.5 12 .5Z"
+                />
+              </svg>
+              Voir le code source
+            </a>
+          </div>
+
+          <p class="hero-note revele d3">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            Sans compte, sans publicité, sans abonnement. Windows, macOS et
+            Linux.
+          </p>
+
+          <figure class="scene revele">
+            <div class="fenetre">
+              <div class="fenetre-barre">
+                <span class="feux" aria-hidden="true"
+                  ><i></i><i></i><i></i
+                ></span>
+                <span class="barre-url">
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="18" height="11" x="3" y="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  localhost:3000
+                </span>
+              </div>
+              <img
+                src="img/apercu-tableau-de-bord.webp"
+                width="1092"
+                height="614"
+                fetchpriority="high"
+                decoding="async"
+                alt="Tableau de bord de l’application : chiffre d’affaires du mois et de l’année, graphique mensuel ventilé entre ventes et prestations, suivi du plafond micro-entrepreneur et de la franchise de TVA."
+              />
+            </div>
+
+            <figcaption class="legende">
+              Le tableau de bord : votre activité, vos seuils et vos dernières
+              recettes en un écran.
+            </figcaption>
+          </figure>
+
+          <dl class="faits revele">
+            <div class="fait">
+              <dt>Prix</dt>
+              <dd>0 €</dd>
+            </div>
+            <div class="fait">
+              <dt>Données envoyées</dt>
+              <dd>Aucune</dd>
+            </div>
+            <div class="fait">
+              <dt>Registres légaux tenus</dt>
+              <dd>2</dd>
+            </div>
+            <div class="fait">
+              <dt>Formats d’export</dt>
+              <dd>3</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ---- Le tableur ---- -->
+      <section class="bande">
+        <div class="page">
+          <p class="eyebrow revele">Pourquoi cette application</p>
+          <h2 class="revele">
+            Le tableur fait le travail, jusqu’au jour où il ne le fait plus
+          </h2>
+          <p class="intro revele d1">
+            Un livre des recettes tenu sous Excel finit toujours par dériver :
+            une formule écrasée, un mois oublié, un total qui ne tombe plus
+            juste, et aucun moyen de savoir s’il manque une facture. Cette
+            application fait la même chose, en vous évitant ces pièges et en
+            beaucoup plus simple.
+          </p>
+
+          <div class="duo">
+            <div class="panneau panneau--avant revele d1">
+              <h3>
+                <span class="rond"
+                  ><svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="18" height="18" x="3" y="3" rx="2" />
+                    <path d="M3 9h18" />
+                    <path d="M9 21V9" /></svg
+                ></span>
+                Avec un tableur
+              </h3>
+              <ul>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" /></svg
+                  ><span
+                    >Les colonnes obligatoires, c’est à vous de les connaître et
+                    de les tenir.</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" /></svg
+                  ><span
+                    >Un numéro de facture manquant passe inaperçu pendant des
+                    mois.</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" /></svg
+                  ><span
+                    >Les seuils de TVA et le plafond micro se surveillent de
+                    tête.</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" /></svg
+                  ><span
+                    >Une mauvaise manipulation, et le fichier est perdu sans
+                    filet.</span
+                  >
+                </li>
+              </ul>
+            </div>
+
+            <div class="panneau panneau--apres revele d2">
+              <h3>
+                <span class="rond"
+                  ><svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"
+                    />
+                    <path d="M14 8H8" />
+                    <path d="M16 12H8" />
+                    <path d="M13 16H8" /></svg
+                ></span>
+                Avec Livre des recettes
+              </h3>
+              <ul>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  ><span
+                    >Les colonnes légales sont déjà là, dans le bon ordre.</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  ><span
+                    >Les trous et doublons de numérotation sont signalés tout
+                    seuls.</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  ><span
+                    >Vos seuils sont suivis en continu, avec alerte à
+                    l’approche.</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  ><span
+                    >Sauvegardes automatiques, et restauration en un clic.</span
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Fonctionnalités ---- -->
+      <section class="bande bande--doux" id="fonctionnalites">
+        <div class="page">
+          <p class="eyebrow revele">Fonctionnalités</p>
+          <h2 class="revele">
+            Tout ce qu’un micro-entrepreneur doit tenir, au même endroit
+          </h2>
+          <p class="intro revele d1">
+            Une seule mission, faite complètement : vos registres obligatoires,
+            leurs exports, et les chiffres qui vous évitent les mauvaises
+            surprises en fin d’année.
+          </p>
+
+          <div class="bento">
+            <article class="tuile tuile--large revele d1">
+              <div>
+                <div class="pastille">
+                  <svg
+                    width="21"
+                    height="21"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"
+                    />
+                    <path d="M14 8H8" />
+                    <path d="M16 12H8" />
+                    <path d="M13 16H8" />
+                  </svg>
+                </div>
+                <h3>Le livre des recettes</h3>
+                <p>
+                  Les six colonnes du registre légal, dans l’ordre chronologique
+                  des encaissements. Saisie assistée, auto-complétion des
+                  libellés, suggestion du prochain numéro de facture et
+                  duplication en un clic pour vos paiements récurrents.
+                </p>
+              </div>
+              <div class="mini-registre" aria-hidden="true">
+                <div class="entete-mini">
+                  <span>Encaissé</span><span>Client</span><span>Montant</span>
+                </div>
+                <div class="ligne-mini">
+                  <span class="date">19/07</span><span>Café des Arts</span
+                  ><span class="mt">120,00 €</span>
+                </div>
+                <div class="ligne-mini">
+                  <span class="date">14/07</span><span>Mme Bernard</span
+                  ><span class="mt">180,00 €</span>
+                </div>
+                <div class="ligne-mini">
+                  <span class="date">08/07</span><span>SARL Bâtiment</span
+                  ><span class="mt">850,00 €</span>
+                </div>
+                <div class="ligne-mini">
+                  <span class="date">01/07</span><span>Boulangerie Dupré</span
+                  ><span class="mt">45,00 €</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="tuile violette revele d2">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="8" cy="21" r="1" />
+                  <circle cx="19" cy="21" r="1" />
+                  <path
+                    d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"
+                  />
+                </svg>
+              </div>
+              <h3>Registre des achats</h3>
+              <p>
+                Obligatoire dès que vous revendez des marchandises : les cinq
+                colonnes légales, dans l’ordre chronologique des règlements,
+                avec les mêmes automatismes.
+              </p>
+            </article>
+
+            <article class="tuile verte revele">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 7h6v6" />
+                  <path d="m22 7-8.5 8.5-5-5L2 17" />
+                </svg>
+              </div>
+              <h3>Suivi de vos seuils</h3>
+              <p>
+                Plafond micro-entrepreneur et franchise en base de TVA suivis en
+                continu : montant restant, pourcentage atteint, seuil majoré, et
+                avertissement avant le dépassement.
+              </p>
+            </article>
+
+            <article class="tuile revele d1">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="16" height="20" x="4" y="2" rx="2" />
+                  <line x1="8" x2="16" y1="6" y2="6" />
+                  <line x1="16" x2="16" y1="14" y2="18" />
+                  <path
+                    d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"
+                  />
+                </svg>
+              </div>
+              <h3>Déclaration URSSAF</h3>
+              <p>
+                Un mois, un trimestre ou l’année : le chiffre d’affaires à
+                déclarer est calculé et les cotisations estimées au taux en
+                vigueur le jour de chaque encaissement.
+              </p>
+            </article>
+
+            <article class="tuile revele d2">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"
+                  />
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                  <path d="M16 13H8" />
+                  <path d="M16 17H8" />
+                  <path d="M10 9H8" />
+                </svg>
+              </div>
+              <h3>Exports conformes</h3>
+              <p>
+                Vos deux registres en PDF, Excel et CSV, totaux mensuels et
+                annuel inclus. Un contrôle repasse d’abord les points qu’un
+                vérificateur regarderait.
+              </p>
+            </article>
+
+            <article class="tuile revele">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </div>
+              <h3>Carnet de clients</h3>
+              <p>
+                Un client professionnel se retrouve par son SIREN ou SIRET dans
+                l’annuaire public, avec son nom exact récupéré pour vous.
+              </p>
+            </article>
+
+            <article class="tuile revele d1">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3v12" />
+                  <path d="m8 11 4 4 4-4" />
+                  <path
+                    d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"
+                  />
+                </svg>
+              </div>
+              <h3>Import de votre historique</h3>
+              <p>
+                Votre tableau Excel reprend sa place : import CSV,
+                correspondance des colonnes, détection des doublons et
+                sauvegarde automatique juste avant.
+              </p>
+            </article>
+
+            <article class="tuile verte revele d2">
+              <div class="pastille">
+                <svg
+                  width="21"
+                  height="21"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                  <path d="M18 17V9" />
+                  <path d="M13 17V5" />
+                  <path d="M8 17v-3" />
+                </svg>
+              </div>
+              <h3>Rapport annuel de gestion</h3>
+              <p>
+                Un PDF pour vous : répartition du chiffre d’affaires, panier
+                moyen, évolution mois par mois et meilleurs clients.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Vie privée ---- -->
+      <section class="bande confiance" id="donnees">
+        <div class="page">
+          <p class="eyebrow revele">Vie privée</p>
+          <h2 class="revele">Vos données restent chez vous. Vraiment.</h2>
+          <p class="intro revele d1">
+            Pas de compte, pas de serveur, pas de synchronisation silencieuse.
+            L’application tourne sur votre machine et enregistre tout dans un
+            fichier que vous pouvez ouvrir, copier et sauvegarder vous-même.
+          </p>
+
+          <div class="confiance-grille">
+            <div class="garantie revele d1">
+              <div class="rond">
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="18" height="11" x="3" y="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <h3>Un seul fichier, chez vous</h3>
+              <p>
+                Recettes, achats, clients et paramètres tiennent dans
+                <code>Documents / Livre des recettes</code>. Changer
+                d’ordinateur revient à copier ce dossier.
+              </p>
+            </div>
+
+            <div class="garantie revele d2">
+              <div class="rond">
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20h.01" />
+                  <path d="M8.5 16.4a5 5 0 0 1 7 0" />
+                  <path d="M5 12.9a10 10 0 0 1 5.2-2.7" />
+                  <path d="M19 12.9a10 10 0 0 0-2-1.5" />
+                  <path d="M2 8.8a15 15 0 0 1 4.2-2.6" />
+                  <path d="M22 8.8a15 15 0 0 0-11.3-3.8" />
+                  <path d="m2 2 20 20" />
+                </svg>
+              </div>
+              <h3>Fonctionne hors ligne</h3>
+              <p>
+                Aucune connexion nécessaire pour saisir, calculer ou exporter.
+                Deux fonctions seulement contactent l’extérieur (recherche de
+                SIRET), à votre demande, et sans jamais transmettre vos
+                écritures.
+              </p>
+            </div>
+
+            <div class="garantie revele d3">
+              <div class="rond">
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                  />
+                  <path d="M3 3v5h5" />
+                  <path
+                    d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"
+                  />
+                  <path d="M16 16h5v5" />
+                </svg>
+              </div>
+              <h3>Sauvegardes automatiques</h3>
+              <p>
+                Une copie de secours à chaque saisie, puis des sauvegardes
+                quotidiennes, hebdomadaires et mensuelles rangées ailleurs que
+                vos données. Restauration en un clic.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Aperçus ---- -->
+      <section class="bande">
+        <div class="page">
+          <p class="eyebrow revele">En images</p>
+          <h2 class="revele">Deux registres, une seule application</h2>
+
+          <div class="apercus">
+            <article class="apercu">
+              <div class="apercu-texte revele">
+                <h3>
+                  <span class="puce puce--recettes"></span> Le livre des
+                  recettes
+                </h3>
+                <p>
+                  Chaque encaissement dans l’ordre chronologique, avec son
+                  client, son libellé, son numéro de facture et son mode de
+                  règlement. Recherche libre, filtres par année, mois, mode et
+                  catégorie, tri par colonne et sélection multiple.
+                </p>
+                <p>
+                  La numérotation des factures est surveillée en permanence :
+                  ici, l’application signale qu’un numéro manque dans la série,
+                  sans jamais rien bloquer.
+                </p>
+              </div>
+              <div class="cadre-image revele d1">
+                <img
+                  src="img/apercu-recettes.webp"
+                  width="1100"
+                  height="739"
+                  loading="lazy"
+                  decoding="async"
+                  alt="Le registre des recettes : liste des encaissements avec filtres, badges de catégorie et alerte de numérotation des factures."
+                />
+              </div>
+            </article>
+
+            <article class="apercu">
+              <div class="apercu-texte revele">
+                <h3>
+                  <span class="puce puce--achats"></span> Le registre des achats
+                </h3>
+                <p>
+                  Le second registre exigible dès que votre activité comporte de
+                  la revente de marchandises : date du règlement, fournisseur,
+                  référence du justificatif, mode de paiement et montant.
+                </p>
+                <p>
+                  Mêmes automatismes, mêmes exports, et un total de vos achats
+                  de l’année directement sur le tableau de bord.
+                </p>
+              </div>
+              <div class="cadre-image revele d1">
+                <img
+                  src="img/apercu-achats.webp"
+                  width="1100"
+                  height="739"
+                  loading="lazy"
+                  decoding="async"
+                  alt="Le registre des achats : liste des règlements aux fournisseurs avec références des justificatifs et modes de paiement."
+                />
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Téléchargement ---- -->
+      <section class="bande bande--doux" id="telecharger">
+        <div class="page">
+          <p class="eyebrow revele">Installation</p>
+          <h2 class="revele">Un fichier à télécharger, et c’est tout</h2>
+          <p class="intro revele d1">
+            Pas d’installateur, pas de compte à créer, rien à configurer. Vous
+            lancez le fichier, l’application s’ouvre dans votre navigateur et
+            vos données sont rangées dans votre dossier Documents.
+          </p>
+
+          <div class="telechargements">
+            <a
+              class="systeme revele d1"
+              href="https://github.com/RDSV01/livre-des-recettes/releases/latest/download/livre-des-recettes-windows.exe"
+            >
+              <span class="nom">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 5.5 10.2 4.5v6.8H3V5.5Zm0 13 7.2 1v-6.7H3v5.7Zm8.2 1.2L21 21V12.3h-9.8v7.4Zm0-15.4v7.2H21V3l-9.8 1.3Z"
+                  />
+                </svg>
+                Windows
+              </span>
+              <span class="fichier">livre-des-recettes-windows.exe</span>
+              <span class="action"
+                >Télécharger
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+
+            <a
+              class="systeme revele d2"
+              href="https://github.com/RDSV01/livre-des-recettes/releases/latest/download/livre-des-recettes-macos"
+            >
+              <span class="nom">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M16.4 12.7c0-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.6 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.6.7 2.8.7c1.2 0 1.9-1 2.6-2.1.8-1.2 1.2-2.4 1.2-2.4-.1 0-2.2-.9-2.2-3.2ZM14.2 5.9c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.6-1.1 1.7-.9 2.6 1 .1 2-.5 2.6-1.2Z"
+                  />
+                </svg>
+                macOS
+              </span>
+              <span class="fichier">livre-des-recettes-macos</span>
+              <span class="action"
+                >Télécharger
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+
+            <a
+              class="systeme revele d3"
+              href="https://github.com/RDSV01/livre-des-recettes/releases/latest/download/livre-des-recettes-linux"
+            >
+              <span class="nom">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="18" height="12" x="3" y="4" rx="2" />
+                  <path d="M7 20h10" />
+                  <path d="M12 16v4" />
+                </svg>
+                Linux
+              </span>
+              <span class="fichier">livre-des-recettes-linux</span>
+              <span class="action"
+                >Télécharger
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+          </div>
+
+          <div class="avis revele">
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            <div>
+              <strong>Un avertissement au premier lancement est normal.</strong>
+              Le fichier n’est pas signé, car un certificat d’éditeur est
+              payant. Sous Windows, cliquez sur « Informations complémentaires »
+              puis « Exécuter quand même ». Sous macOS, faites un clic droit sur
+              le fichier puis « Ouvrir ». Le code source est public : vous
+              pouvez vérifier vous-même ce que fait l’application.
+            </div>
+          </div>
+
+          <h3 class="revele" style="margin-top: 46px">
+            Vous préférez lancer depuis les sources ?
+          </h3>
+          <p class="intro revele" style="margin-top: 10px">
+            Il vous faut simplement Node.js 18 ou plus récent. Aucune base de
+            données, aucune compilation, aucune étape de construction.
+          </p>
+          <div class="bloc-code revele">
+            <pre><span class="invite">$</span> git clone https://github.com/RDSV01/livre-des-recettes.git
+<span class="invite">$</span> cd livre-des-recettes
+<span class="invite">$</span> npm install
+<span class="invite">$</span> npm start
+<span class="comm"># l’application s’ouvre sur http://localhost:3000</span></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Cadre légal ---- -->
+      <section class="bande" id="loi">
+        <div class="page">
+          <p class="eyebrow revele">Vos obligations</p>
+          <h2 class="revele">
+            Ce que vous devez tenir, et ce que l’application remplit
+          </h2>
+          <p class="intro revele d1">
+            Les micro-entrepreneurs doivent tenir un livre des recettes. Ceux
+            dont l’activité comporte de la vente de marchandises doivent y
+            ajouter un registre des achats. Les exports de l’application
+            reprennent exactement ces colonnes.
+          </p>
+
+          <div class="legal-grille">
+            <div class="registre-legal revele d1">
+              <header>
+                <span class="puce puce--recettes"></span>
+                <h3>Le livre des recettes</h3>
+              </header>
+              <ol>
+                <li><span>La date de l’encaissement</span></li>
+                <li>
+                  <span>L’origine de la recette, c’est-à-dire le client</span>
+                </li>
+                <li><span>Le montant encaissé</span></li>
+                <li><span>Le mode de règlement</span></li>
+                <li>
+                  <span
+                    >Les références des pièces justificatives, le numéro de
+                    facture</span
+                  >
+                </li>
+              </ol>
+              <p class="mention">
+                Obligatoire pour toutes les activités, dans l’ordre
+                chronologique des encaissements.
+              </p>
+            </div>
+
+            <div class="registre-legal revele d2">
+              <header>
+                <span class="puce puce--achats"></span>
+                <h3>Le registre des achats</h3>
+              </header>
+              <ol>
+                <li><span>La date du règlement</span></li>
+                <li><span>Le fournisseur</span></li>
+                <li>
+                  <span>La référence de la facture ou du justificatif</span>
+                </li>
+                <li><span>Le mode de paiement</span></li>
+                <li><span>Le montant de l’achat</span></li>
+              </ol>
+              <p class="mention">
+                Obligatoire pour les activités d’achat et de revente de
+                marchandises, dans l’ordre chronologique des règlements.
+              </p>
+            </div>
+          </div>
+
+          <div class="avis revele" style="margin-top: 26px">
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            <div>
+              Conservez vos livres et vos justificatifs pendant
+              <strong>dix ans</strong>. Cet outil vous aide à tenir vos
+              registres : il ne constitue ni un conseil comptable ou juridique,
+              ni un logiciel de caisse certifié. En cas de doute sur vos
+              obligations ou sur les seuils en vigueur, rapprochez-vous de
+              l’URSSAF ou d’un expert-comptable.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Questions ---- -->
+      <section class="bande bande--doux" id="questions">
+        <div class="page">
+          <p class="eyebrow revele">Questions fréquentes</p>
+          <h2 class="revele">Ce que l’on nous demande le plus souvent</h2>
+
+          <div class="faq">
+            <details class="revele">
+              <summary>
+                Le livre des recettes est-il obligatoire pour un
+                micro-entrepreneur ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Oui. Tout micro-entrepreneur doit tenir un livre des recettes
+                  présentant, dans l’ordre chronologique des encaissements, le
+                  montant et l’origine des recettes, le mode de règlement et les
+                  références des pièces justificatives. Les activités d’achat et
+                  de revente de marchandises doivent en plus tenir un registre
+                  des achats.
+                </p>
+                <p>
+                  Ces documents doivent pouvoir être présentés en cas de
+                  contrôle et conservés pendant dix ans.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>L’application est-elle vraiment gratuite ?</summary>
+              <div class="reponse">
+                <p>
+                  Oui, entièrement et sans contrepartie : aucun compte à créer,
+                  aucune version payante, aucune fonctionnalité réservée, aucune
+                  publicité et aucun traceur.
+                </p>
+                <p>
+                  Le code source est publié sous licence MIT : vous pouvez le
+                  consulter, le copier et le modifier librement.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>
+                Mes données comptables sont-elles envoyées sur Internet ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Non. L’application s’exécute sur votre ordinateur et
+                  enregistre tout dans un fichier local. Aucune donnée comptable
+                  n’est transmise à qui que ce soit.
+                </p>
+                <p>
+                  Deux fonctions seulement contactent l’extérieur, sans jamais
+                  envoyer vos écritures : la recherche d’un client par SIRET
+                  dans l’annuaire public des entreprises, que vous déclenchez
+                  vous-même, et la vérification d’une nouvelle version au
+                  démarrage, que vous pouvez désactiver dans les paramètres.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>
+                Faut-il installer un logiciel ou créer un compte ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Ni l’un ni l’autre. Vous téléchargez un fichier unique et vous
+                  le lancez : l’application s’ouvre dans votre navigateur. Il
+                  n’y a pas d’installateur, pas de compte, pas d’abonnement et
+                  pas de base de données à configurer.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>
+                Puis-je reprendre mon historique tenu sous Excel ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Oui. Exportez votre tableur au format CSV puis importez-le
+                  dans l’application : vous associez vos colonnes aux champs du
+                  registre, les doublons sont détectés, un rapport s’affiche
+                  avant validation, et une sauvegarde est créée juste avant
+                  l’import pour pouvoir revenir en arrière.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>
+                Que deviennent mes données si je change d’ordinateur ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Tout tient dans un seul fichier : il suffit de copier le
+                  dossier « Livre des recettes » sur le nouveau poste.
+                </p>
+                <p>
+                  L’application tient par ailleurs des sauvegardes automatiques
+                  rangées hors du dossier de données, avec une copie de secours
+                  mise à jour à chaque saisie. Vous pouvez aussi télécharger une
+                  copie de vos données à tout moment depuis les paramètres.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>
+                L’application calcule-t-elle mes cotisations URSSAF ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Elle en donne une estimation. Vous choisissez un mois, un
+                  trimestre ou l’année, et l’application calcule le chiffre
+                  d’affaires encaissé de la période puis estime les cotisations
+                  au taux correspondant à votre activité, en vigueur le jour de
+                  chaque encaissement.
+                </p>
+                <p>
+                  Il s’agit d’un calcul local destiné à vous aider à remplir
+                  votre déclaration. L’application ne se connecte pas à l’URSSAF
+                  et ne télédéclare rien à votre place.
+                </p>
+              </div>
+            </details>
+
+            <details class="revele">
+              <summary>
+                Cette application remplace-t-elle un expert-comptable ?
+              </summary>
+              <div class="reponse">
+                <p>
+                  Non. Elle vous aide à tenir vos registres et à suivre vos
+                  seuils, mais elle ne constitue ni un conseil comptable ou
+                  juridique, ni un logiciel de caisse certifié, ni un outil de
+                  télédéclaration.
+                </p>
+                <p>
+                  En cas de doute sur vos obligations, rapprochez-vous de
+                  l’URSSAF ou d’un professionnel du chiffre.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Appel final ---- -->
+      <section class="bande final">
+        <div class="page">
+          <p class="eyebrow revele">Prêt à commencer</p>
+          <h2 class="revele">Reprenez votre livre des recettes en main</h2>
+          <p class="intro revele d1">
+            Téléchargez l’application, chargez le jeu de démonstration pour la
+            découvrir en une minute, puis effacez-le d’un clic quand vous voulez
+            commencer pour de bon.
+          </p>
+          <div class="hero-actions revele d2">
+            <a
+              class="btn btn--primaire"
+              href="https://github.com/RDSV01/livre-des-recettes/releases/latest"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M12 15V3" />
+              </svg>
+              Télécharger la dernière version
+            </a>
+            <a
+              class="btn btn--second"
+              href="https://github.com/RDSV01/livre-des-recettes"
+              rel="noopener"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.7.82.58A12 12 0 0 0 24 12.5C24 5.87 18.63.5 12 .5Z"
+                />
+              </svg>
+              Le projet sur GitHub
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pied">
+      <div class="page">
+        <div class="pied-mention">
+          <p>
+            <strong>Livre des recettes</strong>, application libre sous licence
+            MIT.
+          </p>
+          <p>
+            Outil d’aide à la tenue de vos registres. Ne constitue ni un conseil
+            comptable ou juridique, ni un logiciel de caisse certifié.
+          </p>
+        </div>
+        <nav class="pied-liens" aria-label="Liens du projet">
+          <a href="https://github.com/RDSV01/livre-des-recettes" rel="noopener"
+            >Code source</a
+          >
+          <a
+            href="https://github.com/RDSV01/livre-des-recettes/releases"
+            rel="noopener"
+            >Versions</a
+          >
+          <a
+            href="https://github.com/RDSV01/livre-des-recettes/blob/main/ROADMAP.md"
+            rel="noopener"
+            >Feuille de route</a
+          >
+          <a
+            href="https://github.com/RDSV01/livre-des-recettes/issues"
+            rel="noopener"
+            >Signaler un problème</a
+          >
+          <a
+            href="https://github.com/RDSV01/livre-des-recettes/blob/main/LICENSE"
+            rel="noopener"
+            >Licence MIT</a
+          >
+        </nav>
+      </div>
+    </footer>
+
+    <script>
+      /*
+       * Deux effets seulement, et la page reste entière sans eux : tout le contenu
+       * est dans le HTML, jamais produit par ce script. La classe « js » n'est
+       * posée qu'ici, si bien qu'un navigateur sans JavaScript affiche tout
+       * d'emblée, comme les robots d'indexation.
+       */
+      document.documentElement.classList.add("js");
+
+      var reduit = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      // Apparition à l'entrée dans l'écran.
+      if ("IntersectionObserver" in window && !reduit) {
+        var vigie = new IntersectionObserver(
+          function (entrees) {
+            entrees.forEach(function (e) {
+              if (e.isIntersecting) {
+                e.target.classList.add("vu");
+                vigie.unobserve(e.target);
+              }
+            });
+          },
+          { rootMargin: "0px 0px -8% 0px", threshold: 0.06 },
+        );
+        document.querySelectorAll(".revele").forEach(function (el) {
+          vigie.observe(el);
+        });
+      } else {
+        document.querySelectorAll(".revele").forEach(function (el) {
+          el.classList.add("vu");
+        });
+      }
+
+      // L'en-tête ne se détache du fond qu'une fois la page défilée.
+      var entete = document.getElementById("entete");
+      var surveiller = function () {
+        entete.classList.toggle("colle", window.scrollY > 8);
+      };
+      surveiller();
+      addEventListener("scroll", surveiller, { passive: true });
+    </script>
+  </body>
+</html>

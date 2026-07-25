@@ -7,6 +7,8 @@
 ![Node.js ≥ 18](https://img.shields.io/badge/node-%E2%89%A5%2018-brightgreen)
 ![100 % local](https://img.shields.io/badge/donn%C3%A9es-100%25%20locales-blue)
 
+**[Site de présentation et téléchargement](https://rdsv01.github.io/livre-des-recettes/)**
+
 En tant que micro-entrepreneur, vous devez tenir un **livre des recettes** : le registre
 chronologique de tous vos encaissements, présentable en cas de contrôle. Beaucoup le
 tiennent dans Excel, cette application fait la même chose, en plus simple et plus sûr :
