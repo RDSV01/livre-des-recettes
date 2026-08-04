@@ -16,7 +16,7 @@
  * ne prélève rien.
  */
 
-import { enCentimes, enEuros } from './partage/montants.js';
+import { enCentimes, enEuros, arrondiDeclaration } from './partage/montants.js';
 import { PALIERS_COTISATIONS } from './partage/bareme-seuils.js';
 import { regimeFiscal, natureDesPrestations } from './partage/seuils.js';
 
@@ -87,15 +87,20 @@ export function cotisationsUrssaf(recettes, { typeActivite, naturePrestations } 
   // ligne la plus lourde de la période en cours se lit en premier.
   const lignes = [...groupes.values()]
     .sort((a, b) => b.duJour.localeCompare(a.duJour) || b.centimes - a.centimes)
-    .map((g) => ({
-      libelle: regimeFiscal(g.nature).libelle,
-      base: enEuros(g.centimes),
-      taux: g.taux,
-      // Les cotisations s'arrondissent à l'euro le plus proche : 315,50 € est
-      // dû pour 316 €.
-      montant: Math.round((g.centimes * g.taux) / 10_000),
-      duJour: g.duJour
-    }));
+    .map((g) => {
+      // Le taux s'applique sur la base DÉJÀ arrondie à l'euro, celle que la
+      // déclaration fait saisir, et non sur les centimes encaissés : sur
+      // 1 111,49 € au taux de 25,6 %, les centimes donneraient 285 € là où
+      // l'URSSAF en réclame 284. Le montant obtenu est arrondi à son tour.
+      const base = arrondiDeclaration(g.centimes);
+      return {
+        libelle: regimeFiscal(g.nature).libelle,
+        base,
+        taux: g.taux,
+        montant: Math.round((base * g.taux) / 100),
+        duJour: g.duJour
+      };
+    });
 
   return {
     lignes,

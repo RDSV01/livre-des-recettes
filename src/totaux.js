@@ -5,7 +5,7 @@
  * Tous les cumuls passent par les centimes (voir `partage/montants.js`).
  */
 
-import { enCentimes, enEuros } from './partage/montants.js';
+import { enCentimes, enEuros, arrondiDeclaration } from './partage/montants.js';
 import { anneeDe, moisDe, nomMois, trimestreDe } from './partage/dates.js';
 
 /** Total d'une liste de lignes (recettes ou achats), en euros. */
@@ -173,17 +173,28 @@ export function bilanPeriode(recettes, periode) {
   const { selection, libellePeriode } = selectionPeriode(recettes, periode);
   const { annee, type, valeur } = periode;
 
+  // Deux montants, qui ne servent pas à la même chose : le chiffre d'affaires
+  // réellement encaissé, centimes compris, et celui à reporter sur la
+  // déclaration, que l'URSSAF veut en euros entiers.
   const partie = (filtre) => {
     const groupe = selection.filter(filtre);
-    return { chiffreAffaires: totalMontants(groupe), nombreEncaissements: groupe.length };
+    const chiffreAffaires = totalMontants(groupe);
+    return {
+      chiffreAffaires,
+      aDeclarer: arrondiDeclaration(enCentimes(chiffreAffaires)),
+      nombreEncaissements: groupe.length
+    };
   };
+
+  const chiffreAffaires = totalMontants(selection);
 
   return {
     annee,
     type,
     valeur: type === 'annee' ? null : valeur,
     libellePeriode,
-    chiffreAffaires: totalMontants(selection),
+    chiffreAffaires,
+    aDeclarer: arrondiDeclaration(enCentimes(chiffreAffaires)),
     nombreEncaissements: selection.length,
     ventes: partie((r) => r.categorie === 'ventes'),
     prestations: partie((r) => r.categorie === 'prestations'),

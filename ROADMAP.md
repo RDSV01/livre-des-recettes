@@ -6,6 +6,24 @@ est jugée à cette aune.
 
 ## Déjà livré
 
+### v1.7
+
+- Montants alignés sur la règle de l'URSSAF, qui arrondit à l'euro : en dessous
+  de 0,50 € les centimes s'effacent, à partir de 0,50 € ils passent à l'euro
+  suivant. L'écran de déclaration annonce désormais le chiffre d'affaires à
+  reporter, entier, et rappelle en dessous le montant réellement encaissé.
+- Cotisations estimées sur cette base arrondie, et non plus sur les centimes.
+  L'ordre des deux arrondis est celui de l'URSSAF : la base d'abord, le taux
+  ensuite, le résultat arrondi à son tour. Sur 1 111,49 € au taux de 25,6 %,
+  l'estimation annonçait 285 € là où 284 € sont dus.
+- L'écran URSSAF s'ouvre sur la dernière période échue, celle qu'il y a
+  justement à déclarer, au lieu du mois en cours qui n'est pas terminé. La
+  périodicité choisie dans les paramètres décide, et l'année suit quand la
+  période appartient à l'exercice précédent.
+- Site de présentation du projet, publié sur GitHub Pages : ce que fait
+  l'application, comment la télécharger, les obligations que les deux registres
+  couvrent, et les questions les plus fréquentes.
+
 ### v1.6
 
 - Graphique du chiffre d'affaires mensuel ventilé : en activité mixte, une

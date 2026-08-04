@@ -171,9 +171,23 @@ test('bilanPeriode ventile ventes, prestations et non catégorisé', () => {
     recette('2026-02-01', 50)
   ];
   const bilan = bilanPeriode(recettes, { annee: 2026, type: 'annee' });
-  assert.deepEqual(bilan.ventes, { chiffreAffaires: 200, nombreEncaissements: 1 });
-  assert.deepEqual(bilan.prestations, { chiffreAffaires: 100, nombreEncaissements: 1 });
-  assert.deepEqual(bilan.nonCategorise, { chiffreAffaires: 50, nombreEncaissements: 1 });
+  assert.deepEqual(bilan.ventes, { chiffreAffaires: 200, aDeclarer: 200, nombreEncaissements: 1 });
+  assert.deepEqual(bilan.prestations, { chiffreAffaires: 100, aDeclarer: 100, nombreEncaissements: 1 });
+  assert.deepEqual(bilan.nonCategorise, { chiffreAffaires: 50, aDeclarer: 50, nombreEncaissements: 1 });
+});
+
+test('le bilan porte le montant à déclarer, arrondi à l’euro', () => {
+  // Le registre garde les centimes encaissés ; la déclaration, elle, se
+  // remplit en euros entiers.
+  const bilan = bilanPeriode([
+    recette('2026-01-10', 1000.49, { categorie: 'prestations' }),
+    recette('2026-01-20', 111, { categorie: 'ventes' })
+  ], { annee: 2026, type: 'annee' });
+
+  assert.equal(bilan.chiffreAffaires, 1111.49, 'le chiffre d’affaires exact reste intact');
+  assert.equal(bilan.aDeclarer, 1111);
+  assert.equal(bilan.prestations.aDeclarer, 1000, '0,49 € s’efface');
+  assert.equal(bilan.ventes.aDeclarer, 111);
 });
 
 test('registreRecettes trie chronologiquement et insère les totaux', () => {

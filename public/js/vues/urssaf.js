@@ -8,7 +8,7 @@ import { etat } from '../etat.js';
 import { echapperHtml, toast, infobulle } from '../ui.js';
 import { icone } from '../icones.js';
 import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
-import { NOMS_MOIS, formaterDate } from '/partage/dates.js';
+import { NOMS_MOIS, formaterDate, dernierePeriodeEchue } from '/partage/dates.js';
 
 /** « 12,3 » plutôt que « 12.3 ». */
 const pourcentage = (taux) => `${String(taux).replace('.', ',')} %`;
@@ -28,12 +28,12 @@ function blocCotisations(cotisations, devise, formatDate) {
     ? ` <span class="palier-cotisation">à partir du ${echapperHtml(formaterDate(l.duJour, formatDate))}</span>`
     : '');
 
-  // Les montants dus sont des euros entiers (arrondi légal) ; la base, elle,
-  // garde ses centimes puisqu'elle vient du chiffre d'affaires encaissé.
+  // Base comme montant dû sont des euros entiers : c'est sur la base arrondie
+  // que l'URSSAF applique le taux, et le calcul affiché doit tomber juste.
   const lignes = cotisations.lignes.map((l) => `
     <div class="ligne-cotisation">
       <span>${echapperHtml(l.libelle)}${depuis(l)}</span>
-      <span class="base-cotisation">${echapperHtml(formaterMontant(l.base, devise))} × ${pourcentage(l.taux)}</span>
+      <span class="base-cotisation">${echapperHtml(formaterMontantEntier(l.base, devise))} × ${pourcentage(l.taux)}</span>
       <span class="montant-cotisation">${echapperHtml(formaterMontantEntier(l.montant, devise))}</span>
     </div>`).join('');
 
@@ -111,20 +111,47 @@ export async function vueUrssaf(conteneur) {
     resultat: conteneur.querySelector('#resultat-urssaf')
   };
 
+  /**
+   * Période proposée au premier affichage : la dernière échue, celle que
+   * l'utilisateur a justement à déclarer. Proposer le mois en cours n'aurait
+   * pas de sens, il n'est pas terminé.
+   */
+  const echue = dernierePeriodeEchue(etat.parametres.periodiciteUrssaf);
+  const parDefaut = echue
+    // L'identifiant vaut « 2026-07 » ou « 2026-T2 » : l'année en préfixe, le
+    // mois ou le trimestre après le tiret.
+    ? {
+      annee: echue.id.slice(0, 4),
+      type: echue.id.includes('T') ? 'trimestre' : 'mois',
+      valeur: echue.id.slice(echue.id.includes('T') ? 6 : 5).replace(/^0/, '')
+    }
+    : null;
+
   function rafraichirValeurs() {
     if (refs.type.value === 'annee') {
       refs.conteneurValeur.hidden = true;
       return;
     }
     refs.conteneurValeur.hidden = false;
-    if (refs.type.value === 'mois') {
-      refs.valeur.innerHTML = optionsMois;
-      refs.valeur.value = String(new Date().getMonth() + 1);
-    } else {
-      refs.valeur.innerHTML = [1, 2, 3, 4]
+    const estMois = refs.type.value === 'mois';
+    refs.valeur.innerHTML = estMois
+      ? optionsMois
+      : [1, 2, 3, 4]
         .map((t) => `<option value="${t}">${t}${t === 1 ? 'er' : 'e'} trimestre</option>`)
         .join('');
+    // La période échue n'est proposée que pour la périodicité qui la produit :
+    // passer de mensuel à trimestriel à la main doit rester libre.
+    if (parDefaut && parDefaut.type === refs.type.value) {
+      refs.valeur.value = parDefaut.valeur;
+    } else if (estMois) {
+      refs.valeur.value = String(new Date().getMonth() + 1);
     }
+  }
+  if (parDefaut) {
+    refs.type.value = parDefaut.type;
+    // Une année encore absente du registre (janvier, période de décembre) ne
+    // peut pas être sélectionnée : on garde alors la plus récente proposée.
+    if (anneesProposees.includes(Number(parDefaut.annee))) refs.annee.value = parDefaut.annee;
   }
   refs.type.addEventListener('change', rafraichirValeurs);
   rafraichirValeurs();
@@ -141,12 +168,19 @@ export async function vueUrssaf(conteneur) {
 
       // Pour une activité mixte, la déclaration distingue les ventes des
       // prestations : la ventilation est affichée en plus du total.
-      const carte = (etiquette, montant, principale = false) => `
+      //
+      // Les montants affichés sont ceux à reporter sur la déclaration, donc en
+      // euros entiers. Le chiffre d'affaires exact, centimes compris, reste
+      // rappelé dessous quand l'arrondi le fait différer : le registre, lui, ne
+      // s'arrondit jamais.
+      const carte = (etiquette, montant, exact, principale = false) => `
         <div class="carte-stat ${principale ? 'principale' : ''}">
           <div class="pastille">${icone('billet', { taille: 22 })}</div>
           <div>
             <div class="etiquette">${echapperHtml(etiquette)}</div>
-            <div class="valeur">${echapperHtml(formaterMontant(montant, devise))}</div>
+            <div class="valeur">${echapperHtml(formaterMontantEntier(montant, devise))}</div>
+            ${exact !== montant ? `
+              <div class="montant-exact">encaissé : ${echapperHtml(formaterMontant(exact, devise))}</div>` : ''}
           </div>
         </div>`;
 
@@ -154,7 +188,7 @@ export async function vueUrssaf(conteneur) {
 
       refs.resultat.innerHTML = `
         <div class="resultat-bilan">
-          ${carte(`CA encaissé (${bilan.libellePeriode})`, bilan.chiffreAffaires, true)}
+          ${carte(`CA à déclarer (${bilan.libellePeriode})`, bilan.aDeclarer, bilan.chiffreAffaires, true)}
           <div class="carte-stat">
             <div class="pastille">${icone('diese', { taille: 22 })}</div>
             <div>
@@ -163,8 +197,8 @@ export async function vueUrssaf(conteneur) {
             </div>
           </div>
           ${estMixte ? `
-            ${carte('dont ventes de marchandises', bilan.ventes.chiffreAffaires)}
-            ${carte('dont prestations de services', bilan.prestations.chiffreAffaires)}` : ''}
+            ${carte('dont ventes de marchandises', bilan.ventes.aDeclarer, bilan.ventes.chiffreAffaires)}
+            ${carte('dont prestations de services', bilan.prestations.aDeclarer, bilan.prestations.chiffreAffaires)}` : ''}
         </div>
         ${estMixte && bilan.nonCategorise.nombreEncaissements > 0 ? `
           <p class="note-legale">

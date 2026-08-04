@@ -208,16 +208,32 @@ test('le chiffre d’affaires non ventilé d’une activité mixte sort de l’e
 
 // ---- Arrondis ------------------------------------------------------------------
 
-test('les cotisations sont arrondies à l’euro le plus proche', () => {
-  // 21,2 % de 1 234,56 € = 261,72672 € : dû pour 262 €, jamais 261,73 €.
-  const resultat = cotisationsUrssaf([recette(AU_RECENT, 1234.56)], { typeActivite: 'prestations' });
-  assert.equal(resultat.total, 262);
+test('la base déclarée est arrondie à l’euro avant que le taux s’applique', () => {
+  // L'URSSAF fait déclarer un chiffre d'affaires entier, puis calcule dessus.
+  // Sous 0,50 € les centimes s'effacent, à partir de 0,50 € ils montent.
+  const base = (montant) =>
+    cotisationsUrssaf([recette(AU_RECENT, montant)], { typeActivite: 'ventes' }).lignes[0].base;
+  assert.equal(base(1000.49), 1000, '0,49 € s’efface');
+  assert.equal(base(1000.50), 1001, '0,50 € monte à l’euro suivant');
+  assert.equal(base(1000), 1000, 'un montant déjà entier ne bouge pas');
 
-  // Le demi-euro monte : 12,3 % de 2 565,04 € donne 315,49992 €, de 2 565,10 € 315,5073 €.
+  // Le cas qui a révélé l'erreur : 25,6 % de 1 111,49 €. En partant des
+  // centimes on obtient 284,54 € donc 285 €, alors que l'URSSAF calcule sur
+  // 1 111 € et réclame 284 €.
+  const liberal = cotisationsUrssaf([recette(AU_RECENT, 1111.49)], { typeActivite: 'liberal' });
+  assert.equal(liberal.lignes[0].base, 1111);
+  assert.equal(liberal.total, Math.round(1111 * RECENT.liberal / 100));
+});
+
+test('le montant dû est à son tour arrondi à l’euro le plus proche', () => {
   const enVente = (montant) =>
     cotisationsUrssaf([recette(AU_RECENT, montant)], { typeActivite: 'ventes' }).total;
-  assert.equal(enVente(2565.04), 315);
-  assert.equal(enVente(2565.10), 316);
+  // Deux bases entières voisines encadrent le demi-euro du résultat.
+  const sousLeDemi = enVente(2565);
+  const auDessus = enVente(2566);
+  assert.equal(sousLeDemi, Math.round(2565 * RECENT.ventes / 100));
+  assert.equal(auDessus, Math.round(2566 * RECENT.ventes / 100));
+  assert.ok(Number.isInteger(sousLeDemi) && Number.isInteger(auDessus));
 });
 
 test('aucun montant de cotisation ne traîne de centimes', () => {

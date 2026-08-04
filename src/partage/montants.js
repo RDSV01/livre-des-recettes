@@ -25,6 +25,23 @@ export function sommeMontants(montants) {
 }
 
 /**
+ * Arrondit à l'euro un montant destiné à la déclaration URSSAF, à partir de
+ * centimes : en dessous de 0,50 € les centimes s'effacent, à partir de 0,50 €
+ * ils passent à l'euro suivant.
+ *
+ * La règle vaut aussi bien pour le chiffre d'affaires déclaré que pour la
+ * cotisation qui en découle, et l'ordre compte : l'URSSAF arrondit d'abord la
+ * base, puis applique le taux, puis arrondit le résultat. Appliquer le taux
+ * sur les centimes donnerait un euro d'écart avec le décompte officiel.
+ *
+ * @param {number} centimes montant en centimes (entier).
+ * @returns {number} le montant en euros entiers.
+ */
+export function arrondiDeclaration(centimes) {
+  return Math.round(centimes / 100);
+}
+
+/**
  * Formateurs conservés par devise : en construire un est environ cinquante
  * fois plus coûteux que de s'en servir, et un tableau en demande un par
  * montant affiché.
