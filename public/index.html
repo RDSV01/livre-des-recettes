@@ -5,13 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Livre des recettes</title>
   <meta name="description" content="Livre des recettes pour micro-entrepreneurs : simple, rapide, 100 % local.">
+  <!-- Le cadre du navigateur suit le thème de l'application, au lieu de rester
+       clair autour d'une page sombre. -->
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z'/%3E%3Cpath d='M14 8H8'/%3E%3Cpath d='M16 12H8'/%3E%3Cpath d='M13 16H8'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <div class="disposition">
     <nav class="barre-laterale" id="navigation" aria-label="Navigation principale"></nav>
-    <main class="contenu" id="vue" tabindex="-1"></main>
+    <main class="contenu" id="contenu" tabindex="-1">
+      <!-- Les bandeaux globaux (mise à jour, démonstration) vivent hors de la
+           vue : insérés dans son contenu, ils s'empilaient au-dessus du titre
+           de page et repoussaient l'action principale hors de l'écran. -->
+      <div id="bandeaux"></div>
+      <div id="vue"></div>
+    </main>
   </div>
   <div id="toasts" aria-live="polite"></div>
   <script type="module" src="/js/app.js"></script>

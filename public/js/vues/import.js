@@ -11,7 +11,7 @@
 
 import { api } from '../api.js';
 import { etat, registreAchatsUtile } from '../etat.js';
-import { echapperHtml, toast, infobulle } from '../ui.js';
+import { echapperHtml, toast } from '../ui.js';
 import { icone } from '../icones.js';
 import { analyserCsv, lireFichierCsv } from '../csv.js';
 import { analyserDateSouple } from '/partage/dates.js';
@@ -115,10 +115,13 @@ export async function vueImport(conteneur) {
     ${achatsUtiles ? `
     <div class="carte">
       <h2>Que voulez-vous importer ?</h2>
-      <div class="choix-registre" role="tablist">
+      ${/* Deux boutons à bascule, pas des onglets : sans panneau associé ni
+            navigation aux flèches, `role="tab"` promettait un fonctionnement
+            que rien ne tenait. `aria-pressed` décrit ce qui existe vraiment. */ ''}
+      <div class="choix-registre">
         ${Object.entries(REGISTRES).map(([cle, r]) => `
           <button type="button" class="btn ${cle === registre ? 'btn-primaire' : 'btn-secondaire'}"
-            role="tab" data-registre="${cle}" aria-selected="${cle === registre}">
+            data-registre="${cle}" aria-pressed="${cle === registre}">
             ${echapperHtml(r.libelle)}
           </button>`).join('')}
       </div>
@@ -138,7 +141,7 @@ export async function vueImport(conteneur) {
       <h2>2. Faire correspondre les colonnes</h2>
       <p class="resume-filtre" id="resume-fichier"></p>
       <div class="grille-correspondance" id="grille-correspondance"></div>
-      <div class="pied-dialogue" style="justify-content: flex-start;">
+      <div class="actions-formulaire">
         <button type="button" class="btn btn-primaire" id="bouton-analyser">${icone('liste', { taille: 16 })}<span>Analyser le fichier</span></button>
       </div>
     </div>
@@ -167,7 +170,7 @@ export async function vueImport(conteneur) {
         const actif = b.dataset.registre === registre;
         b.classList.toggle('btn-primaire', actif);
         b.classList.toggle('btn-secondaire', !actif);
-        b.setAttribute('aria-selected', String(actif));
+        b.setAttribute('aria-pressed', String(actif));
       });
       // Un fichier déjà chargé se relit pour l'autre registre ; sinon on repart
       // de l'étape 1.
@@ -179,7 +182,11 @@ export async function vueImport(conteneur) {
   // ---- Étape 1 : fichier -------------------------------------------------------
   refs.zone.addEventListener('click', () => refs.champFichier.click());
   refs.zone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') refs.champFichier.click();
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    // Sans cela, la barre d'espace ouvrait le sélecteur ET faisait défiler la
+    // page sous l'utilisateur.
+    e.preventDefault();
+    refs.champFichier.click();
   });
   refs.zone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -297,11 +304,14 @@ export async function vueImport(conteneur) {
 
     refs.etapeRapport.hidden = false;
     refs.etapeRapport.innerHTML = `
-      <h2>3. Vérifier puis importer${infobulle(
-        'Une sauvegarde de vos données est créée automatiquement juste avant l’import : ' +
-        'en cas de problème, restaurez-la depuis les paramètres.',
-        'l’import'
-      )}</h2>
+      <h2>3. Vérifier puis importer</h2>
+      ${/* Le filet de sécurité était caché derrière une bulle au survol, au
+            moment précis où il fallait le dire tout haut. */ ''}
+      <p class="note-legale">
+        ${icone('cercle-valide', { taille: 16 })}
+        <span>Une sauvegarde de vos données est créée juste avant l’import : en cas de
+        problème, restaurez-la depuis les paramètres.</span>
+      </p>
       <div class="compteurs-import">
         <div class="compteur ok"><strong>${rapport.valides}</strong> ${accord(rapport.valides)} prêt${rapport.valides > 1 ? 's' : ''} à importer</div>
         <div class="compteur attention"><strong>${rapport.doublons.length}</strong> doublons détectés</div>
@@ -316,8 +326,11 @@ export async function vueImport(conteneur) {
           ).join('')}
           ${rapport.doublons.length > 15 ? `<li>… et ${rapport.doublons.length - 15} autres.</li>` : ''}
         </ul>
-        <div class="champ" style="margin-top: 10px;">
-          <label><input type="checkbox" id="importer-doublons"> Importer aussi les doublons</label>
+        <div class="liste-options">
+          <label class="option-case">
+            <input type="checkbox" id="importer-doublons">
+            <span>Importer aussi les doublons</span>
+          </label>
         </div>` : ''}
 
       ${rapport.erreurs.length > 0 ? `
@@ -329,7 +342,7 @@ export async function vueImport(conteneur) {
           ${rapport.erreurs.length > 15 ? `<li>… et ${rapport.erreurs.length - 15} autres.</li>` : ''}
         </ul>` : ''}
 
-      <div class="pied-dialogue" style="justify-content: flex-start;">
+      <div class="actions-formulaire">
         <button type="button" class="btn btn-primaire" id="bouton-importer"
           ${rapport.valides + rapport.doublons.length === 0 ? 'disabled' : ''}>
           ${icone('import', { taille: 16 })}<span>Importer maintenant</span>

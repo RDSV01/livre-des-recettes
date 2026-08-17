@@ -14,7 +14,7 @@
 import { api, urlExport, urlRapportAnnuel } from '../api.js';
 import { registreAchatsUtile } from '../etat.js';
 import { icone } from '../icones.js';
-import { infobulle } from '../ui.js';
+import { infobulle, toast, echapperHtml } from '../ui.js';
 import { controlerAvantExport } from '../controle-export.js';
 import { NOMS_MOIS } from '/partage/dates.js';
 
@@ -29,6 +29,10 @@ function carteRegistre({ id, titre, colonnes, annees }) {
     <div class="carte">
       <h2>${titre}</h2>
       <p class="resume-filtre">${colonnes}</p>
+      ${/* Trois formats, trois usages : le dire évite de lire la hiérarchie
+            des boutons comme un jugement sur les deux autres. */ ''}
+      <p class="indication-formats">Le PDF est le document à présenter en cas de contrôle.
+      Excel et CSV servent à retravailler les mêmes lignes dans un tableur.</p>
       <div class="barre-outils">
         <div class="champ">
           <label for="${id}-annee">Année</label>
@@ -104,7 +108,9 @@ export async function vueExports(conteneur) {
       </div>
     </div>
 
-    `;
+    ${/* Le téléchargement part dans le navigateur, hors de l'application : sans
+          cette trace, la vérification se terminait sur un écran inchangé. */ ''}
+    <p class="note-legale" id="dernier-export" hidden></p>`;
 
   /** Nomme la période choisie : « Année 2026 » ou « Mars 2026 ». */
   const periodeLisible = ({ annee, mois }) => {
@@ -113,15 +119,28 @@ export async function vueExports(conteneur) {
     return `${nom.charAt(0).toUpperCase()}${nom.slice(1)} ${annee}`;
   };
 
+  const trace = conteneur.querySelector('#dernier-export');
+
   /** Vérifie devant l'utilisateur, puis déclenche le téléchargement s'il confirme. */
-  const telecharger = async ({ titre, periode, registre, url }) => {
+  const telecharger = async ({ titre, periode, registre, url, format }) => {
     const confirme = await controlerAvantExport({
       titre,
       periodeLisible: periodeLisible(periode),
       periode,
       registre
     });
-    if (confirme) window.location.href = url;
+    if (!confirme) return;
+    window.location.href = url;
+
+    // Le fichier atterrit dans le dossier de téléchargements du navigateur :
+    // l'application dit au moins ce qu'elle vient d'envoyer, et quand.
+    const heure = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const nom = `${titre} · ${periodeLisible(periode)}${format ? ` (${format.toUpperCase()})` : ''}`;
+    trace.hidden = false;
+    trace.innerHTML = `${icone('cercle-valide', { taille: 16 })}
+      <span>Téléchargement lancé à ${heure} : <strong>${echapperHtml(nom)}</strong>.
+      Le fichier arrive dans le dossier de téléchargements de votre navigateur.</span>`;
+    toast('Téléchargement lancé.');
   };
 
   conteneur.querySelectorAll('[data-format]').forEach((bouton) => {
@@ -136,6 +155,7 @@ export async function vueExports(conteneur) {
         titre: id === 'achats' ? 'Registre des achats' : 'Livre des recettes',
         periode,
         registre,
+        format: bouton.dataset.format,
         url: urlExport(bouton.dataset.format, periode, registre)
       });
     });
@@ -149,6 +169,7 @@ export async function vueExports(conteneur) {
       titre: 'Rapport annuel de gestion',
       periode: { annee },
       registre: '',
+      format: 'pdf',
       url: urlRapportAnnuel(annee)
     });
   });

@@ -17,6 +17,13 @@ const SUGGESTIONS_MAX = 6;
 /** L'utilisateur préfère-t-il moins de mouvement ? */
 const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/**
+ * Identifiants uniques pour relier deux éléments entre eux (`aria-labelledby`,
+ * `aria-describedby`) quand le balisage est produit à la volée.
+ */
+let compteurIdentifiants = 0;
+const identifiantUnique = (prefixe) => `${prefixe}-${(compteurIdentifiants += 1)}`;
+
 /** Échappe un texte pour l'insérer sans risque dans du HTML. */
 export function echapperHtml(texte) {
   return String(texte ?? '')
@@ -54,16 +61,51 @@ export function chargeur(forme = 'liste') {
     </div>`;
 }
 
-/** Affiche une notification éphémère en bas à droite. */
-export function toast(message, type = 'succes') {
+/**
+ * Affiche une notification éphémère en bas à droite.
+ *
+ * Une action facultative (« Annuler la suppression ») s'affiche dans le toast.
+ * Sans elle, la réparation promise par le message ne serait joignable qu'au
+ * clavier, par un raccourci que rien ne montre. Sa présence allonge le délai
+ * d'effacement, le temps de la lire puis de la viser.
+ *
+ * @param {string} message
+ * @param {'succes' | 'erreur'} [type]
+ * @param {{ action?: { libelle: string, executer: () => unknown } }} [options]
+ */
+export function toast(message, type = 'succes', { action } = {}) {
   const conteneur = document.getElementById('toasts');
   const element = document.createElement('div');
   const estErreur = type === 'erreur';
   element.className = `toast ${estErreur ? 'erreur' : 'succes'}`;
+  // Une erreur interrompt l'annonce en cours du lecteur d'écran ; une réussite
+  // attend son tour. Le conteneur seul, en `polite`, faisait passer les deux
+  // pour de simples informations.
+  element.setAttribute('role', estErreur ? 'alert' : 'status');
   element.innerHTML = icone(estErreur ? 'cercle-alerte' : 'cercle-valide') +
     `<span>${echapperHtml(message)}</span>`;
+
+  if (action) {
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.className = 'btn btn-tertiaire action-toast';
+    bouton.textContent = action.libelle;
+    bouton.addEventListener('click', () => {
+      element.remove();
+      action.executer();
+    });
+    element.appendChild(bouton);
+  }
+
   conteneur.appendChild(element);
-  setTimeout(() => element.remove(), 4000);
+
+  // Le survol suspend le compte à rebours : un toast qui porte une action ne
+  // doit pas s'effacer sous le curseur qui la vise.
+  let minuteur = setTimeout(() => element.remove(), action ? 9000 : 4000);
+  element.addEventListener('pointerenter', () => clearTimeout(minuteur));
+  element.addEventListener('pointerleave', () => {
+    minuteur = setTimeout(() => element.remove(), 2000);
+  });
 }
 
 /**
@@ -81,9 +123,13 @@ export function confirmer({
 }) {
   return new Promise((resoudre) => {
     const dialogue = document.createElement('dialog');
+    // Le titre nomme la boîte de dialogue : sans lien explicite, un lecteur
+    // d'écran annonce « dialogue » et rien d'autre.
+    const idTitre = identifiantUnique('titre-confirmation');
+    dialogue.setAttribute('aria-labelledby', idTitre);
     dialogue.innerHTML = `
       <form method="dialog" class="corps-dialogue">
-        <h2>${echapperHtml(titre)}</h2>
+        <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
         <p>${echapperHtml(message)}</p>
         <div class="pied-dialogue">
           <button type="button" class="btn btn-secondaire" data-role="annuler">Annuler</button>
@@ -94,9 +140,13 @@ export function confirmer({
       </form>`;
     document.body.appendChild(dialogue);
 
+    // Le focus revient d'où il venait : retirer la boîte le laisserait retomber
+    // sur le document, et le clavier repartirait du haut de la page.
+    const origine = document.activeElement;
     const terminer = (resultat) => {
       dialogue.close();
       dialogue.remove();
+      if (origine instanceof HTMLElement && origine.isConnected) origine.focus();
       resoudre(resultat);
     };
     dialogue.querySelector('[data-role="ok"]').addEventListener('click', () => terminer(true));
@@ -119,9 +169,11 @@ export function confirmer({
 export function dialogueAttente({ titre, message }) {
   const dialogue = document.createElement('dialog');
   dialogue.className = 'dialogue-attente';
+  const idTitre = identifiantUnique('titre-attente');
+  dialogue.setAttribute('aria-labelledby', idTitre);
   dialogue.innerHTML = `
     <div class="corps-dialogue">
-      <h2>${echapperHtml(titre)}</h2>
+      <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
       <p class="etat-attente" aria-live="polite">${echapperHtml(message)}</p>
       <div class="barre-attente"><span></span></div>
     </div>`;
@@ -139,6 +191,22 @@ export function dialogueAttente({ titre, message }) {
       dialogue.remove();
     }
   };
+}
+
+/**
+ * Ouvre une boîte de dialogue déjà présente dans la page, et rend le focus à
+ * son déclencheur quand elle se referme.
+ *
+ * `showModal()` seul déplace bien le focus dans la boîte, mais ne le ramène
+ * nulle part ensuite : après une annulation, le clavier repartait du haut du
+ * document, loin de la ligne sur laquelle on travaillait.
+ */
+export function ouvrirModale(dialogue) {
+  const origine = document.activeElement;
+  dialogue.addEventListener('close', () => {
+    if (origine instanceof HTMLElement && origine.isConnected) origine.focus();
+  }, { once: true });
+  dialogue.showModal();
 }
 
 /**
@@ -197,11 +265,29 @@ export function installerSuggestions({ champ, liste, valeurs }) {
   let visibles = [];
   let indexActif = -1;
 
+  // Le champ et sa liste forment un `combobox` en bonne et due forme : sans ces
+  // rôles, les flèches ne déplaçaient qu'une classe CSS, que rien n'annonçait.
+  if (!liste.id) liste.id = identifiantUnique('liste-suggestions');
+  liste.setAttribute('role', 'listbox');
+  champ.setAttribute('role', 'combobox');
+  champ.setAttribute('aria-autocomplete', 'list');
+  champ.setAttribute('aria-controls', liste.id);
+  champ.setAttribute('aria-expanded', 'false');
+
+  const marquerActif = () => {
+    [...liste.children].forEach((option, i) => option.classList.toggle('actif', i === indexActif));
+    const actif = liste.children[indexActif];
+    if (actif) champ.setAttribute('aria-activedescendant', actif.id);
+    else champ.removeAttribute('aria-activedescendant');
+  };
+
   const fermer = () => {
     liste.hidden = true;
     liste.innerHTML = '';
     visibles = [];
     indexActif = -1;
+    champ.setAttribute('aria-expanded', 'false');
+    champ.removeAttribute('aria-activedescendant');
   };
 
   const ouvrir = () => {
@@ -212,9 +298,11 @@ export function installerSuggestions({ champ, liste, valeurs }) {
     if (visibles.length === 0) return fermer();
     indexActif = -1;
     liste.innerHTML = visibles
-      .map((v, i) => `<div role="option" data-index="${i}">${echapperHtml(v)}</div>`)
+      .map((v, i) => `<div role="option" id="${liste.id}-${i}" aria-selected="false" data-index="${i}">${echapperHtml(v)}</div>`)
       .join('');
     liste.hidden = false;
+    champ.setAttribute('aria-expanded', 'true');
+    champ.removeAttribute('aria-activedescendant');
   };
 
   champ.addEventListener('input', ouvrir);
@@ -224,7 +312,8 @@ export function installerSuggestions({ champ, liste, valeurs }) {
       evenement.preventDefault();
       const pas = evenement.key === 'ArrowDown' ? 1 : -1;
       indexActif = (indexActif + pas + visibles.length) % visibles.length;
-      [...liste.children].forEach((option, i) => option.classList.toggle('actif', i === indexActif));
+      [...liste.children].forEach((option, i) => option.setAttribute('aria-selected', String(i === indexActif)));
+      marquerActif();
     } else if (evenement.key === 'Enter') {
       // Une suggestion surlignée est choisie ; sinon Enter garde son rôle.
       if (indexActif >= 0) {
@@ -270,8 +359,13 @@ export function installerApercuDate(champ) {
 }
 
 /**
- * Bulle d'aide : un « i » posé à côté d'un titre, dont le texte n'apparaît
- * qu'au survol ou au focus clavier.
+ * Bulle d'aide : un « i » posé à côté d'un titre, dont le texte apparaît au
+ * survol, au focus clavier ou au clic.
+ *
+ * Le déclencheur porte `aria-describedby` vers la bulle : c'est ce lien qui
+ * fait lire l'explication par un lecteur d'écran. Sans lui, le seul nom
+ * annoncé était « En savoir plus sur… », et le contenu, souvent une précision
+ * légale, restait inaudible.
  *
  * Réservée à ce qui éclaire sans rien demander. Un avertissement qui appelle
  * une action de l'utilisateur (des recettes à catégoriser, une sauvegarde qui
@@ -282,11 +376,13 @@ export function installerApercuDate(champ) {
  * @param {string} [pour] ce que la bulle explique, pour les lecteurs d'écran.
  */
 export function infobulle(texte, pour = 'ce réglage') {
+  const idBulle = identifiantUnique('bulle');
   return `<span class="infobulle">
-      <button type="button" class="declencheur-infobulle" aria-label="En savoir plus sur ${echapperHtml(pour)}">
+      <button type="button" class="declencheur-infobulle" aria-describedby="${idBulle}"
+        aria-expanded="false" aria-label="En savoir plus sur ${echapperHtml(pour)}">
         ${icone('info', { taille: 15 })}
       </button>
-      <span class="bulle" role="tooltip">${echapperHtml(texte)}</span>
+      <span class="bulle" role="tooltip" id="${idBulle}">${echapperHtml(texte)}</span>
     </span>`;
 }
 
@@ -304,6 +400,8 @@ export function infobulle(texte, pour = 'ce réglage') {
  */
 export function installerInfobulles() {
   const MARGE = 8;
+  /** Bulle ouverte au clic : elle reste jusqu'au prochain clic ou à Échap. */
+  let epinglee = null;
 
   const montrer = (declencheur) => {
     const bulle = declencheur.nextElementSibling;
@@ -318,10 +416,20 @@ export function installerInfobulles() {
     bulle.style.left = `${gauche}px`;
     bulle.style.top = `${ancre.bottom + MARGE}px`;
     bulle.classList.add('visible');
+    declencheur.setAttribute('aria-expanded', 'true');
   };
 
   const cacher = (declencheur) => {
+    if (declencheur === epinglee) return; // ouverte au clic : elle reste
     declencheur.nextElementSibling?.classList.remove('visible');
+    declencheur.setAttribute('aria-expanded', 'false');
+  };
+
+  const desepingler = () => {
+    if (!epinglee) return;
+    const ancienne = epinglee;
+    epinglee = null;
+    cacher(ancienne);
   };
 
   for (const [entree, sortie] of [['pointerover', 'pointerout'], ['focusin', 'focusout']]) {
@@ -335,20 +443,77 @@ export function installerInfobulles() {
     });
   }
 
+  // Le clic épingle la bulle : le survol seul la rendait inatteignable dès que
+  // le pointeur n'est pas le moyen de navigation.
+  document.addEventListener('click', (evenement) => {
+    const declencheur = evenement.target.closest?.('.declencheur-infobulle');
+    if (!declencheur) return desepingler();
+    if (declencheur === epinglee) return desepingler();
+    desepingler();
+    epinglee = declencheur;
+    montrer(declencheur);
+  });
+
+  document.addEventListener('keydown', (evenement) => {
+    if (evenement.key === 'Escape') desepingler();
+  });
+
   // Une bulle placée en coordonnées de fenêtre suivrait mal un défilement :
-  // autant la refermer.
+  // autant la refermer. Le travail est reporté à la prochaine image, pour ne
+  // pas interroger le document à chaque événement de défilement.
+  let defilementPrevu = false;
   window.addEventListener('scroll', () => {
-    document.querySelectorAll('.bulle.visible').forEach((b) => b.classList.remove('visible'));
+    if (defilementPrevu) return;
+    defilementPrevu = true;
+    requestAnimationFrame(() => {
+      defilementPrevu = false;
+      epinglee = null;
+      document.querySelectorAll('.bulle.visible').forEach((b) => {
+        b.classList.remove('visible');
+        b.previousElementSibling?.setAttribute('aria-expanded', 'false');
+      });
+    });
   }, true);
 }
 
-/** Place la flèche de tri sur la colonne active du tableau. */
+/**
+ * En-tête de colonne triable.
+ *
+ * Le libellé est un vrai bouton : posé sur le `th` seul, le tri d'un registre
+ * de plusieurs centaines de lignes n'existait qu'à la souris.
+ */
+export function enteteTri(cleTri, libelle, classe = '') {
+  return `<th class="triable ${classe}" data-tri="${cleTri}" aria-sort="none">
+      <button type="button" class="entete-tri">${libelle}<span class="indicateur-tri"></span></button>
+    </th>`;
+}
+
+/** Place la flèche de tri sur la colonne active du tableau, et l'annonce. */
 export function majIndicateursTri(entetes, tri) {
   entetes.querySelectorAll('th.triable').forEach((th) => {
-    th.querySelector('.indicateur-tri').innerHTML = th.dataset.tri === tri.colonne
+    const actif = th.dataset.tri === tri.colonne;
+    th.setAttribute('aria-sort', actif ? (tri.sens === 'asc' ? 'ascending' : 'descending') : 'none');
+    th.querySelector('.indicateur-tri').innerHTML = actif
       ? icone(tri.sens === 'asc' ? 'chevron-haut' : 'chevron-bas', { taille: 13 })
       : '';
   });
+}
+
+/**
+ * Puces des filtres actifs, chacune retirable d'un clic.
+ *
+ * Les filtres survivent au changement de vue : sans ce rappel, un sous-total
+ * filtré se présentait comme le livre entier, juste avant l'export ou la
+ * recopie d'un montant dans une déclaration.
+ *
+ * @param {{ cle: string, libelle: string }[]} actifs
+ */
+export function pucesFiltres(actifs) {
+  return actifs.map((f) => `
+    <button type="button" class="puce-filtre" data-filtre="${echapperHtml(f.cle)}"
+      aria-label="Retirer le filtre ${echapperHtml(f.libelle)}">
+      <span>${echapperHtml(f.libelle)}</span>${icone('croix', { taille: 13 })}
+    </button>`).join('');
 }
 
 /**

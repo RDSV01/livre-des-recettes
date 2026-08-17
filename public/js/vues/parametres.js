@@ -41,8 +41,12 @@ export async function vueParametres(conteneur) {
       </button>
     </div>` : ''}
 
+    ${/* Une seule carte « Mon entreprise » réunissait seize contrôles de trois
+          natures différentes. Les mêmes champs sont ici groupés par question
+          posée : qui vous êtes, sous quel régime, et comment afficher. */ ''}
     <form class="carte" id="formulaire-parametres" novalidate>
-      <h2>Mon entreprise</h2>
+      <h2>Identité de l’entreprise</h2>
+      <p class="indication">Ces lignes figurent en tête de chaque export.</p>
       <div class="grille-formulaire">
         <div class="champ" data-champ="nomEntreprise">
           <label for="param-nom">Nom de l’entreprise</label>
@@ -72,6 +76,11 @@ export async function vueParametres(conteneur) {
           <input type="text" id="param-adresse" name="adresse" value="${echapperHtml(p.adresse)}">
           <span class="erreur-champ"></span>
         </div>
+      </div>
+
+      <h2 class="titre-section">Régime et déclaration</h2>
+      <p class="indication">Ce qui détermine vos plafonds, vos cotisations estimées et vos rappels.</p>
+      <div class="grille-formulaire">
         <div class="champ" data-champ="typeActivite">
           <label for="param-type-activite">Type d’activité${infobulle(
             'Détermine le plafond micro-entrepreneur et le seuil de franchise de TVA suivis ' +
@@ -110,6 +119,10 @@ export async function vueParametres(conteneur) {
           </select>
           <span class="erreur-champ"></span>
         </div>
+      </div>
+
+      <h2 class="titre-section">Affichage</h2>
+      <div class="grille-formulaire">
         <div class="champ" data-champ="devise">
           <label for="param-devise">Devise</label>
           <select id="param-devise" name="devise">
@@ -130,7 +143,7 @@ export async function vueParametres(conteneur) {
         </div>
       </div>
 
-      <h2 style="margin-top: 24px;">Options</h2>
+      <h2 class="titre-section">Options</h2>
       <div class="liste-options">
         <label class="option-case">
           <input type="checkbox" name="alertesNumerotation" ${p.alertesNumerotation ? 'checked' : ''}>
@@ -151,7 +164,7 @@ export async function vueParametres(conteneur) {
         </label>
       </div>
 
-      <h2 style="margin-top: 24px;">Modes de règlement personnalisés${infobulle(
+      <h2 class="titre-section">Modes de règlement personnalisés${infobulle(
         `Les modes par défaut (${MODES_REGLEMENT.map((m) => m.libelle).join(', ')}) restent ` +
         'toujours disponibles. Un mode utilisé par des recettes peut être renommé, mais pas supprimé.',
         'les modes de règlement'
@@ -166,7 +179,7 @@ export async function vueParametres(conteneur) {
         <span class="erreur-champ"></span>
       </div>
 
-      <div class="pied-dialogue" style="justify-content: flex-start;">
+      <div class="actions-formulaire">
         <button type="submit" class="btn btn-primaire">Enregistrer</button>
       </div>
     </form>
@@ -212,7 +225,7 @@ export async function vueParametres(conteneur) {
 
     <div class="carte">
       <h2>Sauvegardes disponibles</h2>
-      <p class="resume-filtre" id="resume-sauvegardes"></p>
+      <p class="resume-filtre" id="resume-sauvegardes" aria-live="polite"></p>
       <div id="liste-sauvegardes"></div>
     </div>`;
 

@@ -27,11 +27,11 @@ import {
   echapperHtml, toast, confirmer, differer, formaterChampMontant,
   afficherErreursFormulaire, effacerErreursFormulaire,
   installerSuggestions, installerApercuDate, majIndicateursTri, majBarreSelection,
-  animerDepartLignes
+  animerDepartLignes, ouvrirModale, enteteTri, pucesFiltres
 } from '../ui.js';
 import { icone } from '../icones.js';
 import { etatFiltres } from '../preferences-vues.js';
-import { enregistrerAction } from '../historique.js';
+import { enregistrerAction, annulerSi } from '../historique.js';
 import { formaterMontant, sommeMontants, analyserMontant, enCentimes } from '/partage/montants.js';
 import { formaterDate, aujourdHuiIso, anneeDe, NOMS_MOIS } from '/partage/dates.js';
 import {
@@ -85,7 +85,7 @@ export async function vueRecettes(conteneur, params) {
   let enEdition = null;        // recette en cours de modification, ou null
   let idsNouveaux = new Set(); // recettes à mettre en avant au prochain rendu (ajout)
   let siretResolu = null;      // { requete, siret, nom } après une recherche réussie
-  let dejaAverti = false;      // avertissement « recette similaire » déjà montré
+  let saisieAvertie = '';      // saisie pour laquelle « recette similaire » a été montré
   let categorieSource = '';    // catégorie conservée quand le champ n'est pas affiché
   let instantaneInitial = '';  // état du formulaire à l'ouverture (garde-fou)
 
@@ -100,8 +100,10 @@ export async function vueRecettes(conteneur, params) {
     reinitialiser: conteneur.querySelector('#reinitialiser-filtres'),
     resume: conteneur.querySelector('#resume-filtre'),
     anomalies: conteneur.querySelector('#zone-anomalies'),
+    puces: conteneur.querySelector('#puces-filtres'),
     barreSelection: conteneur.querySelector('#barre-selection'),
     compteSelection: conteneur.querySelector('#compte-selection'),
+    noteSelection: conteneur.querySelector('#note-selection'),
     toutSelectionner: conteneur.querySelector('#tout-selectionner'),
     entetes: conteneur.querySelector('#table-recettes thead'),
     corps: conteneur.querySelector('#corps-recettes'),
@@ -154,6 +156,33 @@ export async function vueRecettes(conteneur, params) {
     if (refs.categorie) refs.categorie.value = '';
     changerFiltres();
   });
+
+  // Une puce retirée remet son filtre à zéro : c'est la façon la plus directe
+  // de défaire ce que l'on voit.
+  refs.puces.addEventListener('click', (evenement) => {
+    const puce = evenement.target.closest('[data-filtre]');
+    if (!puce) return;
+    const cle = puce.dataset.filtre;
+    filtres[cle] = '';
+    if (cle === 'q') refs.recherche.value = '';
+    else if (refs[cle]) refs[cle].value = '';
+    changerFiltres();
+  });
+
+  /** Les filtres qui restreignent la liste, nommés en clair. */
+  function filtresActifs() {
+    const nomMode = (code) => modes.find((m) => m.code === code)?.libelle ?? code;
+    const nomCategorie = (code) => (code === 'aucune'
+      ? 'Non catégorisées'
+      : CATEGORIES_RECETTE.find((c) => c.code === code)?.libelle ?? code);
+    return [
+      filtres.q ? { cle: 'q', libelle: `Recherche : ${filtres.q}` } : null,
+      filtres.annee ? { cle: 'annee', libelle: `Année ${filtres.annee}` } : null,
+      filtres.mois ? { cle: 'mois', libelle: NOMS_MOIS[Number(filtres.mois) - 1] } : null,
+      filtres.mode ? { cle: 'mode', libelle: nomMode(filtres.mode) } : null,
+      filtres.categorie ? { cle: 'categorie', libelle: nomCategorie(filtres.categorie) } : null
+    ].filter(Boolean);
+  }
 
   // ---- Tri par colonne ---------------------------------------------------------
   refs.entetes.addEventListener('click', (evenement) => {
@@ -213,31 +242,74 @@ export async function vueRecettes(conteneur, params) {
     const cibles = recettesSelectionnees();
     if (cibles.length === 0) return;
     const total = sommeMontants(cibles.map((r) => r.montant));
+    const dates = cibles.map((r) => r.dateEncaissement).sort();
+    const periode = dates[0] === dates.at(-1)
+      ? formaterDate(dates[0], formatDate)
+      : `du ${formaterDate(dates[0], formatDate)} au ${formaterDate(dates.at(-1), formatDate)}`;
     const accord = await confirmer({
       titre: `Supprimer ${cibles.length} recette${cibles.length > 1 ? 's' : ''} ?`,
-      message: `Total : ${formaterMontant(total, devise)}. Ctrl+Z permet d'annuler.`
+      message: `${periode}, total ${formaterMontant(total, devise)}. ` +
+        'La suppression reste annulable tant que vous ne quittez pas l’application.'
     });
     if (!accord) return;
+
+    // Les recettes réellement supprimées sont accumulées au fil de la boucle, et
+    // l'annulation est enregistrée quoi qu'il arrive : un échec en cours de
+    // route laissait sinon des lignes détruites sans aucun moyen de revenir en
+    // arrière, dans un registre à conserver dix ans.
+    const supprimees = [];
+    let echec = null;
+    const lignes = cibles.map((r) => refs.corps.querySelector(`input[data-selection="${r.id}"]`)?.closest('tr'));
     try {
-      const lignes = cibles.map((r) => refs.corps.querySelector(`input[data-selection="${r.id}"]`)?.closest('tr'));
-      await animerDepartLignes(lignes);
-      for (const recette of cibles) await api.supprimerRecette(recette.id);
-      const donnees = cibles.map(champsRecette);
-      let ids = cibles.map((r) => r.id);
-      enregistrerAction({
+      for (const recette of cibles) {
+        await api.supprimerRecette(recette.id);
+        supprimees.push(champsRecette(recette));
+      }
+    } catch (erreur) {
+      echec = erreur;
+    }
+
+    if (supprimees.length > 0) {
+      let ids = [];
+      const action = enregistrerAction({
         annuler: async () => {
           ids = [];
-          for (const d of donnees) ids.push((await api.creerRecette(d)).recette.id);
+          for (const d of supprimees) ids.push((await api.creerRecette(d)).recette.id);
         },
         retablir: async () => { for (const id of ids) await api.supprimerRecette(id); }
       });
-      toast(`${cibles.length} recette${cibles.length > 1 ? 's' : ''} supprimée${cibles.length > 1 ? 's' : ''}.`);
+      await animerDepartLignes(lignes.slice(0, supprimees.length));
+      const accorde = supprimees.length > 1 ? 's' : '';
+      const message = echec
+        ? `${supprimees.length} recette${accorde} sur ${cibles.length} supprimée${accorde} : ${echec.message}`
+        : `${supprimees.length} recette${accorde} supprimée${accorde}.`;
+      toast(message, echec ? 'erreur' : 'succes', {
+        action: { libelle: 'Annuler la suppression', executer: () => annulerSuppression(action) }
+      });
       selection.clear();
+    } else if (echec) {
+      toast(echec.message, 'erreur');
+    }
+    await rafraichir();
+  });
+
+  /**
+   * Défait une suppression depuis le bouton du toast. L'annulation ne joue que
+   * si rien d'autre n'a été fait entre-temps : elle doit défaire la suppression
+   * qu'elle annonce, pas celle qui l'a suivie.
+   */
+  async function annulerSuppression(action) {
+    try {
+      const fait = await annulerSi(action);
+      toast(fait
+        ? 'Suppression annulée.'
+        : 'Une autre action a eu lieu depuis : utilisez Ctrl+Z pour revenir en arrière pas à pas.',
+      fait ? 'succes' : 'erreur');
       await rafraichir();
     } catch (erreur) {
       toast(erreur.message, 'erreur');
     }
-  });
+  }
 
   // Reclassement groupé (activité mixte) : vente ou prestation.
   conteneur.querySelectorAll('[data-classer]').forEach((bouton) => {
@@ -291,19 +363,25 @@ export async function vueRecettes(conteneur, params) {
       const accord = await confirmer({
         titre: 'Supprimer cette recette ?',
         message: `${formaterDate(recette.dateEncaissement, formatDate)}, ${recette.client}, ` +
-          `${formaterMontant(recette.montant, devise)}.`
+          `${formaterMontant(recette.montant, devise)}. ` +
+          'La suppression reste annulable tant que vous ne quittez pas l’application.'
       });
       if (!accord) return;
+      const ligne = bouton.closest('tr');
       try {
-        await animerDepartLignes([bouton.closest('tr')]);
+        // La ligne ne s'efface qu'une fois la suppression acquise : animée
+        // d'abord, elle disparaissait de l'écran même quand l'écriture échouait.
         await api.supprimerRecette(recette.id);
         const donnees = champsRecette(recette);
         let id = recette.id;
-        enregistrerAction({
+        const action = enregistrerAction({
           annuler: async () => { id = (await api.creerRecette(donnees)).recette.id; },
           retablir: () => api.supprimerRecette(id)
         });
-        toast('Recette supprimée (Ctrl+Z pour annuler).');
+        await animerDepartLignes([ligne]);
+        toast('Recette supprimée.', 'succes', {
+          action: { libelle: 'Annuler la suppression', executer: () => annulerSuppression(action) }
+        });
         await rafraichir();
       } catch (erreur) {
         toast(erreur.message, 'erreur');
@@ -360,9 +438,20 @@ export async function vueRecettes(conteneur, params) {
     let siret = '';
     if (estIdentifiant(chiffres)) {
       // Un SIREN ou SIRET a été saisi : on récupère le nom exact (via le cache si possible).
-      const resolu = siretResolu?.requete === chiffres
-        ? siretResolu
-        : (await api.rechercherSiret(chiffres)).entreprise;
+      let resolu = siretResolu?.requete === chiffres ? siretResolu : null;
+      if (!resolu) {
+        try {
+          resolu = (await api.rechercherSiret(chiffres)).entreprise;
+        } catch (erreur) {
+          // Sans réseau, ou sur un nom fait de chiffres, la recherche échoue :
+          // l'enregistrement doit rester possible, pas s'arrêter net.
+          throw {
+            champ: 'client',
+            message: `Nom introuvable pour « ${saisie} » (${erreur.message}). ` +
+              'Vérifiez le numéro, ou saisissez le nom du client en toutes lettres.'
+          };
+        }
+      }
       nom = resolu.nom;
       siret = resolu.siret || (chiffres.length === 14 ? chiffres : '');
     }
@@ -411,10 +500,25 @@ export async function vueRecettes(conteneur, params) {
     fermerFormulaire();
   });
 
-  // « 12,5 » devient « 12,50 » dès que l'on quitte le champ montant.
+  // « 12,5 » devient « 12,50 » dès que l'on quitte le champ montant. Une saisie
+  // que l'application ne sait pas lire est signalée tout de suite : attendre
+  // l'enregistrement laissait croire que le montant était accepté.
+  const signalerMontant = (message) => {
+    // Message posé sur place, sans déplacer le focus : le faire revenir dans le
+    // champ que l'on vient de quitter empêcherait d'en sortir.
+    const champMontant = refs.formulaire.querySelector('[data-champ="montant"]');
+    champMontant.classList.toggle('invalide', Boolean(message));
+    champMontant.querySelector('.erreur-champ').textContent = message ?? '';
+  };
+  refs.formulaire.montant.addEventListener('input', () => signalerMontant(''));
   refs.formulaire.montant.addEventListener('blur', () => {
     const brut = refs.formulaire.montant.value.trim();
-    if (brut) refs.formulaire.montant.value = formaterChampMontant(brut);
+    if (!brut) return;
+    if (analyserMontant(brut) === null) {
+      signalerMontant('Montant illisible. Attendu : 1234,56 (virgule ou point décimal).');
+      return;
+    }
+    refs.formulaire.montant.value = formaterChampMontant(brut);
   });
 
   // Suggestion du prochain numéro de facture : un clic la reprend.
@@ -467,12 +571,15 @@ export async function vueRecettes(conteneur, params) {
     };
 
     // Avertissement non bloquant : une recette très similaire existe déjà.
-    if (!enEdition && !dejaAverti && etat.parametres.alerteRecetteSimilaire) {
+    // L'accord porte sur la saisie exacte qui a été avertie : changer le montant
+    // ou la date rouvre la question, au lieu de passer en silence.
+    const signatureSaisie = JSON.stringify(payload);
+    if (!enEdition && saisieAvertie !== signatureSaisie && etat.parametres.alerteRecetteSimilaire) {
       const montant = analyserMontant(payload.montant);
       const similaire = montant === null ? null :
         chercherSimilaire({ ...payload, montant }, toutes);
       if (similaire) {
-        dejaAverti = true;
+        saisieAvertie = signatureSaisie;
         refs.avertissement.hidden = false;
         refs.avertissement.innerHTML = `${icone('cercle-alerte', { taille: 18 })}
           <span>Une recette très similaire existe déjà :
@@ -484,6 +591,9 @@ export async function vueRecettes(conteneur, params) {
       }
     }
 
+    // Le bouton se ferme pendant l'écriture : sans cela, un double clic sur un
+    // enregistrement lent créait deux fois la même recette.
+    refs.enregistrer.disabled = true;
     try {
       if (enEdition) {
         const avant = champsRecette(enEdition);
@@ -514,6 +624,8 @@ export async function vueRecettes(conteneur, params) {
       } else {
         toast(erreur.message, 'erreur');
       }
+    } finally {
+      refs.enregistrer.disabled = false;
     }
   });
 
@@ -524,7 +636,7 @@ export async function vueRecettes(conteneur, params) {
   function ouvrirFormulaire(recette = null, modele = null) {
     enEdition = recette;
     siretResolu = null;
-    dejaAverti = false;
+    saisieAvertie = '';
     fermerSuggestions();
     effacerErreursFormulaire(refs.formulaire);
     refs.avertissement.hidden = true;
@@ -565,7 +677,7 @@ export async function vueRecettes(conteneur, params) {
     }
 
     instantaneInitial = lireInstantane();
-    refs.dialogue.showModal();
+    ouvrirModale(refs.dialogue);
     f.dateEncaissement.focus();
   }
 
@@ -652,17 +764,28 @@ export async function vueRecettes(conteneur, params) {
     });
 
     const total = sommeMontants(affichees.map((r) => r.montant));
-    refs.resume.textContent = affichees.length === 0
-      ? 'Aucune recette ne correspond.'
-      : `${affichees.length} recette${affichees.length > 1 ? 's' : ''} (${formaterMontant(total, devise)})`;
+    const actifs = filtresActifs();
+    refs.puces.innerHTML = pucesFiltres(actifs);
+    refs.reinitialiser.disabled = actifs.length === 0;
+    // Un sous-total filtré doit dire qu'il est partiel : c'est ce chiffre que
+    // l'on recopie dans une déclaration.
+    const filtre = affichees.length !== toutes.length;
+    refs.resume.innerHTML = affichees.length === 0
+      ? 'Aucune recette ne correspond aux filtres actifs.'
+      : `<span class="resume-nombre">${affichees.length} recette${affichees.length > 1 ? 's' : ''}</span>` +
+        (filtre ? `<span class="resume-portee">sur ${toutes.length} au total, liste filtrée</span>` : '') +
+        `<span class="resume-total">${echapperHtml(formaterMontant(total, devise))}</span>`;
 
     majIndicateursTri(refs.entetes, tri);
 
     if (affichees.length === 0) {
       idsVisibles = [];
+      refs.noteSelection.hidden = true;
       refs.corps.innerHTML = `
         <tr class="ligne-vide"><td colspan="${estMixte ? 9 : 8}">
-          Aucune recette à afficher. Ajoutez-en une avec « Nouvelle recette ».
+          ${actifs.length > 0
+            ? 'Aucune recette ne correspond aux filtres actifs. Retirez une puce ci-dessus pour élargir la liste.'
+            : 'Aucune recette à afficher. Ajoutez-en une avec « Nouvelle recette ».'}
         </td></tr>`;
       majSelection();
       return;
@@ -671,6 +794,13 @@ export async function vueRecettes(conteneur, params) {
     const visibles = montrerTout ? affichees : affichees.slice(0, LIMITE_AFFICHAGE);
     idsVisibles = visibles.map((r) => r.id);
     const restantes = affichees.length - visibles.length;
+    // « Tout sélectionner » ne coche que les lignes affichées : sur un livre
+    // long, la barre annonçait 200 lignes sans dire que les autres restaient
+    // hors du lot, juste avant un bouton « Supprimer ».
+    refs.noteSelection.textContent = restantes > 0
+      ? `Portée : les ${visibles.length} lignes affichées ; ${restantes} autres ne sont pas concernées.`
+      : '';
+    refs.noteSelection.hidden = restantes === 0;
 
     refs.corps.innerHTML = visibles.map((r) => `
       <tr${idsNouveaux.has(r.id) ? ' class="ligne-nouvelle"' : ''}>
@@ -709,8 +839,6 @@ export async function vueRecettes(conteneur, params) {
     const optionsCategories = CATEGORIES_RECETTE
       .map((c) => `<option value="${c.code}">${c.libelle}</option>`)
       .join('');
-    const enTete = (cleTri, libelle, classe = '') =>
-      `<th class="triable ${classe}" data-tri="${cleTri}">${libelle}<span class="indicateur-tri"></span></th>`;
 
     return `
       <header class="entete-vue">
@@ -760,10 +888,15 @@ export async function vueRecettes(conteneur, params) {
           <button type="button" class="btn btn-secondaire" id="reinitialiser-filtres">${icone('reinitialiser', { taille: 16 })}<span>Réinitialiser</span></button>
         </div>
 
+        <div class="puces-filtres" id="puces-filtres"></div>
+
         <div id="zone-anomalies"></div>
 
         <div class="barre-selection" id="barre-selection" hidden>
-          <span id="compte-selection"></span>
+          <div class="info-selection">
+            <span id="compte-selection"></span>
+            <span class="note-selection" id="note-selection" hidden></span>
+          </div>
           ${estMixte ? `
             <button type="button" class="btn btn-secondaire" data-classer="ventes">Classer en ventes</button>
             <button type="button" class="btn btn-secondaire" data-classer="prestations">Classer en prestations</button>` : ''}
@@ -771,7 +904,7 @@ export async function vueRecettes(conteneur, params) {
           <button type="button" class="btn btn-tertiaire" id="deselectionner">Tout désélectionner</button>
         </div>
 
-        <p class="resume-filtre" id="resume-filtre"></p>
+        <p class="resume-filtre resume-registre" id="resume-filtre" aria-live="polite"></p>
 
         <table id="table-recettes">
           <colgroup>
@@ -790,22 +923,22 @@ export async function vueRecettes(conteneur, params) {
           </colgroup>
           <thead>
             <tr>
-              <th class="col-case"><input type="checkbox" id="tout-selectionner" aria-label="Tout sélectionner"></th>
-              ${enTete('date', 'Encaissé le')}
-              ${enTete('client', 'Client')}
-              ${enTete('libelle', 'Libellé')}
-              ${enTete('facture', 'Facture')}
-              ${enTete('mode', 'Paiement')}
-              ${estMixte ? enTete('categorie', 'Catégorie') : ''}
-              ${enTete('montant', 'Montant', 'montant')}
-              <th></th>
+              <th class="col-case"><input type="checkbox" id="tout-selectionner" aria-label="Sélectionner les lignes affichées"></th>
+              ${enteteTri('date', 'Encaissé le')}
+              ${enteteTri('client', 'Client')}
+              ${enteteTri('libelle', 'Libellé')}
+              ${enteteTri('facture', 'Facture')}
+              ${enteteTri('mode', 'Paiement')}
+              ${estMixte ? enteteTri('categorie', 'Catégorie') : ''}
+              ${enteteTri('montant', 'Montant', 'montant')}
+              <th><span class="hors-ecran">Actions</span></th>
             </tr>
           </thead>
           <tbody id="corps-recettes"></tbody>
         </table>
       </div>
 
-      <dialog id="dialogue-recette">
+      <dialog id="dialogue-recette" aria-labelledby="titre-dialogue-recette">
         <form id="formulaire-recette" class="corps-dialogue" novalidate>
           <h2 id="titre-dialogue-recette">Nouvelle recette</h2>
           <div class="grille-formulaire">

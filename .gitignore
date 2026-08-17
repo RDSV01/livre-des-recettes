@@ -21,6 +21,7 @@ npm-debug.log*
 .claude/
 .vscode/
 .idea/
+.impeccable/
 
 # Système
 .DS_Store

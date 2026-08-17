@@ -10,7 +10,7 @@
 import { api } from '../api.js';
 import { etat } from '../etat.js';
 import {
-  echapperHtml, toast, confirmer,
+  echapperHtml, toast, confirmer, ouvrirModale,
   afficherErreursFormulaire, effacerErreursFormulaire, animerDepartLignes
 } from '../ui.js';
 import { icone } from '../icones.js';
@@ -71,12 +71,15 @@ export async function vueClients(conteneur) {
       const accord = await confirmer({
         titre: 'Supprimer ce client ?',
         message: `« ${client.nom} » sera retiré du carnet. Les recettes déjà enregistrées ` +
-          `ne sont pas modifiées. Cette action est définitive.`
+          'ne sont pas modifiées. Contrairement aux registres, cette suppression ne ' +
+          's’annule pas : le carnet devra être ressaisi.'
       });
       if (!accord) return;
+      const ligne = bouton.closest('tr');
       try {
-        await animerDepartLignes([bouton.closest('tr')]);
+        // La ligne ne part qu'une fois la suppression acquise.
         await api.supprimerClient(client.id);
+        await animerDepartLignes([ligne]);
         toast('Client supprimé.');
         await charger();
       } catch (erreur) {
@@ -118,7 +121,7 @@ export async function vueClients(conteneur) {
     refs.siret.value = '';
     refs.formulaire.nom.value = client?.nom ?? '';
     refs.formulaire.siret.value = client?.siret ?? '';
-    refs.dialogue.showModal();
+    ouvrirModale(refs.dialogue);
     refs.siret.focus();
   }
 
@@ -169,22 +172,23 @@ export async function vueClients(conteneur) {
       </header>
 
       <div class="carte">
-        <p class="resume-filtre" id="resume-clients"></p>
+        <p class="resume-filtre" id="resume-clients" aria-live="polite"></p>
         <div class="conteneur-tableau">
           <table>
             <thead>
-              <tr><th>Nom</th><th>SIRET</th><th>Recettes</th><th class="montant">CA total</th><th></th></tr>
+              <tr><th>Nom</th><th>SIRET</th><th>Recettes</th><th class="montant">CA total</th>
+                <th><span class="hors-ecran">Actions</span></th></tr>
             </thead>
             <tbody id="corps-clients"></tbody>
           </table>
         </div>
       </div>
 
-      <dialog id="dialogue-client">
+      <dialog id="dialogue-client" aria-labelledby="titre-dialogue-client">
         <form id="formulaire-client" class="corps-dialogue" novalidate>
           <h2 id="titre-dialogue-client">Nouveau client</h2>
 
-          <div class="champ" style="margin-bottom:16px">
+          <div class="champ champ-espace">
             <label for="recherche-siret">Rechercher par SIRET (facultatif)</label>
             <div class="ligne-siret">
               <div class="champ">
@@ -197,7 +201,7 @@ export async function vueClients(conteneur) {
             <div class="resultat-siret" id="resultat-siret" hidden></div>
           </div>
 
-          <div class="champ" data-champ="nom" style="margin-bottom:14px">
+          <div class="champ champ-espace" data-champ="nom">
             <label for="client-nom">Nom du client *</label>
             <input type="text" id="client-nom" name="nom" placeholder="Nom du client" required>
             <span class="erreur-champ"></span>

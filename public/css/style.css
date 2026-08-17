@@ -8,6 +8,7 @@
  */
 
 :root {
+  color-scheme: light;
   /* ---- Thème clair (par défaut) ---- */
   --fond: #f8fafc;
   --carte: #ffffff;
@@ -22,6 +23,10 @@
   --accent-doux: #eef2ff;
   --bordure: #e2e8f0;
   --bordure-douce: #eef1f6;
+  /* Bordure des contrôles de saisie : plus soutenue que celle des cartes, qui
+     n'est que décorative. Un champ dont le pourtour se distingue à peine du
+     fond ne se voit pas comme un champ. */
+  --bordure-controle: #7c8b9e;
   --survol: rgba(15, 23, 42, 0.04);
   --succes: #16a34a;
   --succes-doux: #dcfce7;
@@ -30,14 +35,30 @@
   --danger: #dc2626;
   --danger-doux: #fee2e2;
   --neutre-doux: #eef1f6;
+  /*
+   * Deux jeux par teinte, et c'est volontaire : les valeurs vives (`--succes`,
+   * `--alerte`, `--danger`, `--accent`) remplissent les jauges, les segments de
+   * graphique et les pastilles, où seule la forme compte ; les variantes
+   * `-texte` servent partout où la couleur porte des mots. Sur un fond doux,
+   * l'orange vif d'une alerte tombait à 3,1:1 : l'avertissement le plus
+   * important de l'application était le plus difficile à lire.
+   */
+  --accent-texte: #1d4ed8;
+  --succes-texte: #15803d;
+  --alerte-texte: #9a3412;
+  --danger-texte: #b91c1c;
+  /* Fond des boutons pleins : assez sombre pour porter un libellé blanc. */
+  --danger-fond: #dc2626;
   /* Langage de couleur des activités : le bleu désigne toujours une vente, le
      vert une prestation. Repris à l'identique par les badges, les graphiques,
      la jauge « part prestations » et le rapport annuel, pour qu'une même
      couleur veuille dire la même chose partout. */
   --vente: var(--accent);
   --vente-doux: var(--accent-doux);
+  --vente-texte: var(--accent-texte);
   --prestation: var(--succes);
   --prestation-doux: var(--succes-doux);
+  --prestation-texte: var(--succes-texte);
   /* Chaque registre a sa teinte, pour se repérer d'un coup d'œil : les recettes
      empruntent l'accent (bleu), les achats un violet distinct. */
   --recettes: var(--accent);
@@ -47,9 +68,27 @@
   --ombre: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.06);
   --rayon: 12px;
   --rayon-petit: 8px;
+  /*
+   * Échelle d'espacement, par pas de 4 px. Les valeurs de mise en page
+   * (marges, marges intérieures, `gap`) s'y tiennent ; restent hors échelle les
+   * valeurs optiques qui ne relèvent pas du rythme : filets de 1 px, anneaux de
+   * focus, rayons, hauteurs de jauge, tailles de pastille.
+   *
+   * Le contraste entre serré et généreux fait la cadence : 4 et 8 rassemblent,
+   * 24 et 32 séparent. Les paliers intermédiaires ne servent qu'à l'intérieur
+   * d'un même groupe.
+   */
+  --espace-1: 4px;
+  --espace-2: 8px;
+  --espace-3: 12px;
+  --espace-4: 16px;
+  --espace-5: 24px;
+  --espace-6: 32px;
+  --espace-7: 48px;
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --fond: #0f172a;
   --carte: #1e293b;
   --champ-fond: #111c30;
@@ -58,11 +97,17 @@
   --texte: #e2e8f0;
   --texte-secondaire: #94a3b8;
   --accent: #3b82f6;
-  --accent-fort: #2563eb;
-  --accent-contraste: #ffffff;
+  /* En thème sombre, le survol éclaircit au lieu d'assombrir : l'encre du
+     bouton primaire est sombre, un bleu plus profond la ferait disparaître. */
+  --accent-fort: #60a5fa;
+  /* Encre sombre sur bleu vif : le libellé blanc d'un bouton primaire ne
+     tenait que 3,7:1 sur ce bleu, et c'est le couple le plus fréquenté de
+     l'application. */
+  --accent-contraste: #0b1120;
   --accent-doux: rgba(59, 130, 246, 0.16);
   --bordure: #334155;
   --bordure-douce: #263248;
+  --bordure-controle: #64748b;
   --survol: rgba(148, 163, 184, 0.1);
   --succes: #22c55e;
   --succes-doux: rgba(34, 197, 94, 0.16);
@@ -71,10 +116,18 @@
   --danger: #ef4444;
   --danger-doux: rgba(239, 68, 68, 0.16);
   --neutre-doux: rgba(148, 163, 184, 0.16);
+  /* Sur fond sombre, le texte coloré s'éclaircit au lieu de s'assombrir. */
+  --accent-texte: #93c5fd;
+  --succes-texte: #86efac;
+  --alerte-texte: #fdba74;
+  --danger-texte: #fca5a5;
+  --danger-fond: #b91c1c;
   --vente: var(--accent);
   --vente-doux: var(--accent-doux);
+  --vente-texte: var(--accent-texte);
   --prestation: var(--succes);
   --prestation-doux: var(--succes-doux);
+  --prestation-texte: var(--succes-texte);
   --recettes: var(--accent);
   --recettes-doux: var(--accent-doux);
   --achats: #a78bfa;
@@ -111,7 +164,19 @@ body {
 
 /* Les liens gardent la couleur d'accent, visités compris (jamais le violet natif). */
 a {
-  color: var(--accent);
+  color: var(--accent-texte);
+}
+
+/* Libellé réservé aux lecteurs d'écran (en-tête d'une colonne d'actions). */
+.hors-ecran {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ---- Icônes -------------------------------------------------------------- */
@@ -136,7 +201,7 @@ a {
   flex-direction: column;
   background: var(--nav-fond);
   color: var(--nav-texte);
-  padding: 18px 12px;
+  padding: var(--espace-4) var(--espace-3);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -145,11 +210,11 @@ a {
 .marque {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--espace-2);
   font-weight: 700;
   font-size: 16px;
   color: #ffffff;
-  padding: 6px 10px 18px;
+  padding: var(--espace-2) var(--espace-3) var(--espace-4);
   white-space: nowrap;
 }
 
@@ -166,8 +231,8 @@ a {
 .barre-laterale a {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 12px;
+  gap: var(--espace-3);
+  padding: var(--espace-2) var(--espace-3);
   border-radius: var(--rayon-petit);
   color: inherit;
   text-decoration: none;
@@ -186,18 +251,18 @@ a {
 
 .pied-nav {
   margin-top: auto;
-  padding: 12px 6px 4px;
+  padding: var(--espace-3) var(--espace-2) var(--espace-1);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--espace-3);
 }
 
 .bouton-theme {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--espace-2);
   width: 100%;
-  padding: 9px 12px;
+  padding: var(--espace-2) var(--espace-3);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--rayon-petit);
   background: rgba(255, 255, 255, 0.04);
@@ -212,18 +277,18 @@ a {
 }
 
 .infos-nav {
-  padding: 0 6px;
+  padding: 0 var(--espace-2);
   font-size: 11.5px;
   color: var(--nav-texte);
   opacity: 0.75;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--espace-1);
 }
 
 .contenu {
   flex: 1;
-  padding: 28px 32px 48px;
+  padding: var(--espace-6) var(--espace-6) var(--espace-7);
   max-width: 1220px;
   outline: none;
 }
@@ -232,14 +297,17 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--espace-4);
   flex-wrap: wrap;
-  margin-bottom: 22px;
+  margin-bottom: var(--espace-5);
 }
 
 .entete-vue h1 {
   margin: 0;
-  font-size: 24px;
+  /* Un cran au-dessus de la valeur d'une tuile de statistique : à taille égale,
+     un chiffre en gras l'emportait sur le titre de la page. */
+  font-size: 26px;
+  letter-spacing: -0.01em;
 }
 
 /* Titre de registre précédé d'une puce colorée : le repère immédiat qui dit
@@ -247,7 +315,7 @@ a {
 .titre-registre {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--espace-4);
 }
 .puce-registre {
   display: grid;
@@ -266,26 +334,49 @@ a {
   color: var(--achats);
 }
 .entete-vue p {
-  margin: 4px 0 0;
+  margin: var(--espace-1) 0 0;
   color: var(--texte-secondaire);
   font-size: 14px;
 }
 
 .actions-vue {
   display: flex;
-  gap: 8px;
+  gap: var(--espace-2);
   flex-wrap: wrap;
   align-items: center;
 }
+/*
+ * Sélecteur d'année de la barre d'actions.
+ *
+ * Il porte la mise du bouton secondaire qui le suit, et non celle d'un champ de
+ * saisie : dans une barre d'actions, la bordure appuyée d'un formulaire le
+ * faisait passer pour un intrus, et sa hauteur, réglée sur le corps de texte,
+ * ne tombait pas sur celle des boutons. Mêmes marges intérieures, même corps,
+ * même graisse, même interligne : les bordures s'alignent.
+ */
 .actions-vue .selecteur-annee {
   width: auto;
-  padding: 8px 10px;
+  padding: var(--espace-2) var(--espace-6) var(--espace-2) var(--espace-4);
+  border-color: var(--bordure);
+  background-color: transparent;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.5;
+}
+.actions-vue .selecteur-annee:hover {
+  background-color: var(--survol);
+  border-color: var(--bordure);
 }
 
 h2 {
   font-size: 17px;
-  margin: 0 0 14px;
+  margin: 0 0 var(--espace-4);
+}
+
+/* Deuxième section d'une même carte : nettement plus d'air au-dessus du titre
+   qu'en dessous, pour qu'il appartienne à ce qui suit et non à ce qui précède. */
+.titre-section {
+  margin-top: var(--espace-6);
 }
 
 /* Squelette de chargement : blocs gris qui miroitent, en place du contenu.
@@ -294,7 +385,7 @@ h2 {
 .squelette {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--espace-4);
 }
 .sq-titre,
 .sq-carte,
@@ -313,7 +404,7 @@ h2 {
 .sq-grille {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 14px;
+  gap: var(--espace-4);
 }
 .sq-carte {
   height: 82px;
@@ -328,7 +419,7 @@ h2 {
 .sq-tableau {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--espace-2);
 }
 .sq-ligne {
   height: 44px;
@@ -354,20 +445,25 @@ h2 {
 
 /* ---- Cartes -------------------------------------------------------------- */
 
+/*
+ * La carte est le seul conteneur de la page. Ce qu'elle contient se regroupe
+ * par le blanc et, au besoin, par un filet : une seconde bordure à l'intérieur
+ * d'une première n'ajoute aucune information et affaiblit les deux.
+ */
 .carte {
   background: var(--carte);
   border: 1px solid var(--bordure);
   border-radius: var(--rayon);
   box-shadow: var(--ombre);
-  padding: 22px;
-  margin-bottom: 20px;
+  padding: var(--espace-5);
+  margin-bottom: var(--espace-5);
 }
 
 .grille-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--espace-4);
+  margin-bottom: var(--espace-5);
 }
 
 .carte-stat {
@@ -375,10 +471,10 @@ h2 {
   border: 1px solid var(--bordure);
   border-radius: var(--rayon);
   box-shadow: var(--ombre);
-  padding: 18px;
+  padding: var(--espace-4);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--espace-4);
 }
 
 .carte-stat .pastille {
@@ -392,15 +488,25 @@ h2 {
   flex-shrink: 0;
 }
 
+/* Les deux chiffres de tête portent la pastille d'accent : même tuile, même
+   poids, mais l'œil sait par où commencer. */
 .carte-stat.principale .pastille {
   background: var(--accent-doux);
   color: var(--accent);
 }
 
-/* Tuile secondaire à zéro : présente mais en retrait, pour ne pas peser autant
-   qu'un chiffre significatif. */
+/* Tuile secondaire à zéro : présente mais en retrait. Le retrait passe par la
+   couleur et non par une opacité globale, qui emportait aussi le libellé sous
+   le seuil de lisibilité. */
 .carte-stat.vide {
-  opacity: 0.55;
+  background: var(--fond);
+}
+.carte-stat.vide .valeur {
+  color: var(--texte-secondaire);
+  font-weight: 600;
+}
+.carte-stat.vide .pastille {
+  background: transparent;
 }
 
 .carte-stat .etiquette {
@@ -411,10 +517,11 @@ h2 {
 }
 
 .carte-stat .valeur {
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 700;
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* ---- Boutons ------------------------------------------------------------- */
@@ -423,10 +530,10 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--espace-2);
   border: 1px solid transparent;
   border-radius: var(--rayon-petit);
-  padding: 8px 14px;
+  padding: var(--espace-2) var(--espace-4);
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
@@ -455,7 +562,7 @@ h2 {
 }
 
 .btn-danger {
-  background: var(--danger);
+  background: var(--danger-fond);
   color: #ffffff;
 }
 .btn-danger:hover {
@@ -467,7 +574,7 @@ h2 {
   background: none;
   color: var(--texte-secondaire);
   font-weight: 500;
-  padding: 8px 10px;
+  padding: var(--espace-2) var(--espace-3);
 }
 .btn-tertiaire:hover {
   background: var(--survol);
@@ -487,7 +594,7 @@ h2 {
   background: none;
   color: var(--texte-secondaire);
   cursor: pointer;
-  padding: 6px;
+  padding: var(--espace-2);
   border-radius: var(--rayon-petit);
   line-height: 0;
 }
@@ -505,7 +612,7 @@ h2 {
 .champ {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--espace-1);
 }
 
 .champ label {
@@ -529,10 +636,49 @@ textarea {
   font: inherit;
   color: inherit;
   background: var(--champ-fond);
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--bordure-controle);
   border-radius: var(--rayon-petit);
-  padding: 8px 10px;
+  padding: var(--espace-2) var(--espace-3);
   width: 100%;
+}
+
+/* Champ suivi d'un autre bloc dans une modale (remplace une marge en ligne). */
+.champ-espace {
+  margin-bottom: var(--espace-4);
+}
+
+/*
+ * Le chevron natif d'un `select` est dessiné par le système : trapu, gris ardoise,
+ * souvent posé dans un petit bloc à part, il jure avec le trait fin des icônes
+ * Lucide employées partout ailleurs. On le remplace par le chevron du jeu
+ * d'icônes, tracé identique à `chevron-bas` dans `icones.js`.
+ */
+select {
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right var(--espace-3) center;
+  background-size: 16px 16px;
+  padding-right: var(--espace-6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+/* Même tracé, teinte du thème sombre : une image de fond ne suit pas
+   `currentColor`. */
+:root[data-theme="dark"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+select:hover {
+  border-color: var(--texte-secondaire);
+}
+
+/* Les options restent dessinées par le système : on leur donne au moins les
+   couleurs du thème, faute de quoi le menu déroulant s'ouvre en clair sur une
+   application sombre. */
+select option {
+  background: var(--champ-fond);
+  color: var(--texte);
 }
 
 /* Rend l'icône du sélecteur de date lisible en thème sombre. */
@@ -549,12 +695,15 @@ textarea::placeholder {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-.btn:focus-visible,
-.btn-icone:focus-visible,
-.bouton-theme:focus-visible,
+button:focus-visible,
+summary:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+/* En-tête de tri : l'anneau épouse la cellule, sans déborder sur la voisine. */
+.entete-tri:focus-visible {
+  outline-offset: -2px;
 }
 
 .champ.invalide input,
@@ -571,7 +720,7 @@ a:focus-visible {
   text-align: left;
   font-size: 12.5px;
   font-family: inherit;
-  color: var(--accent);
+  color: var(--accent-texte);
   cursor: pointer;
 }
 .lien-suggestion:hover {
@@ -580,14 +729,22 @@ a:focus-visible {
 
 .erreur-champ {
   font-size: 12.5px;
-  color: var(--danger);
+  color: var(--danger-texte);
   min-height: 0;
+}
+
+/* Pied d'un formulaire posé dans une carte (et non dans une modale) : les
+   actions restent alignées à gauche, sous le dernier champ. */
+.actions-formulaire {
+  display: flex;
+  gap: var(--espace-3);
+  margin-top: var(--espace-5);
 }
 
 .grille-formulaire {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px 16px;
+  gap: var(--espace-4) var(--espace-4);
 }
 .grille-formulaire .pleine-largeur {
   grid-column: 1 / -1;
@@ -598,9 +755,9 @@ a:focus-visible {
 .barre-outils {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--espace-3);
   align-items: end;
-  margin-bottom: 14px;
+  margin-bottom: var(--espace-4);
 }
 .barre-outils .champ {
   min-width: 130px;
@@ -613,7 +770,83 @@ a:focus-visible {
 .resume-filtre {
   color: var(--texte-secondaire);
   font-size: 15px;
-  margin: 0 0 12px;
+  margin: 0 0 var(--espace-3);
+}
+
+/*
+ * Résumé d'un registre : combien de lignes, pour quel total. C'est le chiffre
+ * que l'on vient vérifier avant d'exporter ou de déclarer, et il se perdait
+ * dans une ligne grise uniforme. Les deux nombres prennent le poids du texte
+ * courant, les mots qui les relient restent en retrait : la ligne se voit sans
+ * devenir un bandeau, et la carte ne gagne aucun cadre de plus.
+ */
+.resume-registre {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--espace-1) var(--espace-4);
+  margin-bottom: var(--espace-4);
+}
+
+.resume-registre .resume-nombre,
+.resume-registre .resume-total {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--texte);
+}
+
+.resume-registre .resume-total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* « sur 340 (liste filtrée) » : la nuance, pas le chiffre. */
+.resume-registre .resume-portee {
+  font-size: 13.5px;
+}
+
+.lien-sous-tableau {
+  margin: var(--espace-3) 0 0;
+}
+
+.indication-formats {
+  color: var(--texte-secondaire);
+  font-size: 12.5px;
+  margin: -6px 0 var(--espace-3);
+}
+
+/* ---- Puces des filtres actifs -------------------------------------------- */
+
+.puces-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+}
+.puces-filtres:not(:empty) {
+  margin-bottom: var(--espace-3);
+}
+
+.puce-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-2);
+  padding: var(--espace-1) var(--espace-2) var(--espace-1) var(--espace-3);
+  border: 1px solid var(--bordure-controle);
+  border-radius: 999px;
+  background: var(--carte);
+  color: var(--texte);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.puce-filtre:hover {
+  border-color: var(--danger-texte);
+  color: var(--danger-texte);
+}
+.puce-filtre .icone {
+  color: var(--texte-secondaire);
+}
+.puce-filtre:hover .icone {
+  color: inherit;
 }
 
 /* ---- Tableaux ------------------------------------------------------------ */
@@ -635,7 +868,7 @@ th {
   letter-spacing: 0.04em;
   color: var(--texte-secondaire);
   border-bottom: 1px solid var(--bordure);
-  padding: 9px 10px;
+  padding: var(--espace-2) var(--espace-3);
 }
 
 /*
@@ -643,12 +876,13 @@ th {
  * qu'il occupe toujours exactement la largeur disponible. Jamais de barre de
  * défilement horizontale : le contenu passe à la ligne au besoin.
  */
-#table-recettes {
+#table-recettes,
+#table-achats {
   table-layout: fixed;
 }
 
 td {
-  padding: 10px;
+  padding: var(--espace-3);
   border-bottom: 1px solid var(--bordure-douce);
   vertical-align: middle;
   overflow-wrap: break-word;
@@ -690,7 +924,7 @@ td.actions {
    * survol. Ici, la marge intérieure gauche est réduite pour lui laisser la
    * place, l'alignement à droite suffisant à séparer de la colonne précédente.
    */
-  padding-left: 4px;
+  padding-left: var(--espace-1);
 }
 td.actions .btn-icone {
   vertical-align: middle;
@@ -699,23 +933,38 @@ td.actions .btn-icone {
 .ligne-vide td {
   text-align: center;
   color: var(--texte-secondaire);
-  padding: 34px 10px;
+  padding: var(--espace-6) var(--espace-3);
 }
 
 .attenue {
   color: var(--texte-secondaire);
 }
 
-/* En-têtes triables : tout le th est cliquable, le chevron marque le sens. */
+/* En-têtes triables : le libellé est un bouton, le chevron marque le sens. */
 th.triable {
+  padding: 0;
+}
+.entete-tri {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--espace-2) var(--espace-3);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
   cursor: pointer;
   user-select: none;
 }
-th.triable:hover {
+th.montant .entete-tri {
+  justify-content: flex-end;
+}
+.entete-tri:hover {
   color: var(--texte);
 }
-th.triable .icone {
-  margin-left: 4px;
+.entete-tri .icone {
+  margin-left: var(--espace-1);
 }
 
 /* Colonne des cases de sélection multiple. */
@@ -730,21 +979,33 @@ th.triable .icone {
 }
 
 /* Barre d'actions groupées, visible quand des recettes sont cochées. */
+/* Barre d'actions contextuelle : un aplat suffit à la détacher, la bordure
+   n'en faisait qu'une boîte de plus dans la carte du registre. */
 .barre-selection {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
+  gap: var(--espace-3);
+  padding: var(--espace-3) var(--espace-4);
+  margin-bottom: var(--espace-3);
   background: var(--accent-doux);
-  border: 1px solid var(--bordure);
   border-radius: var(--rayon-petit);
   font-size: 13.5px;
 }
-.barre-selection span:first-child {
-  font-weight: 600;
+.info-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-right: auto;
+}
+.info-selection #compte-selection {
+  font-weight: 600;
+}
+/* Portée réelle de la sélection groupée, quand toutes les lignes ne sont pas
+   affichées : « Supprimer » n'agit que sur ce qui est à l'écran. */
+.note-selection {
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
 }
 
 /* ---- Badges -------------------------------------------------------------- */
@@ -752,39 +1013,40 @@ th.triable .icone {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--espace-1);
   font-size: 12px;
-  padding: 3px 9px;
+  padding: var(--espace-1) var(--espace-2);
   border-radius: 999px;
   background: var(--neutre-doux);
-  color: var(--texte-secondaire);
+  color: var(--texte);
   white-space: nowrap;
 }
 
-/* Vente ou prestation : les deux couleurs du langage d'activité. */
+/* Vente ou prestation : les deux couleurs du langage d'activité, dans leur
+   variante lisible (le badge porte du texte, pas un aplat). */
 .badge.categorie-ventes {
   background: var(--vente-doux);
-  color: var(--vente);
+  color: var(--vente-texte);
 }
 .badge.categorie-prestations {
   background: var(--prestation-doux);
-  color: var(--prestation);
+  color: var(--prestation-texte);
 }
 
 /* ---- État vide ----------------------------------------------------------- */
 
 .etat-vide {
   text-align: center;
-  padding: 42px 20px;
+  padding: var(--espace-7) var(--espace-5);
   color: var(--texte-secondaire);
 }
 .etat-vide .grande-icone {
   color: var(--texte-secondaire);
   opacity: 0.6;
-  margin-bottom: 10px;
+  margin-bottom: var(--espace-3);
 }
 .etat-vide .btn {
-  margin-top: 16px;
+  margin-top: var(--espace-4);
 }
 
 /* ---- Dialogues ----------------------------------------------------------- */
@@ -804,23 +1066,23 @@ dialog::backdrop {
 }
 
 .corps-dialogue {
-  padding: 24px;
+  padding: var(--espace-5);
 }
 .corps-dialogue h2 {
-  margin-bottom: 18px;
+  margin-bottom: var(--espace-4);
 }
 .pied-dialogue {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 22px;
+  gap: var(--espace-3);
+  margin-top: var(--espace-5);
 }
 
 /* Boutons d'accès aux dossiers, repliés les uns sous les autres si besoin. */
 .actions-donnees {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--espace-3);
 }
 
 /* Modale d'attente : aucune action possible tant que l'opération dure. */
@@ -832,7 +1094,7 @@ dialog::backdrop {
 }
 
 .barre-attente {
-  margin-top: 18px;
+  margin-top: var(--espace-4);
   height: 4px;
   border-radius: 2px;
   background: var(--accent-doux);
@@ -873,7 +1135,8 @@ dialog::backdrop {
 }
 
 .sous-titre-controle {
-  margin: -12px 0 16px;
+  /* Remontée sous le titre : le sous-titre appartient au titre, pas au corps. */
+  margin: calc(var(--espace-3) * -1) 0 var(--espace-4);
   color: var(--texte-secondaire);
   font-size: 13.5px;
 }
@@ -888,9 +1151,9 @@ dialog::backdrop {
 
 .point-controle {
   display: flex;
-  gap: 10px;
+  gap: var(--espace-3);
   align-items: flex-start;
-  padding: 9px 2px;
+  padding: var(--espace-2) 2px;
 }
 
 .point-controle + .point-controle {
@@ -946,8 +1209,8 @@ dialog::backdrop {
 }
 
 .conclusion-controle {
-  margin-top: 16px;
-  padding: 10px 12px;
+  margin-top: var(--espace-4);
+  padding: var(--espace-3) var(--espace-3);
   border-radius: var(--rayon-petit);
   font-size: 13.5px;
   font-weight: 600;
@@ -955,15 +1218,15 @@ dialog::backdrop {
 
 .conclusion-controle.ok {
   background: var(--succes-doux);
-  color: var(--succes);
+  color: var(--succes-texte);
 }
 .conclusion-controle.attention {
   background: var(--alerte-doux);
-  color: var(--alerte);
+  color: var(--alerte-texte);
 }
 .conclusion-controle.erreur {
   background: var(--danger-doux);
-  color: var(--danger);
+  color: var(--danger-texte);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -980,19 +1243,19 @@ dialog::backdrop {
   right: 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--espace-2);
   z-index: 100;
 }
 
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--espace-3);
   background: var(--carte);
   color: var(--texte);
   border: 1px solid var(--bordure);
   border-radius: var(--rayon-petit);
-  padding: 11px 15px;
+  padding: var(--espace-3) var(--espace-4);
   font-size: 14px;
   box-shadow: var(--ombre);
   animation: apparition-toast 0.18s ease-out;
@@ -1009,6 +1272,19 @@ dialog::backdrop {
   color: var(--danger);
 }
 
+/* Action portée par un toast (« Annuler la suppression ») : la réparation doit
+   se viser à la souris, pas seulement se connaître par cœur au clavier. */
+.action-toast {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--accent-texte);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.action-toast:hover {
+  color: var(--accent-texte);
+}
+
 @keyframes apparition-toast {
   from {
     opacity: 0;
@@ -1023,9 +1299,9 @@ dialog::backdrop {
 /* ---- Import -------------------------------------------------------------- */
 
 .zone-fichier {
-  border: 2px dashed var(--bordure);
+  border: 2px dashed var(--bordure-controle);
   border-radius: var(--rayon);
-  padding: 36px 20px;
+  padding: var(--espace-6) var(--espace-5);
   text-align: center;
   color: var(--texte-secondaire);
   cursor: pointer;
@@ -1041,51 +1317,53 @@ dialog::backdrop {
 }
 .zone-fichier .icone {
   color: var(--accent);
-  margin-bottom: 8px;
+  margin-bottom: var(--espace-2);
 }
 
 .grille-correspondance {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 12px 16px;
+  gap: var(--espace-3) var(--espace-4);
 }
 
 .rapport-import ul {
-  margin: 8px 0 0;
-  padding-left: 20px;
+  margin: var(--espace-2) 0 0;
+  padding-left: var(--espace-5);
 }
 .rapport-import li {
-  margin-bottom: 3px;
+  margin-bottom: var(--espace-1);
   font-size: 13.5px;
 }
 
+/* Bilan de l'analyse : trois chiffres, écartés par le blanc. Encadrés un à un,
+   ils formaient trois boîtes dans la boîte de l'étape. */
 .compteurs-import {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 10px 0;
+  gap: var(--espace-3) var(--espace-6);
+  margin: var(--espace-4) 0 var(--espace-5);
 }
 
 .compteur {
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  padding: 10px 16px;
-  font-size: 13.5px;
-  background: var(--fond);
+  font-size: 13px;
+  color: var(--texte-secondaire);
 }
 
 .compteur strong {
   display: block;
-  font-size: 19px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--texte);
 }
 .compteur.ok strong {
-  color: var(--succes);
+  color: var(--succes-texte);
 }
 .compteur.attention strong {
-  color: var(--alerte);
+  color: var(--alerte-texte);
 }
 .compteur.erreur strong {
-  color: var(--danger);
+  color: var(--danger-texte);
 }
 
 /* ---- Bandeau de rappel (déclaration URSSAF) -------------------------------- */
@@ -1094,9 +1372,9 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 20px;
+  gap: var(--espace-3);
+  padding: var(--espace-3) var(--espace-4);
+  margin-bottom: var(--espace-5);
   background: var(--accent-doux);
   border: 1px solid var(--bordure);
   border-radius: var(--rayon-petit);
@@ -1120,20 +1398,25 @@ dialog::backdrop {
   position: relative;
   display: inline-flex;
   vertical-align: middle;
-  margin-left: 6px;
+  margin-left: var(--espace-2);
 }
 
 .declencheur-infobulle {
   display: inline-flex;
-  padding: 0;
+  /* Une cible de 15 px se rate : la marge intérieure l'élargit sans décaler le
+     titre qui la porte. */
+  padding: var(--espace-1);
+  margin: calc(var(--espace-1) * -1);
   border: 0;
+  border-radius: 999px;
   background: none;
   color: var(--texte-secondaire);
   cursor: help;
 }
 
-.declencheur-infobulle:hover {
-  color: var(--accent);
+.declencheur-infobulle:hover,
+.declencheur-infobulle[aria-expanded="true"] {
+  color: var(--accent-texte);
 }
 
 .infobulle .bulle {
@@ -1146,7 +1429,7 @@ dialog::backdrop {
   z-index: 40;
   width: max-content;
   max-width: min(340px, calc(100vw - 24px));
-  padding: 9px 12px;
+  padding: var(--espace-2) var(--espace-3);
   border-radius: var(--rayon-petit);
   /* Bulle inversée : elle se détache du fond dans les deux thèmes. */
   background: var(--texte);
@@ -1182,12 +1465,12 @@ dialog::backdrop {
  * mis en avant, le détail par taux reste lisible en dessous : c'est lui qui
  * rend le chiffre crédible.
  */
+/* Section d'une carte : séparée par un filet et beaucoup d'air au-dessus, pas
+   par une seconde bordure. */
 .bloc-cotisations {
-  margin-top: 18px;
-  padding: 16px 18px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  background: var(--fond);
+  margin-top: var(--espace-6);
+  padding-top: var(--espace-5);
+  border-top: 1px solid var(--bordure-douce);
   /* Laissé libre, le bloc s'étirait sur toute la carte : les montants
      partaient loin de leur libellé et les notes s'étalaient sur une ligne trop
      longue pour être lue confortablement. */
@@ -1205,9 +1488,9 @@ dialog::backdrop {
      base, le premier paraissait s'enfoncer sous le second. Centrés, ils se
      lisent comme un libellé suivi de sa valeur. */
   align-items: center;
-  gap: 10px;
+  gap: var(--espace-3);
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: var(--espace-3);
 }
 
 .entete-cotisations h3 {
@@ -1218,15 +1501,15 @@ dialog::backdrop {
 
 .entete-cotisations strong {
   font-size: 20px;
-  color: var(--accent);
+  color: var(--accent-texte);
   font-variant-numeric: tabular-nums;
 }
 
 .ligne-cotisation {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 7px 0;
+  gap: var(--espace-3);
+  padding: var(--espace-2) 0;
   font-size: 13.5px;
   border-top: 1px solid var(--bordure-douce);
 }
@@ -1266,7 +1549,7 @@ dialog::backdrop {
 }
 
 .bloc-cotisations .note-legale {
-  margin-top: 12px;
+  margin-top: var(--espace-3);
 }
 
 /* ---- Jauges de seuils ------------------------------------------------------ */
@@ -1277,12 +1560,13 @@ dialog::backdrop {
  * l'autre. Les présenter en deux groupes encadrés évite de les lire comme une
  * seule liste de quatre chiffres, source de confusion.
  */
+/* Deux régimes distincts, séparés par l'air et un filet. Le cadre plein qui les
+   entourait créait une carte dans une carte pour dire une chose que la
+   distance dit déjà. */
 .groupe-seuils {
-  margin-top: 18px;
-  padding: 16px 18px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  background: var(--fond);
+  margin-top: var(--espace-6);
+  padding-top: var(--espace-5);
+  border-top: 1px solid var(--bordure-douce);
 }
 
 .groupe-seuils h3 {
@@ -1292,13 +1576,13 @@ dialog::backdrop {
 }
 
 .explication-groupe {
-  margin: 3px 0 16px;
+  margin: var(--espace-1) 0 var(--espace-4);
   font-size: 12.5px;
   color: var(--texte-secondaire);
 }
 
 .ligne-jauge {
-  margin-bottom: 18px;
+  margin-bottom: var(--espace-4);
 }
 .ligne-jauge:last-child {
   margin-bottom: 0;
@@ -1308,9 +1592,9 @@ dialog::backdrop {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--espace-3);
   flex-wrap: wrap;
-  margin-bottom: 6px;
+  margin-bottom: var(--espace-2);
   font-size: 13.5px;
 }
 
@@ -1365,16 +1649,16 @@ dialog::backdrop {
 .detail-jauge {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: var(--espace-2);
+  margin-top: var(--espace-2);
   font-size: 12.5px;
   color: var(--texte-secondaire);
 }
 .detail-jauge.attention {
-  color: var(--alerte);
+  color: var(--alerte-texte);
 }
 .detail-jauge.depasse {
-  color: var(--danger);
+  color: var(--danger-texte);
 }
 
 /* ---- Graphique du CA mensuel ------------------------------------------------ */
@@ -1417,15 +1701,15 @@ dialog::backdrop {
 .legende-graphique {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
-  margin-top: 12px;
+  gap: var(--espace-2) var(--espace-4);
+  margin-top: var(--espace-3);
   font-size: 12.5px;
   color: var(--texte-secondaire);
 }
 .entree-legende {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--espace-2);
 }
 .pastille-legende {
   width: 10px;
@@ -1446,14 +1730,14 @@ dialog::backdrop {
 .grille-deux {
   display: grid;
   grid-template-columns: 3fr 2fr;
-  gap: 16px;
+  gap: var(--espace-4);
   /* Chaque carte s'arrête à son contenu : étirée, celle du graphique laissait
      un grand vide sous les barres pour s'aligner sur les jauges. */
   align-items: start;
 }
 .grille-deux > .carte,
 .grille-deux > .pile-gauche {
-  margin-bottom: 20px;
+  margin-bottom: var(--espace-5);
 }
 
 /* Le graphique et les dernières recettes se regroupent dans la colonne de
@@ -1463,7 +1747,7 @@ dialog::backdrop {
 .pile-gauche {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--espace-5);
   min-width: 0;
 }
 /* Seul le `gap` de la pile espace ces cartes : sans cela, la marge basse propre
@@ -1486,19 +1770,18 @@ dialog::backdrop {
 /* ---- Anomalies de numérotation ---------------------------------------------- */
 
 details.anomalies {
-  border: 1px solid var(--bordure);
   border-radius: var(--rayon-petit);
   background: var(--alerte-doux);
-  padding: 10px 14px;
-  margin-bottom: 14px;
+  padding: var(--espace-3) var(--espace-4);
+  margin-bottom: var(--espace-4);
   font-size: 13.5px;
 }
 details.anomalies summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--espace-2);
   cursor: pointer;
-  color: var(--alerte);
+  color: var(--alerte-texte);
   font-weight: 600;
   list-style: none;
 }
@@ -1506,12 +1789,12 @@ details.anomalies summary::-webkit-details-marker {
   display: none;
 }
 details.anomalies ul {
-  margin: 10px 0 2px;
-  padding-left: 20px;
+  margin: var(--espace-3) 0 2px;
+  padding-left: var(--espace-5);
   color: var(--texte);
 }
 details.anomalies li {
-  margin-bottom: 3px;
+  margin-bottom: var(--espace-1);
 }
 
 /* ---- Avertissement dans un formulaire ---------------------------------------- */
@@ -1519,10 +1802,9 @@ details.anomalies li {
 .avertissement-formulaire {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-  padding: 11px 14px;
-  border: 1px solid var(--bordure);
+  gap: var(--espace-3);
+  margin-top: var(--espace-4);
+  padding: var(--espace-3) var(--espace-4);
   border-radius: var(--rayon-petit);
   background: var(--alerte-doux);
   color: var(--texte);
@@ -1538,13 +1820,13 @@ details.anomalies li {
 .liste-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--espace-3);
 }
 
 .option-case {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--espace-3);
   font-size: 14px;
   cursor: pointer;
 }
@@ -1558,15 +1840,17 @@ details.anomalies li {
 
 /* ---- Listes de gestion (modes personnalisés, sauvegardes) --------------------- */
 
+/* Liste divisée : un filet entre deux lignes suffit à les distinguer. Chaque
+   ligne encadrée faisait autant de boîtes que d'éléments. */
 .ligne-gestion {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  background: var(--fond);
-  margin-bottom: 8px;
+  gap: var(--espace-3);
+  padding: var(--espace-3) 0;
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.ligne-gestion:last-child {
+  border-bottom: 0;
 }
 .ligne-gestion .libelle-gestion {
   flex: 1;
@@ -1583,19 +1867,95 @@ details.anomalies li {
 
 /* ---- Résultat / bilan ---------------------------------------------------- */
 
+/* ---- Bilan URSSAF -------------------------------------------------------- */
+
+/*
+ * Le geste de cette page est de recopier un nombre dans le formulaire de
+ * l'URSSAF. La mise en page le sert : un intitulé qui nomme la période, le
+ * montant seul et large, la copie à portée immédiate, et seulement ensuite ce
+ * qui l'explique.
+ */
 .resultat-bilan {
+  margin-top: var(--espace-5);
+  padding-top: var(--espace-5);
+  border-top: 1px solid var(--bordure-douce);
+}
+
+.etiquette-declaration {
   display: flex;
-  gap: 16px;
+  align-items: baseline;
   flex-wrap: wrap;
-  margin-top: 16px;
+  gap: var(--espace-2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--texte-secondaire);
+}
+/* La période portée par l'intitulé, pas glissée entre parenthèses dans un
+   libellé déjà long. */
+.periode-declaration {
+  color: var(--texte);
+  font-weight: 600;
+}
+
+.ligne-declaration {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espace-4);
+  margin-top: var(--espace-2);
+}
+
+.montant-declaration {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.compte-encaissements {
+  margin: var(--espace-2) 0 0;
+  font-size: 13px;
+  color: var(--texte-secondaire);
+}
+
+/* Ventilation d'une activité mixte : deux lignes, deux cases du formulaire. */
+.ventilation {
+  margin-top: var(--espace-6);
+}
+.ventilation h3 {
+  margin: 0 0 var(--espace-2);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.ligne-ventilation {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espace-3);
+  padding: var(--espace-3) 0;
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 13.5px;
+}
+.intitule-ventilation {
+  flex: 1;
+  min-width: 140px;
+}
+.montant-ventilation {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ligne-ventilation .btn-icone {
+  align-self: center;
 }
 
 .note-legale {
   display: flex;
-  gap: 8px;
+  gap: var(--espace-2);
   font-size: 13px;
   color: var(--texte-secondaire);
-  margin-top: 14px;
+  margin-top: var(--espace-4);
 }
 .note-legale .icone {
   flex-shrink: 0;
@@ -1606,7 +1966,7 @@ code.chemin {
   background: var(--fond);
   border: 1px solid var(--bordure);
   border-radius: 6px;
-  padding: 2px 6px;
+  padding: 2px var(--espace-2);
   font-size: 12.5px;
   word-break: break-all;
 }
@@ -1631,7 +1991,7 @@ code.chemin {
 }
 
 .liste-suggestions [role="option"] {
-  padding: 8px 12px;
+  padding: var(--espace-2) var(--espace-3);
   font-size: 14px;
   cursor: pointer;
 }
@@ -1650,7 +2010,7 @@ code.chemin {
   border: 1px solid var(--bordure);
   border-radius: var(--rayon-petit);
   box-shadow: var(--ombre);
-  padding: 7px 11px;
+  padding: var(--espace-2) var(--espace-3);
   font-size: 12.5px;
   line-height: 1.5;
   /* Le détail par activité est multiligne : les retours à la ligne portés par
@@ -1663,7 +2023,7 @@ code.chemin {
 
 .ligne-siret {
   display: flex;
-  gap: 10px;
+  gap: var(--espace-3);
   align-items: end;
 }
 .ligne-siret .champ {
@@ -1671,18 +2031,17 @@ code.chemin {
 }
 
 .bloc-nouveau-client {
-  margin-top: 8px;
+  margin-top: var(--espace-2);
 }
 
+/* Résultat de la recherche SIRET : une ligne de réponse sous le champ, pas un
+   panneau encadré posé dans la modale. */
 .resultat-siret {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  background: var(--fond);
+  gap: var(--espace-2);
+  margin-top: var(--espace-3);
+  font-size: 13.5px;
 }
 .resultat-siret .icone {
   color: var(--accent);
@@ -1702,25 +2061,25 @@ code.chemin {
     width: 100%;
     height: auto;
     position: static;
-    padding: 10px 12px;
+    padding: var(--espace-3) var(--espace-3);
   }
 
   .marque {
-    padding-bottom: 8px;
+    padding-bottom: var(--espace-2);
   }
   .liens-nav {
     flex-direction: row;
     overflow-x: auto;
-    gap: 4px;
+    gap: var(--espace-1);
   }
   .barre-laterale a {
     white-space: nowrap;
-    padding: 8px 11px;
+    padding: var(--espace-2) var(--espace-3);
   }
   .pied-nav {
     flex-direction: row;
     align-items: center;
-    margin-top: 10px;
+    margin-top: var(--espace-3);
   }
   .bouton-theme {
     width: auto;
@@ -1730,7 +2089,7 @@ code.chemin {
   }
 
   .contenu {
-    padding: 18px 14px 40px;
+    padding: var(--espace-4) var(--espace-4) var(--espace-7);
   }
   .grille-formulaire {
     grid-template-columns: 1fr;
@@ -1764,8 +2123,8 @@ code.chemin {
     display: block;
     border: 1px solid var(--bordure);
     border-radius: var(--rayon-petit);
-    padding: 6px 14px;
-    margin-bottom: 10px;
+    padding: var(--espace-2) var(--espace-4);
+    margin-bottom: var(--espace-3);
   }
   /* En carte, le survol de ligne entière n'a plus de sens. */
   #table-recettes tbody tr:hover,
@@ -1778,8 +2137,8 @@ code.chemin {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 7px 0;
+    gap: var(--espace-4);
+    padding: var(--espace-2) 0;
     border: none;
     border-bottom: 1px solid var(--bordure-douce);
     text-align: right;
@@ -1809,7 +2168,7 @@ code.chemin {
   #table-recettes td.actions,
   #table-achats td.actions {
     justify-content: flex-end;
-    gap: 6px;
+    gap: var(--espace-2);
   }
   #table-recettes td.col-case::before,
   #table-recettes td.actions::before,
@@ -1847,7 +2206,7 @@ code.chemin {
 .choix-registre {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--espace-2);
 }
 
 /* Aperçu « 28 mai 2026 » sous un champ date. */
@@ -1861,7 +2220,7 @@ code.chemin {
 .chemin-copiable {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--espace-2);
   max-width: 100%;
 }
 .chemin-copiable .chemin {
@@ -1888,10 +2247,47 @@ code.chemin {
 
 /* Note d'alerte (sauvegardes en échec) : reprend la note légale en teinte alerte. */
 .note-legale.alerte {
-  color: var(--alerte);
+  color: var(--alerte-texte);
 }
 .note-legale.alerte .icone {
   color: var(--alerte);
+}
+
+/* Équivalent textuel d'un graphique : replié par défaut, sous les barres. */
+.details-graphique {
+  margin-top: var(--espace-3);
+  font-size: 13px;
+}
+.details-graphique summary {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-2);
+  color: var(--texte-secondaire);
+  cursor: pointer;
+  width: max-content;
+  list-style: none;
+}
+.details-graphique summary::-webkit-details-marker {
+  display: none;
+}
+.details-graphique summary:hover {
+  color: var(--texte);
+}
+/* Le chevron pivote vers le haut une fois le tableau déplié. */
+.details-graphique[open] summary .icone {
+  transform: rotate(180deg);
+}
+.details-graphique summary .icone {
+  transition: transform 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .details-graphique summary .icone {
+    transition: none;
+  }
+}
+.details-graphique .conteneur-tableau {
+  margin-top: var(--espace-2);
 }
 
 /* ---- Micro-animations ---------------------------------------------------- */

@@ -66,9 +66,10 @@ export function controlerAvantExport({ titre, periodeLisible, periode, registre 
   return new Promise((resoudre) => {
     const dialogue = document.createElement('dialog');
     dialogue.className = 'dialogue-controle';
+    dialogue.setAttribute('aria-labelledby', 'titre-controle-export');
     dialogue.innerHTML = `
       <div class="corps-dialogue">
-        <h2>Vérification avant export</h2>
+        <h2 id="titre-controle-export">Vérification avant export</h2>
         <p class="sous-titre-controle">${echapperHtml(titre)} · ${echapperHtml(periodeLisible)}</p>
         <ul class="liste-controle" aria-live="polite"></ul>
         <p class="conclusion-controle" hidden></p>
@@ -85,9 +86,12 @@ export function controlerAvantExport({ titre, periodeLisible, periode, registre 
     const zoneConclusion = dialogue.querySelector('.conclusion-controle');
     const boutonOk = dialogue.querySelector('[data-role="ok"]');
 
+    // Le focus retourne au bouton de format d'où le contrôle est parti.
+    const origine = document.activeElement;
     const terminer = (resultat) => {
       dialogue.close();
       dialogue.remove();
+      if (origine instanceof HTMLElement && origine.isConnected) origine.focus();
       resoudre(resultat);
     };
     boutonOk.addEventListener('click', () => terminer(true));

@@ -24,6 +24,9 @@ const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'ao
 /** « 4 prestations », « 1 vente » : le nombre suivi du mot accordé. */
 const accord = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? 's' : ''}`;
 
+/** « de mars », mais « d'août » : l'élision devant une voyelle. */
+const deMois = (mois) => (/^[aeiouâéèêîôû]/i.test(mois) ? `d’${mois}` : `de ${mois}`);
+
 /** Dimensions communes aux deux graphiques mensuels. */
 const GRAPHE = { largeur: 720, hauteur: 210, margeGauche: 56, margeHaut: 10, margeBas: 26 };
 
@@ -177,6 +180,49 @@ function graphiqueCaEmpile(pointsGlobal, ventesPts, prestationsPts, devise) {
 }
 
 /**
+ * Équivalent textuel d'un graphique : le même tableau de chiffres, replié dans
+ * un `details`.
+ *
+ * Les montants mensuels ne vivaient que dans un `data-info` lu au survol : au
+ * clavier comme au lecteur d'écran, le graphique ne disait rien du tout. Le
+ * repli le garde discret pour qui lit déjà les barres.
+ *
+ * @param {{ mois: number, annee: number, total: number }[]} points
+ * @param {{ ventes?: object[], prestations?: object[] }} [ventilation]
+ */
+function tableauEquivalent(points, devise, ventilation = {}) {
+  const { ventes, prestations } = ventilation;
+  const detaille = Boolean(ventes && prestations);
+  const lignes = points.map((p, i) => `
+    <tr>
+      <td>${echapperHtml(nomMois(p.mois))}</td>
+      ${detaille ? `
+        <td class="montant">${echapperHtml(formaterMontant(ventes[i].total, devise))}</td>
+        <td class="montant">${echapperHtml(formaterMontant(prestations[i].total, devise))}</td>` : ''}
+      <td class="montant">${echapperHtml(formaterMontant(p.total, devise))}</td>
+    </tr>`).join('');
+
+  return `
+    <details class="details-graphique">
+      ${/* Le triangle natif d'un `summary` est un glyphe du système, étranger au
+            jeu d'icônes : on le masque et on pose le chevron de la maison. */ ''}
+      <summary>${icone('chevron-bas', { taille: 14 })}<span>Voir les chiffres mois par mois</span></summary>
+      <div class="conteneur-tableau">
+        <table>
+          <thead>
+            <tr>
+              <th>Mois</th>
+              ${detaille ? '<th class="montant">Ventes</th><th class="montant">Prestations</th>' : ''}
+              <th class="montant">Total</th>
+            </tr>
+          </thead>
+          <tbody>${lignes}</tbody>
+        </table>
+      </div>
+    </details>`;
+}
+
+/**
  * Info-bulle instantanée du graphique : elle suit le pointeur et affiche le
  * chiffre d'affaires exact du mois survolé, sans le délai de l'info-bulle
  * native du navigateur.
@@ -238,8 +284,10 @@ function jauge({ titre, ca, progression, devise, messageAttention, messageDepass
   const majore = progression.seuilMajore;
   const reference = majore ?? progression.seuil;
   const largeur = Math.min(100, (ca / reference) * 100);
+  // Le repère double une information déjà écrite dans l'en-tête de la jauge
+  // (« X / seuil (majoré Y) ») : il est décoratif pour un lecteur d'écran.
   const repere = majore ? `
-    <i class="repere-seuil" style="left: ${(progression.seuil / majore) * 100}%"
+    <i class="repere-seuil" aria-hidden="true" style="left: ${(progression.seuil / majore) * 100}%"
       title="Seuil de base : ${echapperHtml(formaterMontant(progression.seuil, devise))} · seuil majoré : ${echapperHtml(formaterMontant(majore, devise))}"></i>` : '';
 
   return `
@@ -415,8 +463,12 @@ export async function vueTableauDeBord(conteneur) {
     // `cible` (nombre) et `format` alimentent les compteurs animés ; la valeur
     // affichée en découle.
     const formaterValeur = (cible, format) => format === 'entier' ? String(cible) : formaterMontant(cible, devise);
+
+    // Tous les chiffres clés dans une même grille de tuiles. Les deux premières
+    // portent la pastille d'accent : le CA du mois et celui de l'année restent
+    // les repères de la page, sans que les autres changent de nature.
     const cartes = [
-      { etiquette: `CA de ${nomMois(stats.mois)} ${stats.annee}`, cible: stats.caMois, format: 'montant', icone: 'billet', principale: true },
+      { etiquette: `CA ${deMois(nomMois(stats.mois))} ${stats.annee}`, cible: stats.caMois, format: 'montant', icone: 'billet', principale: true },
       { etiquette: `CA de l’année ${stats.annee}`, cible: stats.caAnnee, format: 'montant', icone: 'calendrier', principale: true },
       { etiquette: 'Moyenne par encaissement', cible: stats.moyenneEncaissement, format: 'montant', icone: 'tendance' },
       // Total des achats : seulement quand le registre des achats est tenu.
@@ -433,6 +485,22 @@ export async function vueTableauDeBord(conteneur) {
       ] : [])
     ];
 
+    /** Une tuile de chiffre clé. */
+    const tuile = (carte) => {
+      // Une tuile secondaire à zéro (« 0 vente en juillet ») n'apporte rien :
+      // en retrait, elle laisse ressortir les chiffres qui comptent. Les deux
+      // tuiles principales gardent leur poids, un CA nul y étant une info.
+      const vide = carte.cible === 0 && !carte.principale;
+      return `
+        <div class="carte-stat ${carte.principale ? 'principale' : ''} ${vide ? 'vide' : ''}">
+          <div class="pastille">${icone(carte.icone, { taille: 22 })}</div>
+          <div>
+            <div class="etiquette">${echapperHtml(carte.etiquette)}</div>
+            <div class="valeur" data-compteur="${carte.cible}" data-format="${carte.format}">${echapperHtml(formaterValeur(carte.cible, carte.format))}</div>
+          </div>
+        </div>`;
+    };
+
     // En activité mixte, un seul graphique empilé montre la répartition
     // vente / prestation de chaque mois ; ailleurs, un graphique simple du CA.
     const aDesRecettes = stats.caParMois.some((p) => p.total > 0);
@@ -441,9 +509,12 @@ export async function vueTableauDeBord(conteneur) {
            <div class="grande-icone">${icone('tendance', { taille: 32 })}</div>
            Le graphique apparaîtra dès vos premiers encaissements.
          </div>`
-      : estMixte
+      : (estMixte
         ? graphiqueCaEmpile(stats.caParMois, stats.caParMoisVentes, stats.caParMoisPrestations, devise)
-        : graphiqueCaMensuel(stats.caParMois, devise);
+        : graphiqueCaMensuel(stats.caParMois, devise)
+      ) + tableauEquivalent(stats.caParMois, devise, estMixte
+        ? { ventes: stats.caParMoisVentes, prestations: stats.caParMoisPrestations }
+        : {});
 
     const graphiquePrincipal = `
       <div class="carte">
@@ -495,7 +566,7 @@ export async function vueTableauDeBord(conteneur) {
               </tbody>
             </table>
           </div>
-          <p class="resume-filtre" style="margin-top:12px;margin-bottom:0">
+          <p class="resume-filtre lien-sous-tableau">
             <a href="#/recettes">Voir toutes les recettes</a>
           </p>`}
       </section>`;
@@ -507,9 +578,12 @@ export async function vueTableauDeBord(conteneur) {
           <p>Votre activité en un coup d’œil.</p>
         </div>
         <div class="actions-vue">
+          ${/* Le sélecteur porte son propre intitulé (« Année 2026 ») plutôt qu'une
+                étiquette posée à côté : il se lit seul, et il prend place dans la
+                barre comme un contrôle de plus, à la hauteur des boutons. */ ''}
           ${anneesDisponibles.length > 1 ? `
-            <select id="annee-tableau" aria-label="Année affichée" class="selecteur-annee">
-              ${anneesDisponibles.map((a) => `<option value="${a}" ${a === anneeChoisie ? 'selected' : ''}>${a}</option>`).join('')}
+            <select id="annee-tableau" class="selecteur-annee" aria-label="Année affichée">
+              ${anneesDisponibles.map((a) => `<option value="${a}" ${a === anneeChoisie ? 'selected' : ''}>Année ${a}</option>`).join('')}
             </select>` : ''}
           <a class="btn btn-tertiaire" href="#/exports">${icone('exports', { taille: 16 })}<span>Exporter le livre des recettes</span></a>
           ${registreAchatsUtile() ? `
@@ -521,20 +595,7 @@ export async function vueTableauDeBord(conteneur) {
       ${bandeauRappelUrssaf()}
 
       <section class="grille-stats">
-        ${cartes.map((carte) => {
-          // Une tuile secondaire à zéro (« 0 vente en juillet ») n'apporte rien :
-          // atténuée, elle laisse ressortir les chiffres qui comptent. Les deux
-          // tuiles principales gardent leur poids, un CA nul y étant une info.
-          const vide = carte.cible === 0 && !carte.principale;
-          return `
-          <div class="carte-stat ${carte.principale ? 'principale' : ''} ${vide ? 'vide' : ''}">
-            <div class="pastille">${icone(carte.icone, { taille: 22 })}</div>
-            <div>
-              <div class="etiquette">${echapperHtml(carte.etiquette)}</div>
-              <div class="valeur" data-compteur="${carte.cible}" data-format="${carte.format}">${echapperHtml(formaterValeur(carte.cible, carte.format))}</div>
-            </div>
-          </div>`;
-        }).join('')}
+        ${cartes.map(tuile).join('')}
       </section>
 
       ${suiviSeuils ? `

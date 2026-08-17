@@ -96,10 +96,13 @@ export async function vueUrssaf(conteneur) {
           <label for="urssaf-valeur">Période</label>
           <select id="urssaf-valeur"></select>
         </div>
-        <button type="button" class="btn btn-primaire" id="bouton-urssaf">${icone('urssaf', { taille: 16 })}<span>Calculer</span></button>
       </div>
+      ${/* Le bilan se recalcule au moindre changement de période. Le bouton
+            « Calculer » était le plus proéminent de la page et ne faisait
+            jamais rien de nouveau : le calcul était déjà à l'écran. */ ''}
+      <p class="indication">Le montant à déclarer se met à jour dès que vous changez de période.</p>
 
-      <div id="resultat-urssaf"></div>
+      <div id="resultat-urssaf" aria-live="polite"></div>
     </div>`;
 
   const refs = {
@@ -107,7 +110,6 @@ export async function vueUrssaf(conteneur) {
     type: conteneur.querySelector('#urssaf-type'),
     valeur: conteneur.querySelector('#urssaf-valeur'),
     conteneurValeur: conteneur.querySelector('#conteneur-urssaf-valeur'),
-    bouton: conteneur.querySelector('#bouton-urssaf'),
     resultat: conteneur.querySelector('#resultat-urssaf')
   };
 
@@ -153,7 +155,24 @@ export async function vueUrssaf(conteneur) {
     // peut pas être sélectionnée : on garde alors la plus récente proposée.
     if (anneesProposees.includes(Number(parDefaut.annee))) refs.annee.value = parDefaut.annee;
   }
-  refs.type.addEventListener('change', rafraichirValeurs);
+  // Copie d'un montant à reporter : le nombre nu, sans devise ni séparateur.
+  refs.resultat.addEventListener('click', async (evenement) => {
+    const bouton = evenement.target.closest('[data-copier-montant]');
+    if (!bouton) return;
+    try {
+      await navigator.clipboard.writeText(bouton.dataset.copierMontant);
+      toast('Montant copié dans le presse-papiers.');
+    } catch {
+      toast('Copie impossible : sélectionnez le montant à la main.', 'erreur');
+    }
+  });
+
+  refs.type.addEventListener('change', () => {
+    rafraichirValeurs();
+    calculer();
+  });
+  refs.annee.addEventListener('change', () => calculer());
+  refs.valeur.addEventListener('change', () => calculer());
   rafraichirValeurs();
 
   async function calculer() {
@@ -173,46 +192,78 @@ export async function vueUrssaf(conteneur) {
       // euros entiers. Le chiffre d'affaires exact, centimes compris, reste
       // rappelé dessous quand l'arrondi le fait différer : le registre, lui, ne
       // s'arrondit jamais.
-      const carte = (etiquette, montant, exact, principale = false) => `
-        <div class="carte-stat ${principale ? 'principale' : ''}">
-          <div class="pastille">${icone('billet', { taille: 22 })}</div>
-          <div>
-            <div class="etiquette">${echapperHtml(etiquette)}</div>
-            <div class="valeur">${echapperHtml(formaterMontantEntier(montant, devise))}</div>
-            ${exact !== montant ? `
-              <div class="montant-exact">encaissé : ${echapperHtml(formaterMontant(exact, devise))}</div>` : ''}
-          </div>
+      /**
+       * Bouton de copie d'un montant à reporter.
+       *
+       * Le geste réel de cette page est de recopier un nombre dans le
+       * formulaire de l'URSSAF : ce qui part au presse-papiers est donc le
+       * nombre nu, sans symbole de devise ni espace de milliers, prêt à être
+       * collé dans un champ qui n'accepte rien d'autre.
+       */
+      const boutonCopier = (montant, quoi, { compact = false } = {}) => `
+        <button type="button" class="${compact ? 'btn-icone' : 'btn btn-secondaire'}"
+          data-copier-montant="${montant}"
+          title="Copier ${echapperHtml(quoi)}"
+          aria-label="Copier ${echapperHtml(quoi)}, sans symbole de devise">
+          ${icone('copier', { taille: 16 })}${compact ? '' : '<span>Copier</span>'}
+        </button>`;
+
+      /** Une ligne de ventilation : intitulé, montant à reporter, copie. */
+      const ligneVentilation = (etiquette, montant, exact) => `
+        <div class="ligne-ventilation">
+          <span class="intitule-ventilation">${echapperHtml(etiquette)}</span>
+          ${exact !== montant ? `
+            <span class="montant-exact">encaissé : ${echapperHtml(formaterMontant(exact, devise))}</span>` : ''}
+          <strong class="montant-ventilation">${echapperHtml(formaterMontantEntier(montant, devise))}</strong>
+          ${boutonCopier(montant, `le montant des ${etiquette}`, { compact: true })}
         </div>`;
 
       const { formatDate } = etat.parametres;
 
       refs.resultat.innerHTML = `
         <div class="resultat-bilan">
-          ${carte(`CA à déclarer (${bilan.libellePeriode})`, bilan.aDeclarer, bilan.chiffreAffaires, true)}
-          <div class="carte-stat">
-            <div class="pastille">${icone('diese', { taille: 22 })}</div>
-            <div>
-              <div class="etiquette">Encaissements</div>
-              <div class="valeur">${bilan.nombreEncaissements}</div>
-            </div>
+          ${/* La réponse à la question de la page, en toutes lettres et une
+                seule fois : la période est nommée dans l'intitulé plutôt que
+                glissée entre parenthèses, et le montant se lit sans concurrent. */ ''}
+          <p class="etiquette-declaration">
+            Chiffre d’affaires à déclarer${estMixte ? ' (total)' : ''}
+            <span class="periode-declaration">${echapperHtml(bilan.libellePeriode)}</span>
+          </p>
+          <div class="ligne-declaration">
+            <strong class="montant-declaration">${echapperHtml(formaterMontantEntier(bilan.aDeclarer, devise))}</strong>
+            ${boutonCopier(bilan.aDeclarer, 'le montant à déclarer')}
           </div>
+          ${bilan.chiffreAffaires !== bilan.aDeclarer ? `
+            <p class="montant-exact">Encaissé exactement : ${echapperHtml(formaterMontant(bilan.chiffreAffaires, devise))}.
+            La déclaration se fait en euros entiers.</p>` : ''}
+          <p class="compte-encaissements">
+            ${bilan.nombreEncaissements} encaissement${bilan.nombreEncaissements > 1 ? 's' : ''} sur la période.
+          </p>
+
           ${estMixte ? `
-            ${carte('dont ventes de marchandises', bilan.ventes.aDeclarer, bilan.ventes.chiffreAffaires)}
-            ${carte('dont prestations de services', bilan.prestations.aDeclarer, bilan.prestations.chiffreAffaires)}` : ''}
-        </div>
-        ${estMixte && bilan.nonCategorise.nombreEncaissements > 0 ? `
-          <p class="note-legale">
-            ${icone('cercle-alerte', { taille: 16 })}
-            <span>${bilan.nonCategorise.nombreEncaissements} recette${bilan.nonCategorise.nombreEncaissements > 1 ? 's' : ''}
-            sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
-            modifiez-les pour une ventilation exacte entre ventes et prestations.</span>
-          </p>` : ''}
-        ${blocCotisations(bilan.cotisations, devise, formatDate)}`;
+            ${/* En activité mixte, ce ne sont pas ces deux lignes qui étayent le
+                  total : ce sont elles que le formulaire de l'URSSAF réclame,
+                  chacune dans sa case. Elles ont donc leur propre copie. */ ''}
+            <section class="ventilation">
+              <h3>À reporter case par case</h3>
+              ${ligneVentilation('ventes de marchandises', bilan.ventes.aDeclarer, bilan.ventes.chiffreAffaires)}
+              ${ligneVentilation('prestations de services', bilan.prestations.aDeclarer, bilan.prestations.chiffreAffaires)}
+            </section>` : ''}
+
+          ${estMixte && bilan.nonCategorise.nombreEncaissements > 0 ? `
+            <p class="note-legale">
+              ${icone('cercle-alerte', { taille: 16 })}
+              <span>${bilan.nonCategorise.nombreEncaissements} recette${bilan.nonCategorise.nombreEncaissements > 1 ? 's' : ''}
+              sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
+              modifiez-les pour une ventilation exacte entre ventes et prestations.</span>
+            </p>` : ''}
+
+          ${blocCotisations(bilan.cotisations, devise, formatDate)}
+        </div>`;
     } catch (erreur) {
       toast(erreur.message, 'erreur');
     }
   }
 
-  refs.bouton.addEventListener('click', calculer);
-  calculer(); // premier affichage : mois courant
+  await calculer(); // premier affichage : dernière période échue
 }

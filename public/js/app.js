@@ -43,11 +43,18 @@ let modeRestauration = false;
 
 // ---- Thème -----------------------------------------------------------------
 
-/** Applique le thème (« light » par défaut) et mémorise le choix. */
-function appliquerTheme(theme) {
+/**
+ * Applique le thème et, sauf mention contraire, mémorise le choix.
+ *
+ * `memoriser: false` sert au thème hérité du système au premier lancement :
+ * l'enregistrer figerait un choix que l'utilisateur n'a jamais fait.
+ */
+function appliquerTheme(theme, { memoriser = true } = {}) {
   const valide = theme === 'dark' ? 'dark' : 'light';
   document.documentElement.dataset.theme = valide;
-  try { localStorage.setItem(CLE_THEME, valide); } catch { /* stockage indisponible : sans gravité */ }
+  if (memoriser) {
+    try { localStorage.setItem(CLE_THEME, valide); } catch { /* stockage indisponible : sans gravité */ }
+  }
   const bouton = document.getElementById('bouton-theme');
   if (bouton) {
     const versClair = valide === 'dark';
@@ -62,7 +69,9 @@ function themeInitial() {
     const enregistre = localStorage.getItem(CLE_THEME);
     if (enregistre === 'light' || enregistre === 'dark') return enregistre;
   } catch { /* ignore */ }
-  return 'light'; // clair par défaut
+  // Aucun choix mémorisé : on suit la préférence du système plutôt que
+  // d'imposer le thème clair à qui a réglé sa machine en sombre.
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function basculerTheme() {
@@ -94,7 +103,8 @@ function construireNavigation() {
       </div>
     </div>`;
   document.getElementById('bouton-theme').addEventListener('click', basculerTheme);
-  appliquerTheme(document.documentElement.dataset.theme); // remplit le bouton
+  // Remplit le bouton sans rien réécrire : le thème courant est déjà posé.
+  appliquerTheme(document.documentElement.dataset.theme, { memoriser: false });
 }
 
 // Changer de type d'activité fait apparaître ou disparaître l'onglet Achats.
@@ -113,7 +123,11 @@ async function afficherVue() {
   const route = routesVisibles().find((r) => r.chemin === chemin) ?? ROUTES[0];
 
   document.querySelectorAll('#navigation a[data-route]').forEach((lien) => {
-    lien.classList.toggle('actif', lien.dataset.route === route.chemin);
+    const actif = lien.dataset.route === route.chemin;
+    lien.classList.toggle('actif', actif);
+    // La page courante ne peut pas se signaler par la seule couleur du lien.
+    if (actif) lien.setAttribute('aria-current', 'page');
+    else lien.removeAttribute('aria-current');
   });
 
   const conteneur = document.getElementById('vue');
@@ -134,18 +148,23 @@ async function afficherVue() {
   }, 180);
   try {
     await route.vue(conteneur, params);
-    rendreBandeauMaj();
-    rendreBandeauDemo();
+    rendreBandeaux();
     revelerEnFondu(conteneur);
-    conteneur.focus();
+    document.getElementById('contenu').focus();
   } catch (erreur) {
     console.error(erreur);
     conteneur.innerHTML = `
       <div class="carte">
-        <h2>Oups</h2>
-        <p>Impossible de charger cette page : ${echapperHtml(erreur.message)}</p>
-        <p>Veuillez recharger la page.</p>
+        <h2>Cette page n’a pas pu s’afficher</h2>
+        <p>${echapperHtml(erreur.message)}</p>
+        <p>Vos données ne sont pas en cause : elles sont enregistrées dans leur fichier.</p>
+        <button type="button" class="btn btn-primaire" id="recharger-page">
+          ${icone('reinitialiser', { taille: 16 })}<span>Recharger la page</span>
+        </button>
       </div>`;
+    // Dire « rechargez » sans donner de quoi le faire laisse l'utilisateur
+    // chercher le raccourci de son navigateur.
+    conteneur.querySelector('#recharger-page').addEventListener('click', () => window.location.reload());
     revelerEnFondu(conteneur);
   } finally {
     clearTimeout(minuteurSquelette);
@@ -159,21 +178,33 @@ function revelerEnFondu(conteneur) {
   conteneur.classList.add('vue-entre');
 }
 
-// ---- Jeu de démonstration ----------------------------------------------------
+// ---- Bandeaux globaux --------------------------------------------------------
 
 /**
  * Bandeau rappelant que le livre affiché est le jeu de démonstration, avec un
  * bouton pour tout effacer et commencer son vrai livre.
  */
-function rendreBandeauDemo() {
-  if (!etat.parametres?.jeuDemo) return;
-  const conteneur = document.getElementById('vue');
-  conteneur.insertAdjacentHTML('afterbegin', `
+function bandeauDemo() {
+  if (!etat.parametres?.jeuDemo) return '';
+  return `
     <div class="bandeau-rappel bandeau-demo">
       ${icone('info', { taille: 18 })}
       <span>Vous explorez un <strong>jeu de démonstration</strong>. Effacez-le quand vous voulez commencer votre vrai livre des recettes.</span>
       <button type="button" class="btn btn-tertiaire" id="effacer-demo">${icone('corbeille', { taille: 16 })}<span>Tout effacer</span></button>
-    </div>`);
+    </div>`;
+}
+
+/**
+ * Rend le bandeau global de la page : un seul à la fois, la mise à jour
+ * passant devant la démonstration. Empilés, ils repoussaient le titre de la
+ * vue et son action principale sous la ligne de flottaison.
+ */
+function rendreBandeaux() {
+  const zone = document.getElementById('bandeaux');
+  // Données à restaurer : rien d'autre ne doit détourner l'attention.
+  zone.innerHTML = modeRestauration ? '' : (bandeauMaj() || bandeauDemo());
+
+  document.getElementById('lancer-maj')?.addEventListener('click', appliquerMiseAJour);
   document.getElementById('effacer-demo')?.addEventListener('click', async (evenement) => {
     const bouton = evenement.currentTarget;
     const accord = await confirmer({
@@ -199,14 +230,12 @@ function rendreBandeauDemo() {
 let miseAJour = null;
 
 /**
- * Bandeau annonçant une nouvelle version, ajouté en tête de la vue
- * courante (donc visible quel que soit l'onglet). L'exécutable sait se
- * remplacer lui-même ; une installation depuis les sources renvoie vers la
- * page des versions.
+ * Bandeau annonçant une nouvelle version, affiché en tête de page quel que
+ * soit l'onglet. L'exécutable sait se remplacer lui-même ; une installation
+ * depuis les sources renvoie vers la page des versions.
  */
-function rendreBandeauMaj() {
-  if (!miseAJour?.disponible) return;
-  const conteneur = document.getElementById('vue');
+function bandeauMaj() {
+  if (!miseAJour?.disponible) return '';
   // Un exécutable se met à jour tout seul, mais on propose toujours de lire
   // ce que la version apporte avant de l'installer.
   const action = miseAJour.remplacable
@@ -214,15 +243,13 @@ function rendreBandeauMaj() {
        <button type="button" class="btn btn-tertiaire" id="lancer-maj">Mettre à jour</button>`
     : `<a class="btn btn-tertiaire" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Voir la nouvelle version</a>`;
 
-  conteneur.insertAdjacentHTML('afterbegin', `
+  return `
     <div class="bandeau-rappel">
       ${icone('exports', { taille: 18 })}
       <span>Version ${echapperHtml(miseAJour.version)} disponible
       (vous utilisez la ${echapperHtml(etat.systeme.version)}).</span>
       ${action}
-    </div>`);
-
-  document.getElementById('lancer-maj')?.addEventListener('click', appliquerMiseAJour);
+    </div>`;
 }
 
 async function appliquerMiseAJour(evenement) {
@@ -391,7 +418,9 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
 
 // ---- Démarrage -------------------------------------------------------------
 
-appliquerTheme(themeInitial());
+// Le thème hérité du système n'est pas mémorisé : tant que l'utilisateur n'a
+// pas touché au bouton, l'application suit sa machine.
+appliquerTheme(themeInitial(), { memoriser: false });
 construireNavigation();
 // Écouteurs délégués : posés une fois, ils valent pour toutes les vues, qui
 // se redessinent entièrement à chaque navigation.
@@ -431,7 +460,7 @@ chargerEtat()
     api.miseAJour()
       .then((reponse) => {
         miseAJour = reponse;
-        rendreBandeauMaj();
+        rendreBandeaux();
       })
       .catch(() => { /* vérification impossible : sans conséquence */ });
   })

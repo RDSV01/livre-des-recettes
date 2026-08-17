@@ -19,12 +19,12 @@ import {
   echapperHtml, toast, confirmer, differer, formaterChampMontant,
   afficherErreursFormulaire, effacerErreursFormulaire,
   installerSuggestions, installerApercuDate, majIndicateursTri, majBarreSelection,
-  animerDepartLignes
+  animerDepartLignes, ouvrirModale, enteteTri, pucesFiltres
 } from '../ui.js';
 import { icone } from '../icones.js';
 import { etatFiltres } from '../preferences-vues.js';
-import { enregistrerAction } from '../historique.js';
-import { formaterMontant, sommeMontants, enCentimes } from '/partage/montants.js';
+import { enregistrerAction, annulerSi } from '../historique.js';
+import { formaterMontant, sommeMontants, enCentimes, analyserMontant } from '/partage/montants.js';
 import { formaterDate, aujourdHuiIso, anneeDe, NOMS_MOIS } from '/partage/dates.js';
 import { MODES_REGLEMENT, libelleMode } from '/partage/constantes.js';
 import { normaliserTexte } from '/partage/texte.js';
@@ -74,15 +74,18 @@ export async function vueAchats(conteneur, params) {
     mode: conteneur.querySelector('#filtre-mode'),
     reinitialiser: conteneur.querySelector('#reinitialiser-filtres'),
     resume: conteneur.querySelector('#resume-filtre'),
+    puces: conteneur.querySelector('#puces-filtres'),
     barreSelection: conteneur.querySelector('#barre-selection'),
     compteSelection: conteneur.querySelector('#compte-selection'),
+    noteSelection: conteneur.querySelector('#note-selection'),
     toutSelectionner: conteneur.querySelector('#tout-selectionner'),
     entetes: conteneur.querySelector('#table-achats thead'),
     corps: conteneur.querySelector('#corps-achats'),
     suggestions: conteneur.querySelector('#suggestions-fournisseur'),
     dialogue: conteneur.querySelector('#dialogue-achat'),
     formulaire: conteneur.querySelector('#formulaire-achat'),
-    titreDialogue: conteneur.querySelector('#titre-dialogue-achat')
+    titreDialogue: conteneur.querySelector('#titre-dialogue-achat'),
+    enregistrer: conteneur.querySelector('#enregistrer-achat')
   };
 
   // Reflète dans les contrôles les filtres restaurés (l'année est gérée par
@@ -118,6 +121,28 @@ export async function vueAchats(conteneur, params) {
     refs.mode.value = '';
     changerFiltres();
   });
+
+  // Une puce retirée remet son filtre à zéro.
+  refs.puces.addEventListener('click', (evenement) => {
+    const puce = evenement.target.closest('[data-filtre]');
+    if (!puce) return;
+    const cle = puce.dataset.filtre;
+    filtres[cle] = '';
+    if (cle === 'q') refs.recherche.value = '';
+    else if (refs[cle]) refs[cle].value = '';
+    changerFiltres();
+  });
+
+  /** Les filtres qui restreignent la liste, nommés en clair. */
+  function filtresActifs() {
+    const nomMode = (code) => modes.find((m) => m.code === code)?.libelle ?? code;
+    return [
+      filtres.q ? { cle: 'q', libelle: `Recherche : ${filtres.q}` } : null,
+      filtres.annee ? { cle: 'annee', libelle: `Année ${filtres.annee}` } : null,
+      filtres.mois ? { cle: 'mois', libelle: NOMS_MOIS[Number(filtres.mois) - 1] } : null,
+      filtres.mode ? { cle: 'mode', libelle: nomMode(filtres.mode) } : null
+    ].filter(Boolean);
+  }
 
   // ---- Tri par colonne ---------------------------------------------------------
   refs.entetes.addEventListener('click', (evenement) => {
@@ -177,31 +202,68 @@ export async function vueAchats(conteneur, params) {
     const cibles = achatsSelectionnes();
     if (cibles.length === 0) return;
     const total = sommeMontants(cibles.map((a) => a.montant));
+    const dates = cibles.map((a) => a.dateReglement).sort();
+    const periode = dates[0] === dates.at(-1)
+      ? formaterDate(dates[0], formatDate)
+      : `du ${formaterDate(dates[0], formatDate)} au ${formaterDate(dates.at(-1), formatDate)}`;
     const accord = await confirmer({
       titre: `Supprimer ${cibles.length} achat${cibles.length > 1 ? 's' : ''} ?`,
-      message: `Total : ${formaterMontant(total, devise)}. Ctrl+Z permet d'annuler.`
+      message: `${periode}, total ${formaterMontant(total, devise)}. ` +
+        'La suppression reste annulable tant que vous ne quittez pas l’application.'
     });
     if (!accord) return;
+
+    // Voir la note de `recettes.js` : ce qui a été détruit doit rester
+    // récupérable même si la boucle s'interrompt en chemin.
+    const supprimes = [];
+    let echec = null;
+    const lignes = cibles.map((a) => refs.corps.querySelector(`input[data-selection="${a.id}"]`)?.closest('tr'));
     try {
-      const lignes = cibles.map((a) => refs.corps.querySelector(`input[data-selection="${a.id}"]`)?.closest('tr'));
-      await animerDepartLignes(lignes);
-      for (const achat of cibles) await api.supprimerAchat(achat.id);
-      const donnees = cibles.map(champsAchat);
-      let ids = cibles.map((a) => a.id);
-      enregistrerAction({
+      for (const achat of cibles) {
+        await api.supprimerAchat(achat.id);
+        supprimes.push(champsAchat(achat));
+      }
+    } catch (erreur) {
+      echec = erreur;
+    }
+
+    if (supprimes.length > 0) {
+      let ids = [];
+      const action = enregistrerAction({
         annuler: async () => {
           ids = [];
-          for (const d of donnees) ids.push((await api.creerAchat(d)).achat.id);
+          for (const d of supprimes) ids.push((await api.creerAchat(d)).achat.id);
         },
         retablir: async () => { for (const id of ids) await api.supprimerAchat(id); }
       });
-      toast(`${cibles.length} achat${cibles.length > 1 ? 's' : ''} supprimé${cibles.length > 1 ? 's' : ''}.`);
+      await animerDepartLignes(lignes.slice(0, supprimes.length));
+      const accorde = supprimes.length > 1 ? 's' : '';
+      const message = echec
+        ? `${supprimes.length} achat${accorde} sur ${cibles.length} supprimé${accorde} : ${echec.message}`
+        : `${supprimes.length} achat${accorde} supprimé${accorde}.`;
+      toast(message, echec ? 'erreur' : 'succes', {
+        action: { libelle: 'Annuler la suppression', executer: () => annulerSuppression(action) }
+      });
       selection.clear();
+    } else if (echec) {
+      toast(echec.message, 'erreur');
+    }
+    await chargerAchats();
+  });
+
+  /** Défait une suppression depuis le bouton du toast (voir `recettes.js`). */
+  async function annulerSuppression(action) {
+    try {
+      const fait = await annulerSi(action);
+      toast(fait
+        ? 'Suppression annulée.'
+        : 'Une autre action a eu lieu depuis : utilisez Ctrl+Z pour revenir en arrière pas à pas.',
+      fait ? 'succes' : 'erreur');
       await chargerAchats();
     } catch (erreur) {
       toast(erreur.message, 'erreur');
     }
-  });
+  }
 
   // ---- Actions par ligne (délégation d'événements) -----------------------------
   refs.corps.addEventListener('click', async (evenement) => {
@@ -226,19 +288,24 @@ export async function vueAchats(conteneur, params) {
       const accord = await confirmer({
         titre: 'Supprimer cet achat ?',
         message: `${formaterDate(achat.dateReglement, formatDate)}, ${achat.fournisseur}, ` +
-          `${formaterMontant(achat.montant, devise)}.`
+          `${formaterMontant(achat.montant, devise)}. ` +
+          'La suppression reste annulable tant que vous ne quittez pas l’application.'
       });
       if (!accord) return;
+      const ligne = bouton.closest('tr');
       try {
-        await animerDepartLignes([bouton.closest('tr')]);
+        // La ligne ne s'efface qu'une fois la suppression acquise.
         await api.supprimerAchat(achat.id);
         const donnees = champsAchat(achat);
         let id = achat.id;
-        enregistrerAction({
+        const action = enregistrerAction({
           annuler: async () => { id = (await api.creerAchat(donnees)).achat.id; },
           retablir: () => api.supprimerAchat(id)
         });
-        toast('Achat supprimé (Ctrl+Z pour annuler).');
+        await animerDepartLignes([ligne]);
+        toast('Achat supprimé.', 'succes', {
+          action: { libelle: 'Annuler la suppression', executer: () => annulerSuppression(action) }
+        });
         await chargerAchats();
       } catch (erreur) {
         toast(erreur.message, 'erreur');
@@ -274,10 +341,22 @@ export async function vueAchats(conteneur, params) {
     fermerFormulaire();
   });
 
-  // « 12,5 » devient « 12,50 » dès que l'on quitte le champ montant.
+  // « 12,5 » devient « 12,50 » dès que l'on quitte le champ montant, et une
+  // saisie illisible est signalée sur place plutôt qu'à l'enregistrement.
+  const signalerMontant = (message) => {
+    const champMontant = refs.formulaire.querySelector('[data-champ="montant"]');
+    champMontant.classList.toggle('invalide', Boolean(message));
+    champMontant.querySelector('.erreur-champ').textContent = message ?? '';
+  };
+  refs.formulaire.montant.addEventListener('input', () => signalerMontant(''));
   refs.formulaire.montant.addEventListener('blur', () => {
     const brut = refs.formulaire.montant.value.trim();
-    if (brut) refs.formulaire.montant.value = formaterChampMontant(brut);
+    if (!brut) return;
+    if (analyserMontant(brut) === null) {
+      signalerMontant('Montant illisible. Attendu : 1234,56 (virgule ou point décimal).');
+      return;
+    }
+    refs.formulaire.montant.value = formaterChampMontant(brut);
   });
 
   // ---- Suggestions de fournisseur (liste maison, sans composant natif) ----------
@@ -301,6 +380,8 @@ export async function vueAchats(conteneur, params) {
       modeReglement: f.modeReglement.value
     };
 
+    // Le bouton se ferme pendant l'écriture : un double clic créait deux achats.
+    refs.enregistrer.disabled = true;
     try {
       if (enEdition) {
         const avant = champsAchat(enEdition);
@@ -331,6 +412,8 @@ export async function vueAchats(conteneur, params) {
       } else {
         toast(erreur.message, 'erreur');
       }
+    } finally {
+      refs.enregistrer.disabled = false;
     }
   });
 
@@ -354,7 +437,7 @@ export async function vueAchats(conteneur, params) {
     f.referenceFacture.value = achat?.referenceFacture ?? '';
 
     instantaneInitial = lireInstantane();
-    refs.dialogue.showModal();
+    ouvrirModale(refs.dialogue);
     f.dateReglement.focus();
   }
 
@@ -386,17 +469,26 @@ export async function vueAchats(conteneur, params) {
     });
 
     const total = sommeMontants(affiches.map((a) => a.montant));
-    refs.resume.textContent = affiches.length === 0
-      ? 'Aucun achat ne correspond.'
-      : `${affiches.length} achat${affiches.length > 1 ? 's' : ''} (${formaterMontant(total, devise)})`;
+    const actifs = filtresActifs();
+    refs.puces.innerHTML = pucesFiltres(actifs);
+    refs.reinitialiser.disabled = actifs.length === 0;
+    const filtre = affiches.length !== tous.length;
+    refs.resume.innerHTML = affiches.length === 0
+      ? 'Aucun achat ne correspond aux filtres actifs.'
+      : `<span class="resume-nombre">${affiches.length} achat${affiches.length > 1 ? 's' : ''}</span>` +
+        (filtre ? `<span class="resume-portee">sur ${tous.length} au total, liste filtrée</span>` : '') +
+        `<span class="resume-total">${echapperHtml(formaterMontant(total, devise))}</span>`;
 
     majIndicateursTri(refs.entetes, tri);
 
     if (affiches.length === 0) {
       idsVisibles = [];
+      refs.noteSelection.hidden = true;
       refs.corps.innerHTML = `
         <tr class="ligne-vide"><td colspan="7">
-          Aucun achat à afficher. Ajoutez-en un avec « Nouvel achat ».
+          ${actifs.length > 0
+            ? 'Aucun achat ne correspond aux filtres actifs. Retirez une puce ci-dessus pour élargir la liste.'
+            : 'Aucun achat à afficher. Ajoutez-en un avec « Nouvel achat ».'}
         </td></tr>`;
       majSelection();
       return;
@@ -405,6 +497,11 @@ export async function vueAchats(conteneur, params) {
     const visibles = montrerTout ? affiches : affiches.slice(0, LIMITE_AFFICHAGE);
     idsVisibles = visibles.map((a) => a.id);
     const restants = affiches.length - visibles.length;
+    // La sélection groupée ne porte que sur les lignes affichées.
+    refs.noteSelection.textContent = restants > 0
+      ? `Portée : les ${visibles.length} lignes affichées ; ${restants} autres ne sont pas concernées.`
+      : '';
+    refs.noteSelection.hidden = restants === 0;
 
     refs.corps.innerHTML = visibles.map((a) => `
       <tr${idsNouveaux.has(a.id) ? ' class="ligne-nouvelle"' : ''}>
@@ -436,9 +533,6 @@ export async function vueAchats(conteneur, params) {
     const optionsModes = modes
       .map((m) => `<option value="${echapperHtml(m.code)}">${echapperHtml(m.libelle)}</option>`)
       .join('');
-    const enTete = (cleTri, libelle, classe = '') =>
-      `<th class="triable ${classe}" data-tri="${cleTri}">${libelle}<span class="indicateur-tri"></span></th>`;
-
     return `
       <header class="entete-vue">
         <div class="titre-registre">
@@ -478,13 +572,18 @@ export async function vueAchats(conteneur, params) {
           <button type="button" class="btn btn-secondaire" id="reinitialiser-filtres">${icone('reinitialiser', { taille: 16 })}<span>Réinitialiser</span></button>
         </div>
 
+        <div class="puces-filtres" id="puces-filtres"></div>
+
         <div class="barre-selection" id="barre-selection" hidden>
-          <span id="compte-selection"></span>
+          <div class="info-selection">
+            <span id="compte-selection"></span>
+            <span class="note-selection" id="note-selection" hidden></span>
+          </div>
           <button type="button" class="btn btn-danger" id="supprimer-selection">${icone('corbeille', { taille: 16 })}<span>Supprimer</span></button>
           <button type="button" class="btn btn-tertiaire" id="deselectionner">Tout désélectionner</button>
         </div>
 
-        <p class="resume-filtre" id="resume-filtre"></p>
+        <p class="resume-filtre resume-registre" id="resume-filtre" aria-live="polite"></p>
 
         <table id="table-achats">
           <colgroup>
@@ -497,20 +596,20 @@ export async function vueAchats(conteneur, params) {
           </colgroup>
           <thead>
             <tr>
-              <th class="col-case"><input type="checkbox" id="tout-selectionner" aria-label="Tout sélectionner"></th>
-              ${enTete('date', 'Réglé le')}
-              ${enTete('fournisseur', 'Fournisseur')}
-              ${enTete('reference', 'Référence')}
-              ${enTete('mode', 'Paiement')}
-              ${enTete('montant', 'Montant', 'montant')}
-              <th></th>
+              <th class="col-case"><input type="checkbox" id="tout-selectionner" aria-label="Sélectionner les lignes affichées"></th>
+              ${enteteTri('date', 'Réglé le')}
+              ${enteteTri('fournisseur', 'Fournisseur')}
+              ${enteteTri('reference', 'Référence')}
+              ${enteteTri('mode', 'Paiement')}
+              ${enteteTri('montant', 'Montant', 'montant')}
+              <th><span class="hors-ecran">Actions</span></th>
             </tr>
           </thead>
           <tbody id="corps-achats"></tbody>
         </table>
       </div>
 
-      <dialog id="dialogue-achat">
+      <dialog id="dialogue-achat" aria-labelledby="titre-dialogue-achat">
         <form id="formulaire-achat" class="corps-dialogue" novalidate>
           <h2 id="titre-dialogue-achat">Nouvel achat</h2>
           <div class="grille-formulaire">
@@ -551,7 +650,7 @@ export async function vueAchats(conteneur, params) {
           </div>
           <div class="pied-dialogue">
             <button type="button" class="btn btn-secondaire" id="annuler-achat">Annuler</button>
-            <button type="submit" class="btn btn-primaire"><span>Enregistrer</span></button>
+            <button type="submit" class="btn btn-primaire" id="enregistrer-achat"><span>Enregistrer</span></button>
           </div>
         </form>
       </dialog>`;

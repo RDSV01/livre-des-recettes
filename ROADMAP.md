@@ -6,6 +6,53 @@ est jugée à cette aune.
 
 ## Déjà livré
 
+### v1.8
+
+- Interface utilisable entièrement au clavier et au lecteur d'écran : le tri des
+  colonnes s'active à la touche et annonce son sens, chaque boîte de dialogue
+  porte son titre, le focus revient au bouton d'où il venait quand elle se
+  ferme, l'auto-complétion annonce la suggestion surlignée, et les explications
+  des bulles d'aide, jusque-là muettes et réservées au survol, se lisent
+  désormais au clic comme au lecteur d'écran.
+- Graphique du chiffre d'affaires doublé d'un tableau de chiffres repliable :
+  les montants mensuels n'étaient lisibles qu'en promenant la souris sur les
+  barres.
+- Couleurs revues pour la lisibilité : les teintes vives restent aux jauges et
+  aux graphiques, une variante plus soutenue porte le texte. Les
+  avertissements, les anomalies de numérotation et les conclusions de contrôle,
+  précisément ce qu'il faut lire, passaient sous le seuil de contraste. En
+  thème sombre, le libellé du bouton principal aussi.
+- Suppression annulable pour de bon : la notification porte un bouton
+  « Annuler la suppression », là où seul Ctrl+Z, invisible et perdu au moindre
+  rechargement, était proposé.
+- Suppression groupée fiabilisée : si une ligne résiste, ce qui a déjà été
+  supprimé reste récupérable et le message dit combien de lignes sur combien
+  sont parties. La barre de sélection rappelle qu'elle ne porte que sur les
+  lignes affichées.
+- Filtres actifs affichés en puces retirables au-dessus des registres, et le
+  résumé annonce « 12 recettes sur 340 » quand la liste est filtrée : un
+  sous-total ne se présente plus comme le livre entier.
+- Résumé des registres plus lisible : le nombre de lignes et le total prennent
+  le poids du texte courant.
+- Écran de déclaration URSSAF repensé autour de son geste réel : le montant à
+  déclarer domine, un bouton le copie sans symbole ni espace, prêt à coller sur
+  le site de l'URSSAF, et une activité mixte obtient ses deux montants à
+  reporter case par case. Le bilan se recalcule à chaque changement de période,
+  le bouton « Calculer » qui ne faisait plus rien a disparu.
+- Mise en page assainie : plus aucune boîte encadrée à l'intérieur d'une carte,
+  les groupes se disent par l'espace et un filet. Les espacements suivent une
+  échelle déclarée au lieu de vingt-six valeurs improvisées.
+- Menus déroulants dessinés dans le style de l'application, au lieu du chevron
+  du système.
+- Thème : au premier lancement, l'application suit le réglage clair ou sombre
+  de la machine, et la barre du navigateur s'accorde au thème.
+- Détails : un seul bandeau global à la fois, qui ne repousse plus le titre de
+  la page ; page d'erreur munie d'un bouton pour recharger ; bouton
+  d'enregistrement verrouillé pendant l'écriture, contre les doublons créés au
+  double clic ; montant illisible signalé dès la sortie du champ ; identifiant
+  d'entreprise introuvable hors connexion signalé sur le champ au lieu
+  d'interrompre l'enregistrement ; « CA d'août » au lieu de « CA de août ».
+
 ### v1.7
 
 - Montants alignés sur la règle de l'URSSAF, qui arrondit à l'euro : en dessous
@@ -178,8 +225,15 @@ est jugée à cette aune.
 
 - [ ] **Gestion multi entreprises**
 - [ ] **Un exécutable pour Mac Intel**
-- [ ] **Rendre plus voyant resume-filtre dans recettes et achats pour avoir une meilleure vue sur le nombre de recettes et le total en prix (pas aussi gros que dans le tableau de bord mais juste plus voyant)** (une première tentative, un bandeau à deux blocs chiffrés, a été écartée : présentation trop lourde. À reprendre autrement.)
 - [ ] **Possibilité de choisir dans les paramètres ce qu'on affiche dans le tableau de bord**
+- [ ] **Donner au registre la forme d'un livre** : séparateurs de mois et
+      sous-totaux mensuels à l'écran, comme dans le PDF exporté, en lecture
+      chronologique.
+- [ ] **Signaler une période déjà déclarée** : rien ne distingue aujourd'hui une
+      recette d'un trimestre déclaré à l'URSSAF d'une autre, ni ne prévient
+      avant de la modifier.
+- [ ] **Projection de fin d'année** : « à ce rythme, vous finissez l'année à X,
+      soit Y % de votre plafond », à partir des chiffres déjà calculés.
 
 ## À l'étude (pas engagé)
 
