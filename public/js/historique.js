@@ -1,5 +1,5 @@
 /**
- * Historique Annuler / Rétablir des actions sur les recettes.
+ * Historique Annuler / Rétablir des actions sur les deux registres.
  *
  * Chaque action enregistrée fournit deux fonctions inverses (`annuler`,
  * `retablir`) qui rejouent l'opération via l'API. L'historique vit uniquement

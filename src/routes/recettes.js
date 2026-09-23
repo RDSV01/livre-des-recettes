@@ -11,6 +11,7 @@ import { validerRecette } from '../validation.js';
 import { estDoublon } from '../partage/doublons.js';
 import { parDateDesc, anneesPresentes } from '../totaux.js';
 import { traiterImport } from '../import-registre.js';
+import { installerRoutesLot } from './lots.js';
 
 export function routesRecettes(stockage) {
   const routeur = express.Router();
@@ -52,6 +53,15 @@ export function routesRecettes(stockage) {
     });
     if (erreur) return res.status(400).json({ erreur });
     res.json(rapport);
+  });
+
+  // Suppression, restauration et reclassement groupés (voir `lots.js`).
+  installerRoutesLot(routeur, {
+    cle: 'recettes',
+    valider: (ligne) => validerRecette(ligne, modesPersonnalises()),
+    supprimer: (ids) => stockage.supprimerRecettes(ids),
+    restaurer: (lignes) => stockage.restaurerRecettes(lignes),
+    modifier: (changements) => stockage.modifierRecettes(changements)
   });
 
   routeur.put('/:id', (req, res) => {

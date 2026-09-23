@@ -59,6 +59,26 @@ export const VERSION = (() => {
  */
 export const DOSSIER_DONNEES_DEFAUT = dossierDonneesParDefaut();
 
+/** Noms sous lesquels l'application se sert elle-même, sur cette machine. */
+const HOTES_LOCAUX = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Refuse toute requête adressée à un autre nom que la machine elle-même.
+ *
+ * Parade au « DNS rebinding » : un site malveillant peut faire pointer son
+ * propre nom de domaine vers 127.0.0.1. Son script parle alors à ce serveur
+ * en se croyant chez lui : le navigateur le laisse lire les réponses (le
+ * livre entier via `/api/sauvegarde`) et annonce ses écritures comme venant
+ * de la même origine, ce qui déjouerait `refuserRequetesExterieures`. Le seul
+ * indice qui le trahit est l'en-tête `Host`, qui porte encore son nom de
+ * domaine : il est vérifié avant tout le reste. Le port, lui, n'importe pas.
+ */
+function refuserHotesInconnus(req, res, suite) {
+  const hote = String(req.get('Host') ?? '').toLowerCase().replace(/:\d+$/, '');
+  if (HOTES_LOCAUX.has(hote)) return suite();
+  res.status(403).json({ erreur: 'Requête refusée : adresse inconnue de l’application.' });
+}
+
 /**
  * Rejette toute requête qui modifie quelque chose et qui ne vient pas de
  * l'application elle-même.
@@ -102,6 +122,7 @@ export function creerApp({
 
   const app = express();
   app.disable('x-powered-by');
+  app.use(refuserHotesInconnus);
   app.use(refuserRequetesExterieures);
   // Limite généreuse : un import CSV de plusieurs milliers de lignes passe en JSON.
   app.use(express.json({ limit: '20mb' }));

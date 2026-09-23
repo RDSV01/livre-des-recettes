@@ -9,6 +9,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { creerApp } from '../src/app.js';
@@ -684,4 +685,143 @@ test('POST /api/demo charge un jeu, puis se refuse sur un livre non vide', async
 
   instance.close();
   instance.closeAllConnections();
+});
+
+// ---- Sécurité : nom d'hôte -------------------------------------------------------
+
+/** Requête brute, pour choisir librement l'en-tête `Host`. */
+function requeteAvecHote(hote, chemin) {
+  const { port } = serveur.address();
+  return new Promise((resoudre, rejeter) => {
+    const requete = http.get({ host: '127.0.0.1', port, path: chemin, headers: { Host: hote } }, (reponse) => {
+      reponse.resume();
+      resoudre(reponse.statusCode);
+    });
+    requete.on('error', rejeter);
+  });
+}
+
+test('une requête adressée à un autre nom que la machine est refusée (DNS rebinding)', async () => {
+  const { port } = serveur.address();
+  // Un site qui ferait pointer son domaine vers 127.0.0.1 lirait sinon tout le livre.
+  assert.equal(await requeteAvecHote(`site-malveillant.example:${port}`, '/api/sauvegarde'), 403);
+  assert.equal(await requeteAvecHote('site-malveillant.example', '/'), 403);
+  // Les noms de la machine elle-même passent, quel que soit le port.
+  assert.equal(await requeteAvecHote(`localhost:${port}`, '/api/systeme'), 200);
+  assert.equal(await requeteAvecHote(`127.0.0.1:${port}`, '/api/systeme'), 200);
+});
+
+// ---- Opérations groupées ----------------------------------------------------------
+
+test('suppression groupée puis restauration à l’identique des recettes', async () => {
+  const creer = async (client) => (await (await appeler('/api/recettes', {
+    methode: 'POST', corps: { ...RECETTE, client, numeroFacture: '' }
+  })).json()).recette;
+  const a = await creer('Lot A');
+  const b = await creer('Lot B');
+
+  const reponse = await appeler('/api/recettes/lot/supprimer', { methode: 'POST', corps: { ids: [a.id, b.id] } });
+  assert.equal(reponse.status, 200);
+  const { recettes: supprimees } = await reponse.json();
+  assert.equal(supprimees.length, 2);
+
+  const restauration = await appeler('/api/recettes/lot/restaurer', { methode: 'POST', corps: { lignes: supprimees } });
+  assert.equal(restauration.status, 201);
+  const { recettes } = await (await appeler('/api/recettes')).json();
+  const a2 = recettes.find((r) => r.id === a.id);
+  assert.ok(a2, 'même identifiant');
+  assert.equal(a2.creeLe, a.creeLe, 'même date de création');
+
+  // Une seconde restauration créerait des doublons.
+  const encore = await appeler('/api/recettes/lot/restaurer', { methode: 'POST', corps: { lignes: supprimees } });
+  assert.equal(encore.status, 409);
+
+  await appeler('/api/recettes/lot/supprimer', { methode: 'POST', corps: { ids: [a.id, b.id] } });
+});
+
+test('un lot de modifications invalide est refusé en entier', async () => {
+  const { recette } = await (await appeler('/api/recettes', {
+    methode: 'POST', corps: { ...RECETTE, client: 'Lot C', numeroFacture: '' }
+  })).json();
+
+  const invalide = await appeler('/api/recettes/lot', {
+    methode: 'PUT',
+    corps: { lignes: [{ ...recette, categorie: 'ventes' }, { ...recette, montant: '-1' }] }
+  });
+  assert.equal(invalide.status, 400);
+  assert.match((await invalide.json()).erreur, /Ligne 2/);
+
+  const inconnue = await appeler('/api/recettes/lot', {
+    methode: 'PUT', corps: { lignes: [{ ...recette, id: 'inconnu', categorie: 'ventes' }] }
+  });
+  assert.equal(inconnue.status, 404);
+
+  const { recettes } = await (await appeler('/api/recettes')).json();
+  assert.equal(recettes.find((r) => r.id === recette.id).categorie, '', 'rien n’a été modifié');
+
+  const valide = await appeler('/api/recettes/lot', {
+    methode: 'PUT', corps: { lignes: [{ ...recette, categorie: 'ventes' }] }
+  });
+  assert.equal(valide.status, 200);
+  assert.equal((await valide.json()).recettes[0].categorie, 'ventes');
+  await appeler(`/api/recettes/${recette.id}`, { methode: 'DELETE' });
+});
+
+test('les achats se suppriment et se restaurent aussi par lot', async () => {
+  const { achat } = await (await appeler('/api/achats', {
+    methode: 'POST', corps: { ...ACHAT, fournisseur: 'Lot fournisseur' }
+  })).json();
+  const { achats } = await (await appeler('/api/achats/lot/supprimer', {
+    methode: 'POST', corps: { ids: [achat.id] }
+  })).json();
+  assert.equal(achats.length, 1);
+  const restauration = await appeler('/api/achats/lot/restaurer', { methode: 'POST', corps: { lignes: achats } });
+  assert.equal(restauration.status, 201);
+  const liste = (await (await appeler('/api/achats')).json()).achats;
+  assert.ok(liste.some((a) => a.id === achat.id && a.creeLe === achat.creeLe));
+  await appeler(`/api/achats/${achat.id}`, { methode: 'DELETE' });
+});
+
+test('les routes de lot refusent un corps mal formé', async () => {
+  const vide = await appeler('/api/recettes/lot/supprimer', { methode: 'POST', corps: { ids: [] } });
+  assert.equal(vide.status, 400);
+  const mauvaisId = await appeler('/api/recettes/lot/restaurer', {
+    methode: 'POST', corps: { lignes: [{ ...RECETTE, id: '../hors-champ' }] }
+  });
+  assert.equal(mauvaisId.status, 400);
+});
+
+// ---- Prélèvements URSSAF et paramètres associés --------------------------------------
+
+test('GET /api/urssaf estime aussi la formation, le versement libératoire et le reste', async () => {
+  const { parametres: avant } = await (await appeler('/api/parametres')).json();
+  const regler = (modification) => appeler('/api/parametres', {
+    methode: 'PUT', corps: { ...avant, ...modification }
+  });
+
+  await regler({ typeActivite: 'liberal', versementLiberatoire: false });
+  const sans = (await (await appeler('/api/urssaf?annee=2026&type=annee')).json()).cotisations;
+  assert.ok(sans.formationPro.total > 0);
+  assert.equal(sans.versementLiberatoire, null);
+
+  await regler({ typeActivite: 'liberal', versementLiberatoire: true });
+  const avec = (await (await appeler('/api/urssaf?annee=2026&type=annee')).json()).cotisations;
+  assert.ok(avec.versementLiberatoire.total > 0);
+  assert.ok(avec.reste < sans.reste, 'l’impôt payé d’avance réduit ce qui reste');
+  const somme = avec.total + avec.formationPro.total + avec.versementLiberatoire.total;
+  assert.equal(Math.round(avec.totalPreleve * 100), Math.round(somme * 100), 'le total prélevé est la somme des trois');
+
+  await regler({});
+});
+
+test('enregistrer les paramètres sans la liste des numéros ignorés la conserve', async () => {
+  const { parametres } = await (await appeler('/api/parametres')).json();
+  await appeler('/api/parametres', { methode: 'PUT', corps: { ...parametres, numerosIgnores: ['FAC-099'] } });
+
+  const { numerosIgnores, ...sansListe } = parametres;
+  await appeler('/api/parametres', { methode: 'PUT', corps: sansListe });
+  const relus = (await (await appeler('/api/parametres')).json()).parametres;
+  assert.deepEqual(relus.numerosIgnores, ['FAC-099']);
+
+  await appeler('/api/parametres', { methode: 'PUT', corps: { ...relus, numerosIgnores } });
 });

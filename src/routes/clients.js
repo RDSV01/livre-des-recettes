@@ -11,7 +11,8 @@ import express from 'express';
 import { validerClient, cleSirenValide } from '../validation.js';
 import { rechercherEntreprise } from '../entreprises.js';
 import { normaliserTexte } from '../partage/texte.js';
-import { enCentimes, enEuros } from '../partage/montants.js';
+import { enEuros } from '../partage/montants.js';
+import { regrouper } from '../totaux.js';
 
 /** Cherche un client déjà enregistré portant le même nom ou le même SIRET. */
 function clientExistant(clients, { nom, siret }) {
@@ -27,14 +28,7 @@ export function routesClients(stockage) {
   // Liste triée par nom, enrichie du nombre de recettes et du CA par client
   // (rapprochement par nom, insensible à la casse et aux accents).
   routeur.get('/', (req, res) => {
-    const totaux = new Map();
-    for (const recette of stockage.listerRecettes()) {
-      const cle = normaliserTexte(recette.client);
-      const entree = totaux.get(cle) ?? { nombre: 0, centimes: 0 };
-      entree.nombre += 1;
-      entree.centimes += enCentimes(recette.montant);
-      totaux.set(cle, entree);
-    }
+    const totaux = regrouper(stockage.listerRecettes(), (r) => normaliserTexte(r.client));
     const clients = stockage.listerClients().map((client) => {
       const stats = totaux.get(normaliserTexte(client.nom)) ?? { nombre: 0, centimes: 0 };
       return { ...client, nombreRecettes: stats.nombre, totalRecettes: enEuros(stats.centimes) };

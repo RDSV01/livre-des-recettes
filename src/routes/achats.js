@@ -10,6 +10,7 @@ import { validerAchat } from '../validation.js';
 import { estDoublonAchat } from '../partage/doublons.js';
 import { parDateDesc, anneesPresentes } from '../totaux.js';
 import { traiterImport } from '../import-registre.js';
+import { installerRoutesLot } from './lots.js';
 
 export function routesAchats(stockage) {
   const routeur = express.Router();
@@ -50,6 +51,14 @@ export function routesAchats(stockage) {
     });
     if (erreur) return res.status(400).json({ erreur });
     res.json(rapport);
+  });
+
+  // Suppression et restauration groupées (voir `lots.js`).
+  installerRoutesLot(routeur, {
+    cle: 'achats',
+    valider: (ligne) => validerAchat(ligne, modesPersonnalises()),
+    supprimer: (ids) => stockage.supprimerAchats(ids),
+    restaurer: (lignes) => stockage.restaurerAchats(lignes)
   });
 
   routeur.put('/:id', (req, res) => {

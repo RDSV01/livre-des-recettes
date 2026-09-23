@@ -105,7 +105,11 @@ export function controlerRecettes(recettes, periode, parametres = {}) {
       : `${pluriel(sansNumero, 'recette')} sans numéro de facture.`
   });
 
-  const { doublons, manquants } = analyserNumerotation(selection);
+  // Les numéros que l'utilisateur a déclarés normaux depuis le registre ne
+  // reviennent pas ici : le contrôle dirait autre chose que l'écran.
+  const { doublons, manquants } = analyserNumerotation(selection, {
+    ignores: parametres.numerosIgnores ?? []
+  });
   const trous = manquants.reduce((acc, s) => acc + s.numeros.length, 0);
   points.push({
     libelle: 'Continuité de la numérotation',

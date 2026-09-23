@@ -12,6 +12,7 @@ import {
 } from './ui.js';
 import { icone } from './icones.js';
 import { annuler, retablir } from './historique.js';
+import { listeSauvegardes, brancherRestauration } from './sauvegardes.js';
 import { vueTableauDeBord } from './vues/tableau-de-bord.js';
 import { vueRecettes } from './vues/recettes.js';
 import { vueAchats } from './vues/achats.js';
@@ -362,14 +363,7 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
       actuel sera conservé de côté : rien n’est effacé.</p>
       ${sauvegardes.length === 0
         ? '<p class="attenue">Aucune sauvegarde disponible. Vous pouvez remplacer manuellement le fichier de données par une copie personnelle, puis relancer l’application.</p>'
-        : sauvegardes.map((s) => `
-          <div class="ligne-gestion">
-            <span class="libelle-gestion">${echapperHtml(s.fichier)}</span>
-            <span class="details-gestion">${echapperHtml(new Date(s.date).toLocaleString('fr-FR'))} (${Math.max(1, Math.round(s.taille / 1024))} Ko)</span>
-            <button type="button" class="btn btn-secondaire" data-fichier="${echapperHtml(s.fichier)}">
-              ${icone('reinitialiser', { taille: 16 })}<span>Restaurer</span>
-            </button>
-          </div>`).join('')}
+        : listeSauvegardes(sauvegardes)}
       ${disparition ? `
         <p class="note-legale">
           ${icone('info', { taille: 16 })}
@@ -397,23 +391,7 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
     }
   });
 
-  conteneur.querySelectorAll('[data-fichier]').forEach((bouton) => {
-    bouton.addEventListener('click', async () => {
-      const fichier = bouton.dataset.fichier;
-      const accord = await confirmer({
-        titre: 'Restaurer cette sauvegarde ?',
-        message: `Les données reviendront à l’état de « ${fichier} ». Le fichier actuel est conservé de côté.`,
-        boutonOk: 'Restaurer'
-      });
-      if (!accord) return;
-      try {
-        await api.restaurerSauvegarde(fichier);
-        window.location.reload();
-      } catch (erreur) {
-        toast(erreur.message, 'erreur');
-      }
-    });
-  });
+  brancherRestauration(conteneur);
 }
 
 // ---- Démarrage -------------------------------------------------------------

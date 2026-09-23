@@ -5,7 +5,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  estDateIso, formaterDate, analyserDateSouple, trimestreDe, dernierePeriodeEchue, dateEnFrancaisLong
+  estDateIso, formaterDate, analyserDateSouple, trimestreDe, dernierePeriodeEchue, dateEnFrancaisLong,
+  idPeriode, periodeDepuisId, finPeriode, echeanceDeclaration, periodeDeclaree
 } from '../src/partage/dates.js';
 import { analyserMontant, sommeMontants, enCentimes } from '../src/partage/montants.js';
 import { normaliserTexte } from '../src/partage/texte.js';
@@ -432,4 +433,47 @@ test('le barème ne contient que des montants cohérents', () => {
       assert.ok(taux > 0 && taux < 100, 'un abattement est un pourcentage');
     }
   }
+});
+
+// ---- Périodes et échéances de déclaration --------------------------------------
+
+test('idPeriode et periodeDepuisId se répondent', () => {
+  assert.equal(idPeriode(2026, 'mois', 7), '2026-07');
+  assert.equal(idPeriode(2026, 'trimestre', 2), '2026-T2');
+  assert.equal(idPeriode(2026, 'annee', null), null, 'une année n’est pas une périodicité de déclaration');
+  assert.deepEqual(periodeDepuisId('2026-07'), { annee: 2026, type: 'mois', valeur: 7 });
+  assert.deepEqual(periodeDepuisId('2026-T2'), { annee: 2026, type: 'trimestre', valeur: 2 });
+  for (const illisible of ['', null, undefined, '2026-13', '2026-T5', '2026']) {
+    assert.equal(periodeDepuisId(illisible), null, `« ${illisible} » refusé`);
+  }
+});
+
+test('l’échéance tombe le dernier jour du mois qui suit la période', () => {
+  // Trimestriel : 30 avril, 31 juillet, 31 octobre, 31 janvier (source : urssaf.fr).
+  assert.equal(echeanceDeclaration(2026, 'trimestre', 1), '2026-04-30');
+  assert.equal(echeanceDeclaration(2026, 'trimestre', 2), '2026-07-31');
+  assert.equal(echeanceDeclaration(2026, 'trimestre', 3), '2026-10-31');
+  assert.equal(echeanceDeclaration(2026, 'trimestre', 4), '2027-01-31', 'le 4e trimestre se déclare l’année suivante');
+  // Mensuel : fin du mois suivant, février compris, bissextile ou non.
+  assert.equal(echeanceDeclaration(2026, 'mois', 1), '2026-02-28');
+  assert.equal(echeanceDeclaration(2028, 'mois', 1), '2028-02-29');
+  assert.equal(echeanceDeclaration(2026, 'mois', 12), '2027-01-31');
+  assert.equal(echeanceDeclaration(2026, 'annee', null), null);
+});
+
+test('finPeriode donne le dernier jour de la période', () => {
+  assert.equal(finPeriode(2026, 'trimestre', 1), '2026-03-31');
+  assert.equal(finPeriode(2026, 'mois', 2), '2026-02-28');
+  assert.equal(finPeriode(2026, 'annee', null), null);
+});
+
+test('une période est déclarée si elle précède la dernière marquée faite', () => {
+  assert.equal(periodeDeclaree('2026-T2', '2026-T2'), true);
+  assert.equal(periodeDeclaree('2026-T1', '2026-T2'), true, 'les déclarations se suivent dans l’ordre');
+  assert.equal(periodeDeclaree('2026-T3', '2026-T2'), false);
+  assert.equal(periodeDeclaree('2025-12', '2026-01'), true, 'd’une année sur l’autre');
+  assert.equal(periodeDeclaree('2026-09', '2026-10'), true);
+  // Après un changement de périodicité, un mois et un trimestre ne se comparent pas.
+  assert.equal(periodeDeclaree('2026-07', '2026-T3'), false);
+  assert.equal(periodeDeclaree('2026-T2', ''), false, 'rien de déclaré');
 });

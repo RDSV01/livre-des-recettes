@@ -10,7 +10,7 @@
 import { api } from '../api.js';
 import { etat } from '../etat.js';
 import {
-  echapperHtml, toast, confirmer, ouvrirModale,
+  echapperHtml, toast, confirmer, ouvrirModale, resultatSiret,
   afficherErreursFormulaire, effacerErreursFormulaire, animerDepartLignes
 } from '../ui.js';
 import { icone } from '../icones.js';
@@ -42,17 +42,14 @@ export async function vueClients(conteneur) {
     const siret = refs.siret.value.replace(/\s/g, '');
     if (!siret) return;
     refs.boutonSiret.disabled = true;
-    refs.resultatSiret.hidden = false;
-    refs.resultatSiret.innerHTML = '<span class="attenue">Recherche en cours…</span>';
+    resultatSiret(refs.resultatSiret);
     try {
       const { entreprise } = await api.rechercherSiret(siret);
       refs.formulaire.nom.value = entreprise.nom;
       if (entreprise.siret) refs.formulaire.siret.value = entreprise.siret;
-      refs.resultatSiret.innerHTML =
-        `${icone('cercle-valide', { taille: 18 })}<span class="nom-trouve">${echapperHtml(entreprise.nom)}</span>`;
+      resultatSiret(refs.resultatSiret, { nom: entreprise.nom });
     } catch (erreur) {
-      refs.resultatSiret.innerHTML =
-        `${icone('cercle-alerte', { taille: 18 })}<span>${echapperHtml(erreur.message)}</span>`;
+      resultatSiret(refs.resultatSiret, { erreur: erreur.message });
     } finally {
       refs.boutonSiret.disabled = false;
     }
@@ -92,6 +89,10 @@ export async function vueClients(conteneur) {
   refs.formulaire.addEventListener('submit', async (evenement) => {
     evenement.preventDefault();
     const donnees = Object.fromEntries(new FormData(refs.formulaire).entries());
+    // Fermé pendant l'écriture, comme dans les registres : un double clic
+    // tentait de créer deux fois le même client.
+    const bouton = refs.formulaire.querySelector('[type="submit"]');
+    bouton.disabled = true;
     try {
       if (enEdition) {
         await api.modifierClient(enEdition.id, donnees);
@@ -109,6 +110,8 @@ export async function vueClients(conteneur) {
       } else {
         toast(erreur.message, 'erreur');
       }
+    } finally {
+      bouton.disabled = false;
     }
   });
 

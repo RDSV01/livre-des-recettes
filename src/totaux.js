@@ -8,9 +8,36 @@
 import { enCentimes, enEuros, arrondiDeclaration } from './partage/montants.js';
 import { anneeDe, moisDe, nomMois, trimestreDe } from './partage/dates.js';
 
+/** Total d'une liste de lignes (recettes ou achats), en centimes entiers. */
+export function totalCentimes(lignes) {
+  return lignes.reduce((acc, l) => acc + enCentimes(l.montant), 0);
+}
+
 /** Total d'une liste de lignes (recettes ou achats), en euros. */
 export function totalMontants(lignes) {
-  return enEuros(lignes.reduce((acc, l) => acc + enCentimes(l.montant), 0));
+  return enEuros(totalCentimes(lignes));
+}
+
+/**
+ * Regroupe des lignes selon une clé (client, mode de règlement…) et cumule,
+ * par groupe, le nombre de lignes et leur montant en centimes. Chaque groupe
+ * garde sa première ligne, qui fournit le libellé à afficher : la clé, elle,
+ * est souvent normalisée (sans casse ni accents) pour rapprocher les saisies.
+ *
+ * @param {object[]} lignes
+ * @param {(ligne: object) => string} cleDe
+ * @returns {Map<string, { premiere: object, nombre: number, centimes: number }>}
+ */
+export function regrouper(lignes, cleDe) {
+  const groupes = new Map();
+  for (const ligne of lignes) {
+    const cle = cleDe(ligne);
+    const groupe = groupes.get(cle) ?? { premiere: ligne, nombre: 0, centimes: 0 };
+    groupe.nombre += 1;
+    groupe.centimes += enCentimes(ligne.montant);
+    groupes.set(cle, groupe);
+  }
+  return groupes;
 }
 
 /**
@@ -100,7 +127,7 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
   // catégorie (un achat n'en porte pas). La date qui fait foi est le règlement.
   const achatsAnnee = filtrerParPeriode(achats, { annee: anneeChoisie }, 'dateReglement');
 
-  const caAnneeCentimes = recettesAnnee.reduce((acc, r) => acc + enCentimes(r.montant), 0);
+  const caAnneeCentimes = totalCentimes(recettesAnnee);
   const nombreAnnee = recettesAnnee.length;
 
   // Ventilation ventes / prestations : elle n'a de sens qu'en activité mixte,

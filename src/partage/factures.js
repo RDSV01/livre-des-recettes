@@ -28,12 +28,32 @@ const TROU_MAX = 3;
 /**
  * Analyse les numéros de facture d'une liste de recettes.
  *
+ * `ignores` liste les numéros que l'utilisateur a déclarés normaux : une
+ * facture annulée laisse un trou légitime, une facture réglée en deux fois
+ * revient légitimement sur deux encaissements. Ils ne sont plus signalés,
+ * ni comme manquants ni comme doublons. La comparaison ignore la casse et les
+ * accents, comme celle des doublons.
+ *
+ * @param {object[]} recettes
+ * @param {{ ignores?: string[] }} [options]
  * @returns {{
  *   doublons: Array<{ numero: string, occurrences: number }>,
  *   manquants: Array<{ serie: string, numeros: string[] }>
  * }}
  */
-export function analyserNumerotation(recettes) {
+export function analyserNumerotation(recettes, { ignores = [] } = {}) {
+  const ignore = new Set(ignores.map((n) => normaliserTexte(String(n))));
+  const signale = (numero) => !ignore.has(normaliserTexte(numero));
+  const { doublons, manquants } = analyserSansFiltre(recettes);
+  return {
+    doublons: doublons.filter((d) => signale(d.numero)),
+    manquants: manquants
+      .map((s) => ({ ...s, numeros: s.numeros.filter(signale) }))
+      .filter((s) => s.numeros.length > 0)
+  };
+}
+
+function analyserSansFiltre(recettes) {
   const numeros = recettes
     .map((r) => String(r.numeroFacture ?? '').trim())
     .filter((n) => n !== '');

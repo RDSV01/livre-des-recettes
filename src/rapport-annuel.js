@@ -11,11 +11,13 @@
  * `src/exports/rapport-pdf.js` se charge du rendu.
  */
 
-import { enCentimes, enEuros } from './partage/montants.js';
+import { enEuros } from './partage/montants.js';
 import { normaliserTexte } from './partage/texte.js';
 import { moisDe, nomMois } from './partage/dates.js';
 import { libelleMode } from './partage/constantes.js';
-import { filtrerParPeriode, totalMontants, parDateAsc } from './totaux.js';
+import {
+  filtrerParPeriode, totalMontants, totalCentimes, regrouper, parDateAsc
+} from './totaux.js';
 
 /** Nombre de clients et de fournisseurs listés dans les classements. */
 const TAILLE_CLASSEMENT = 5;
@@ -27,52 +29,38 @@ function part(centimes, totalCentimes) {
 }
 
 /**
- * Regroupe des lignes par tiers (client ou fournisseur) et les classe du plus
- * gros au plus petit. La comparaison ignore la casse et les accents, mais le
- * nom affiché reste celui saisi la première fois.
+ * Classement du plus gros au plus petit : les groupes de `regrouper`, avec
+ * leur montant et leur part du total, plus ce que `decrire` en tire.
  */
-function classementTiers(lignes, cleTiers, totalCentimes) {
-  const groupes = new Map();
-  for (const ligne of lignes) {
-    const nom = String(ligne[cleTiers] ?? '').trim();
-    const cle = normaliserTexte(nom);
-    const groupe = groupes.get(cle) ?? { nom, nombre: 0, centimes: 0 };
-    groupe.nombre += 1;
-    groupe.centimes += enCentimes(ligne.montant);
-    groupes.set(cle, groupe);
-  }
-  return [...groupes.values()]
+function classer(lignes, cleDe, total, decrire) {
+  return [...regrouper(lignes, cleDe).values()]
     .sort((a, b) => b.centimes - a.centimes)
     .map((g) => ({
-      nom: g.nom,
+      ...decrire(g.premiere),
       nombre: g.nombre,
       montant: enEuros(g.centimes),
-      part: part(g.centimes, totalCentimes)
+      part: part(g.centimes, total)
     }));
+}
+
+/**
+ * Classement par tiers (client ou fournisseur). La comparaison ignore la casse
+ * et les accents, mais le nom affiché reste celui saisi la première fois.
+ */
+function classementTiers(lignes, cleTiers, total) {
+  const nom = (ligne) => String(ligne[cleTiers] ?? '').trim();
+  return classer(lignes, (l) => normaliserTexte(nom(l)), total, (l) => ({ nom: nom(l) }));
 }
 
 /**
  * Répartition des encaissements par mode de règlement, du plus utilisé au
  * moins utilisé. Les modes personnalisés de l'utilisateur sont pris en compte.
  */
-function repartitionModes(recettes, totalCentimes, modesPersonnalises) {
-  const groupes = new Map();
-  for (const recette of recettes) {
-    const code = recette.modeReglement;
-    const groupe = groupes.get(code) ?? { code, nombre: 0, centimes: 0 };
-    groupe.nombre += 1;
-    groupe.centimes += enCentimes(recette.montant);
-    groupes.set(code, groupe);
-  }
-  return [...groupes.values()]
-    .sort((a, b) => b.centimes - a.centimes)
-    .map((g) => ({
-      code: g.code,
-      libelle: libelleMode(g.code, modesPersonnalises),
-      nombre: g.nombre,
-      montant: enEuros(g.centimes),
-      part: part(g.centimes, totalCentimes)
-    }));
+function repartitionModes(recettes, total, modesPersonnalises) {
+  return classer(recettes, (r) => r.modeReglement, total, (r) => ({
+    code: r.modeReglement,
+    libelle: libelleMode(r.modeReglement, modesPersonnalises)
+  }));
 }
 
 /** Les douze mois de l'année, ceux sans encaissement compris. */
@@ -104,22 +92,22 @@ export function rapportAnnuel({ recettes = [], achats = [], parametres = {} }, a
   const duRegistre = filtrerParPeriode(recettes, { annee }).sort(parDateAsc('dateEncaissement'));
   const achatsAnnee = filtrerParPeriode(achats, { annee }, 'dateReglement');
 
-  const caCentimes = duRegistre.reduce((acc, r) => acc + enCentimes(r.montant), 0);
-  const achatsCentimes = achatsAnnee.reduce((acc, a) => acc + enCentimes(a.montant), 0);
+  const caCentimes = totalCentimes(duRegistre);
+  const achatsCentimes = totalCentimes(achatsAnnee);
   const nombre = duRegistre.length;
 
   const parCategorie = (categorie) => {
     const groupe = categorie === null
       ? duRegistre.filter((r) => !r.categorie)
       : duRegistre.filter((r) => r.categorie === categorie);
-    const centimes = groupe.reduce((acc, r) => acc + enCentimes(r.montant), 0);
+    const centimes = totalCentimes(groupe);
     return { montant: enEuros(centimes), nombre: groupe.length, part: part(centimes, caCentimes) };
   };
 
   // Évolution : sans aucun encaissement l'année précédente, un pourcentage
   // n'aurait pas de sens (division par zéro), d'où `evolution: null`.
   const precedente = filtrerParPeriode(recettes, { annee: annee - 1 });
-  const caPrecedentCentimes = precedente.reduce((acc, r) => acc + enCentimes(r.montant), 0);
+  const caPrecedentCentimes = totalCentimes(precedente);
 
   const mois = mensuel(duRegistre, achatsAnnee);
   const meilleurMois = mois.reduce((a, b) => (b.montant > a.montant ? b : a), mois[0]);

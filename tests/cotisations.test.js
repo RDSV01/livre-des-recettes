@@ -278,3 +278,123 @@ test('chaque palier porte un taux pour chaque activité', () => {
     }
   }
 });
+
+// ---- Formation professionnelle, versement libératoire, reste -----------------
+
+test('la formation professionnelle suit l’immatriculation', () => {
+  // Valeurs de contrôle : service-public.gouv.fr (fiche F23459) et les règles
+  // du simulateur de l'URSSAF. 0,1 % en activité commerciale, 0,3 % en
+  // activité artisanale, 0,2 % en activité libérale, CIPAV comprise.
+  const cfp = (type, options = {}) =>
+    cotisationsUrssaf([recette(AU_RECENT, 10_000)], { typeActivite: type, ...options }).formationPro.total;
+
+  assert.equal(cfp('ventes'), 10, 'vente : 0,1 %');
+  assert.equal(cfp('prestations'), 10, 'prestations commerciales : 0,1 %, comme le commerce');
+  assert.equal(cfp('liberal'), 20, 'libéral : 0,2 %');
+  assert.equal(cfp('liberalCipav'), 20, 'libéral CIPAV : 0,2 %');
+
+  assert.equal(cfp('ventes', { activiteArtisanale: true }), 30, 'artisan qui vend : 0,3 %');
+  assert.equal(cfp('prestations', { activiteArtisanale: true }), 30, 'prestations artisanales : 0,3 %');
+  assert.equal(cfp('liberal', { activiteArtisanale: true }), 20, 'une activité libérale n’est jamais artisanale');
+});
+
+test('formation et versement libératoire sont arrondis à l’euro le plus proche', () => {
+  // Cas relevé sur un vrai relevé de l'URSSAF : 0,1 % de 2 220 € font 2,22 €,
+  // et l'URSSAF prélève 2 €. Même règle que pour les cotisations (article
+  // L133-10 du Code de la sécurité sociale), et pour l'impôt (article 1724 du
+  // Code général des impôts) : la fraction de 0,50 € compte pour 1.
+  const prelevements = (montant, type) =>
+    cotisationsUrssaf([recette(AU_RECENT, montant)], { typeActivite: type, versementLiberatoire: true });
+
+  assert.equal(prelevements(2220, 'prestations').formationPro.total, 2, '2,22 € prélevés 2 €');
+  assert.equal(prelevements(500, 'ventes').formationPro.total, 1, '0,50 € monte à 1 €');
+  assert.equal(prelevements(499, 'ventes').formationPro.total, 0, '0,499 € s’efface');
+  assert.equal(prelevements(2220, 'prestations').versementLiberatoire.total, 38, '1,7 % de 2 220 € : 37,74 € prélevés 38 €');
+  assert.equal(prelevements(50, 'ventes').versementLiberatoire.total, 1, '0,50 € d’impôt monte à 1 €');
+
+  // Aucun prélèvement ne traîne de centimes, ni ligne par ligne ni au total.
+  const mixte = cotisationsUrssaf([
+    recette(AU_RECENT, 1234.56, 'ventes'),
+    recette(AU_RECENT, 987.65, 'prestations')
+  ], { typeActivite: 'mixte', naturePrestations: 'liberal', versementLiberatoire: true, activiteArtisanale: true });
+  for (const bloc of [mixte.formationPro, mixte.versementLiberatoire]) {
+    assert.ok(Number.isInteger(bloc.total));
+    for (const l of bloc.lignes) assert.ok(Number.isInteger(l.montant), `${l.libelle} : entier`);
+    assert.equal(bloc.lignes.reduce((acc, l) => acc + l.montant, 0), bloc.total);
+  }
+  assert.ok(Number.isInteger(mixte.totalPreleve));
+});
+
+test('le versement libératoire ne s’ajoute que pour qui l’a choisi', () => {
+  const vl = (type) => cotisationsUrssaf(
+    [recette(AU_RECENT, 10_000)], { typeActivite: type, versementLiberatoire: true }
+  ).versementLiberatoire.total;
+
+  // Valeurs de contrôle : impots.gouv.fr, « Le versement libératoire ».
+  assert.equal(vl('ventes'), 100, 'vente : 1 %');
+  assert.equal(vl('prestations'), 170, 'prestations BIC : 1,7 %');
+  assert.equal(vl('liberal'), 220, 'BNC : 2,2 %');
+  assert.equal(vl('liberalCipav'), 220, 'BNC CIPAV : 2,2 %');
+
+  const sansOption = cotisationsUrssaf([recette(AU_RECENT, 10_000)], { typeActivite: 'ventes' });
+  assert.equal(sansOption.versementLiberatoire, null, 'option non choisie : aucun versement');
+});
+
+test('ce qui reste est l’encaissé moins tous les prélèvements', () => {
+  // 4 000 € de prestations commerciales, versement libératoire choisi :
+  // 848 € de cotisations, 4 € de formation, 68 € d'impôt.
+  const resultat = cotisationsUrssaf([recette(AU_RECENT, 4000)], {
+    typeActivite: 'prestations', versementLiberatoire: true
+  });
+  assert.equal(resultat.total, Math.round(4000 * RECENT.prestations / 100));
+  assert.equal(resultat.formationPro.total, 4);
+  assert.equal(resultat.versementLiberatoire.total, 68);
+  assert.equal(resultat.totalPreleve, resultat.total + 4 + 68);
+  assert.equal(resultat.reste, 4000 - resultat.totalPreleve);
+
+  // Le reste part de l'encaissé exact, centimes compris, et non de la base
+  // arrondie : 1 000,49 € encaissés, c'est 1 000,49 € dans la poche avant
+  // prélèvements.
+  const auCentime = cotisationsUrssaf([recette(AU_RECENT, 1000.49)], { typeActivite: 'ventes' });
+  assert.equal(auCentime.reste, Math.round((1000.49 - auCentime.totalPreleve) * 100) / 100);
+});
+
+test('une activité mixte prélève chaque part à ses propres taux', () => {
+  const resultat = cotisationsUrssaf([
+    recette(AU_RECENT, 20_000, 'ventes'),
+    recette(AU_RECENT, 10_000, 'prestations')
+  ], { typeActivite: 'mixte', naturePrestations: 'liberal', versementLiberatoire: true });
+
+  const tauxDe = (bloc, base) => bloc.lignes.find((l) => l.base === base).taux;
+  assert.equal(tauxDe(resultat.formationPro, 20_000), RECENT.formationPro.ventes);
+  assert.equal(tauxDe(resultat.formationPro, 10_000), RECENT.formationPro.liberal);
+  assert.equal(tauxDe(resultat.versementLiberatoire, 20_000), RECENT.versementLiberatoire.ventes);
+  assert.equal(tauxDe(resultat.versementLiberatoire, 10_000), RECENT.versementLiberatoire.liberal);
+  assert.equal(resultat.formationPro.total, 20 + 20);
+  assert.equal(resultat.versementLiberatoire.total, 200 + 220);
+});
+
+test('le chiffre d’affaires sans taux reste compté dans ce qui reste', () => {
+  // 500 € non catégorisés ne coûtent rien à l'estimation, mais ont bien été
+  // encaissés : le reste est surestimé, et l'écran le dit.
+  const resultat = cotisationsUrssaf([
+    recette(AU_RECENT, 1000, 'ventes'),
+    recette(AU_RECENT, 500)
+  ], { typeActivite: 'mixte' });
+  assert.equal(resultat.horsEstimation, 500);
+  assert.equal(resultat.reste, Math.round((1500 - resultat.totalPreleve) * 100) / 100);
+});
+
+test('chaque palier porte ses taux de formation et de versement libératoire', () => {
+  for (const palier of PALIERS_COTISATIONS) {
+    for (const activite of ['ventes', 'prestations', 'liberal', 'liberalCipav']) {
+      assert.ok(palier.formationPro[activite] > 0, `${palier.duJour} / CFP ${activite}`);
+      assert.ok(palier.versementLiberatoire[activite] > 0, `${palier.duJour} / VL ${activite}`);
+    }
+    assert.ok(palier.formationPro.artisan > 0, `${palier.duJour} / CFP artisan`);
+    // Ni la CFP ni le versement libératoire n'ont changé depuis 2023 : une
+    // modification involontaire d'un seul palier se verrait ici.
+    assert.deepEqual(palier.formationPro, { ventes: 0.1, prestations: 0.1, liberal: 0.2, liberalCipav: 0.2, artisan: 0.3 });
+    assert.deepEqual(palier.versementLiberatoire, { ventes: 1, prestations: 1.7, liberal: 2.2, liberalCipav: 2.2 });
+  }
+});

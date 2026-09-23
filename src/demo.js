@@ -8,10 +8,15 @@
  * effaçable d'un clic.
  */
 
-/** Date ISO d'il y a `jours` jours (l'ordre chronologique reste réaliste). */
+/**
+ * Date ISO d'il y a `jours` jours (l'ordre chronologique reste réaliste), en
+ * jours du calendrier LOCAL : l'heure universelle faisait reculer toutes les
+ * dates d'un jour quand le jeu était chargé entre minuit et 2 h.
+ */
 function ilYA(jours, maintenant) {
-  const d = new Date(maintenant.getTime() - jours * 24 * 60 * 60 * 1000);
-  return d.toISOString().slice(0, 10);
+  const d = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate() - jours);
+  const deux = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${deux(d.getMonth() + 1)}-${deux(d.getDate())}`;
 }
 
 /** Construit le jeu de démonstration (activité mixte, pour tout montrer). */

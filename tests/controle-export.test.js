@@ -158,3 +158,15 @@ test('un achat sans fournisseur ni montant valide est une erreur', () => {
   assert.equal(point(rapport, 'Identité du fournisseur').etat, 'erreur');
   assert.equal(point(rapport, 'Montant de l').etat, 'erreur');
 });
+
+test('les numéros déclarés normaux ne sont pas signalés avant export', () => {
+  const recettes = [
+    recette('2026-03-01', { numeroFacture: 'F-001' }),
+    recette('2026-03-02', { numeroFacture: 'F-003', client: 'Autre' })
+  ];
+  const continuite = (parametres) => controlerRecettes(recettes, { annee: 2026 }, parametres)
+    .points.find((p) => p.libelle === 'Continuité de la numérotation');
+
+  assert.equal(continuite({}).etat, 'attention', 'F-002 manque');
+  assert.equal(continuite({ numerosIgnores: ['F-002'] }).etat, 'ok', 'sauf s’il a été déclaré normal');
+});

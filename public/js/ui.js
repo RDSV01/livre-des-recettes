@@ -8,14 +8,59 @@
 
 import { icone } from './icones.js';
 import { analyserMontant, formaterMontant } from '/partage/montants.js';
-import { dateEnFrancaisLong } from '/partage/dates.js';
-import { normaliserTexte } from '/partage/texte.js';
+import { dateEnFrancaisLong, NOMS_MOIS } from '/partage/dates.js';
+import { normaliserTexte, majusculeInitiale } from '/partage/texte.js';
 
 /** Nombre de suggestions proposées sous un champ de saisie. */
 const SUGGESTIONS_MAX = 6;
 
 /** L'utilisateur préfère-t-il moins de mouvement ? */
-const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+export const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Options d'un sélecteur d'années, dans l'ordre reçu. */
+export const optionsAnnees = (annees) => annees.map((a) => `<option value="${a}">${a}</option>`).join('');
+
+/** Options des douze mois, de valeur 1 à 12. */
+export const OPTIONS_MOIS = NOMS_MOIS.map((nom, i) => `<option value="${i + 1}">${nom}</option>`).join('');
+
+/** Options d'un sélecteur de codes (`{ code, libelle }` : modes, catégories). */
+export const optionsCodes = (entrees) => entrees
+  .map((e) => `<option value="${echapperHtml(e.code)}">${echapperHtml(e.libelle)}</option>`)
+  .join('');
+
+/**
+ * Résultat d'une recherche d'entreprise par SIRET, sous le champ saisi :
+ * recherche en cours (ni nom ni erreur), nom trouvé, ou message d'échec.
+ *
+ * @param {HTMLElement} zone
+ * @param {{ nom?: string, erreur?: string }} resultat
+ */
+export function resultatSiret(zone, { nom, erreur } = {}) {
+  zone.hidden = false;
+  if (erreur) {
+    zone.innerHTML = `${icone('cercle-alerte', { taille: 18 })}<span>${echapperHtml(erreur)}</span>`;
+  } else if (nom) {
+    zone.innerHTML = `${icone('cercle-valide', { taille: 18 })}<span class="nom-trouve">${echapperHtml(nom)}</span>`;
+  } else {
+    zone.innerHTML = '<span class="attenue">Recherche du nom…</span>';
+  }
+}
+
+/**
+ * Copie un texte dans le presse-papiers et le dit. En cas d'échec (droit
+ * refusé par le navigateur), invite à le sélectionner à la main.
+ *
+ * @param {string} texte
+ * @param {string} quoi ce qui est copié, au masculin (« montant », « chemin »).
+ */
+export async function copierDansPressePapiers(texte, quoi) {
+  try {
+    await navigator.clipboard.writeText(texte);
+    toast(`${majusculeInitiale(quoi)} copié dans le presse-papiers.`);
+  } catch {
+    toast(`Copie impossible : sélectionnez le ${quoi} à la main.`, 'erreur');
+  }
+}
 
 /**
  * Identifiants uniques pour relier deux éléments entre eux (`aria-labelledby`,
@@ -109,40 +154,29 @@ export function toast(message, type = 'succes', { action } = {}) {
 }
 
 /**
- * Demande confirmation via une boîte de dialogue modale.
+ * Boîte de dialogue créée pour une seule question, puis retirée : elle
+ * s'ouvre aussitôt, et se referme au clic sur un bouton `data-role="ok"` ou
+ * `data-role="annuler"`, ou à la touche Échap (qui vaut « annuler »).
  *
- * Par défaut l'action est présentée comme destructrice (bouton rouge et
- * corbeille) ; `danger: false` et `iconeOk` conviennent aux actions qui ne
- * suppriment rien, comme installer une mise à jour.
+ * Le focus revient d'où il venait : retirer la boîte le laisserait retomber
+ * sur le document, et le clavier repartirait du haut de la page.
  *
- * @returns {Promise<boolean>} vrai si l'utilisateur confirme.
+ * @param {(idTitre: string) => string} contenu balisage de la boîte ; son
+ *   titre doit porter l'identifiant reçu, qui la nomme pour les lecteurs
+ *   d'écran (sans lui, ils annoncent « dialogue » et rien d'autre).
+ * @param {string} [classe] classe de la boîte.
+ * @returns {{ dialogue: HTMLDialogElement, reponse: Promise<boolean> }}
  */
-export function confirmer({
-  titre = 'Confirmer', message, boutonOk = 'Supprimer',
-  danger = true, iconeOk = 'corbeille'
-}) {
-  return new Promise((resoudre) => {
-    const dialogue = document.createElement('dialog');
-    // Le titre nomme la boîte de dialogue : sans lien explicite, un lecteur
-    // d'écran annonce « dialogue » et rien d'autre.
-    const idTitre = identifiantUnique('titre-confirmation');
-    dialogue.setAttribute('aria-labelledby', idTitre);
-    dialogue.innerHTML = `
-      <form method="dialog" class="corps-dialogue">
-        <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
-        <p>${echapperHtml(message)}</p>
-        <div class="pied-dialogue">
-          <button type="button" class="btn btn-secondaire" data-role="annuler">Annuler</button>
-          <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primaire'}" data-role="ok">
-            ${icone(iconeOk, { taille: 16 })}<span>${echapperHtml(boutonOk)}</span>
-          </button>
-        </div>
-      </form>`;
-    document.body.appendChild(dialogue);
+export function dialogueTemporaire(contenu, classe = '') {
+  const dialogue = document.createElement('dialog');
+  if (classe) dialogue.className = classe;
+  const idTitre = identifiantUnique('titre-dialogue');
+  dialogue.setAttribute('aria-labelledby', idTitre);
+  dialogue.innerHTML = contenu(idTitre);
+  document.body.appendChild(dialogue);
 
-    // Le focus revient d'où il venait : retirer la boîte le laisserait retomber
-    // sur le document, et le clavier repartirait du haut de la page.
-    const origine = document.activeElement;
+  const origine = document.activeElement;
+  const reponse = new Promise((resoudre) => {
     const terminer = (resultat) => {
       dialogue.close();
       dialogue.remove();
@@ -155,8 +189,35 @@ export function confirmer({
       evenement.preventDefault();
       terminer(false);
     });
-    dialogue.showModal();
   });
+  dialogue.showModal();
+  return { dialogue, reponse };
+}
+
+/**
+ * Demande confirmation via une boîte de dialogue modale.
+ *
+ * Par défaut l'action est présentée comme destructrice (bouton rouge et
+ * corbeille) ; `danger: false` et `iconeOk` conviennent aux actions qui ne
+ * suppriment rien, comme installer une mise à jour.
+ *
+ * @returns {Promise<boolean>} vrai si l'utilisateur confirme.
+ */
+export function confirmer({
+  titre = 'Confirmer', message, boutonOk = 'Supprimer',
+  danger = true, iconeOk = 'corbeille'
+}) {
+  return dialogueTemporaire((idTitre) => `
+    <form method="dialog" class="corps-dialogue">
+      <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
+      <p>${echapperHtml(message)}</p>
+      <div class="pied-dialogue">
+        <button type="button" class="btn btn-secondaire" data-role="annuler">Annuler</button>
+        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primaire'}" data-role="ok">
+          ${icone(iconeOk, { taille: 16 })}<span>${echapperHtml(boutonOk)}</span>
+        </button>
+      </div>
+    </form>`).reponse;
 }
 
 /**
@@ -228,8 +289,7 @@ export function afficherErreursFormulaire(formulaire, erreurs) {
   // Le premier dans l'ordre de la page, pas dans celui des erreurs reçues.
   const premier = formulaire.querySelector('.champ.invalide');
   if (!premier) return;
-  const anime = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  premier.scrollIntoView({ behavior: anime ? 'smooth' : 'auto', block: 'center' });
+  premier.scrollIntoView({ behavior: mouvementReduit() ? 'auto' : 'smooth', block: 'center' });
   // Le défilement est déjà fait : le focus ne doit pas en déclencher un autre.
   premier.querySelector('input, select, textarea')?.focus({ preventScroll: true });
 }
@@ -244,6 +304,66 @@ export function effacerErreursFormulaire(formulaire) {
 export function formaterChampMontant(valeur) {
   const montant = analyserMontant(valeur);
   return montant === null ? String(valeur ?? '') : montant.toFixed(2).replace('.', ',');
+}
+
+/**
+ * Champ montant d'un formulaire : « 12,5 » devient « 12,50 » dès qu'on le
+ * quitte, et une saisie que l'application ne sait pas lire est signalée tout
+ * de suite. Attendre l'enregistrement laissait croire le montant accepté.
+ *
+ * Le message est posé sur place, sans déplacer le focus : le faire revenir
+ * dans le champ que l'on vient de quitter empêcherait d'en sortir.
+ *
+ * @param {HTMLFormElement} formulaire formulaire portant un champ `montant`.
+ */
+export function installerChampMontant(formulaire) {
+  const champ = formulaire.montant;
+  const conteneur = formulaire.querySelector('[data-champ="montant"]');
+  const signaler = (message) => {
+    conteneur.classList.toggle('invalide', Boolean(message));
+    conteneur.querySelector('.erreur-champ').textContent = message;
+  };
+  champ.addEventListener('input', () => signaler(''));
+  champ.addEventListener('blur', () => {
+    const brut = champ.value.trim();
+    if (!brut) return;
+    if (analyserMontant(brut) === null) {
+      signaler('Montant illisible. Attendu : 1234,56 (virgule ou point décimal).');
+      return;
+    }
+    champ.value = formaterChampMontant(brut);
+  });
+}
+
+/**
+ * Garde-fou d'une boîte de saisie : l'abandonner après l'avoir modifiée
+ * (bouton Annuler ou touche Échap) demande confirmation.
+ *
+ * @param {object} options
+ * @param {HTMLDialogElement} options.dialogue
+ * @param {HTMLElement} options.boutonAnnuler
+ * @param {() => string} options.lireEtat instantané des champs, comparable.
+ * @returns {() => void} mémorise l'état de référence (à l'ouverture).
+ */
+export function installerGardeFormulaire({ dialogue, boutonAnnuler, lireEtat }) {
+  let etatInitial = '';
+  const fermer = async () => {
+    if (lireEtat() !== etatInitial) {
+      const accord = await confirmer({
+        titre: 'Abandonner cette saisie ?',
+        message: 'Les informations du formulaire seront perdues.',
+        boutonOk: 'Abandonner'
+      });
+      if (!accord) return;
+    }
+    dialogue.close();
+  };
+  boutonAnnuler.addEventListener('click', fermer);
+  dialogue.addEventListener('cancel', (evenement) => {
+    evenement.preventDefault();
+    fermer();
+  });
+  return () => { etatInitial = lireEtat(); };
 }
 
 /**
@@ -497,6 +617,21 @@ export function majIndicateursTri(entetes, tri) {
       ? icone(tri.sens === 'asc' ? 'chevron-haut' : 'chevron-bas', { taille: 13 })
       : '';
   });
+}
+
+/**
+ * Adresse du bouton « Exporter » d'un registre : la page Exports, sur la carte
+ * de ce registre, avec l'année et le mois filtrés à l'écran s'il y en a. Ce
+ * qu'on regarde est ainsi ce qu'on s'apprête à exporter.
+ *
+ * @param {'recettes'|'achats'} registre
+ * @param {{ annee?: string, mois?: string }} [filtres]
+ */
+export function lienExport(registre, { annee, mois } = {}) {
+  const params = new URLSearchParams({ registre });
+  if (annee) params.set('annee', annee);
+  if (mois) params.set('mois', mois);
+  return `#/exports?${params}`;
 }
 
 /**

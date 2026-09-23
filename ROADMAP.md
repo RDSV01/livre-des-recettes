@@ -6,6 +6,53 @@ est jugée à cette aune.
 
 ## Déjà livré
 
+### v1.9
+
+- Écran de déclaration URSSAF répondu en trois chiffres : ce qu'il faut
+  déclarer, ce que l'URSSAF prélèvera, et ce qu'il vous restera. Le calcul qui
+  mène de l'encaissé au reste, base et taux de chaque prélèvement, se déplie à
+  la demande au lieu d'encombrer l'écran.
+- L'estimation compte désormais tout ce que l'URSSAF prélève sur le chiffre
+  d'affaires : les cotisations sociales, la contribution à la formation
+  professionnelle (0,1 % pour une activité commerciale, 0,3 % pour un artisan,
+  0,2 % pour une activité libérale) et, pour qui l'a choisi, le versement
+  libératoire de l'impôt sur le revenu. Chaque prélèvement est arrondi à
+  l'euro le plus proche, comme l'URSSAF le fait. Deux cases dans les
+  paramètres indiquent l'option pour le versement libératoire et l'activité
+  artisanale.
+- Bouton « Exporter » dans les registres des recettes et des achats : il ouvre
+  la page des exports sur le bon registre, à l'année et au mois filtrés à
+  l'écran.
+- Date limite de déclaration affichée pour chaque période : en cours, à faire
+  avant telle date, en retard ou déjà faite. Une période se marque déclarée
+  depuis l'écran URSSAF, et le rappel du tableau de bord donne directement le
+  montant à déclarer et la date limite, en changeant de ton une fois
+  l'échéance passée.
+- Numéros de facture signalés à tort (facture annulée, facture réglée en
+  plusieurs fois) ignorables d'un clic : ils ne reviennent plus, ni dans le
+  registre ni dans le contrôle avant export. La liste reste consultable, et
+  réversible, dans les paramètres.
+- Tableau de bord allégé en activité mixte : la répartition ventes /
+  prestations passe sous les deux tuiles du chiffre d'affaires, quatre tuiles
+  au lieu de huit qui se répétaient. Libellés des tuiles en casse normale.
+- Paramètres : les options s'appliquent dès qu'on les coche, sans passer par
+  le bouton « Enregistrer » du bas de la page.
+- Sécurité : l'application refuse toute requête adressée à un autre nom que la
+  machine elle-même. Un site malveillant qui ferait pointer son domaine vers
+  votre ordinateur (« DNS rebinding ») ne peut plus lire le livre.
+- Données : chaque écriture est vidée sur le disque avant de remplacer le
+  fichier, contre la perte en cas de coupure de courant. Les sauvegardes et la
+  date d'édition des exports suivent l'heure locale : entre minuit et 2 h,
+  elles portaient la date de la veille.
+- Suppressions et reclassements groupés en une seule écriture, en tout ou
+  rien. Annuler une suppression rend la ligne telle qu'elle était, identifiant
+  et date de création compris, au lieu d'en créer une copie.
+- Code allégé : les deux registres partagent désormais une seule mécanique de
+  tableau (filtres, tri, sélection, suppression annulable), les exports une
+  seule base, et le stockage une seule implémentation par opération. Au
+  passage, le graphique ventilé du tableau de bord s'anime comme le graphique
+  simple, et l'ajout d'un client résiste au double clic.
+
 ### v1.8
 
 - Interface utilisable entièrement au clavier et au lecteur d'écran : le tri des

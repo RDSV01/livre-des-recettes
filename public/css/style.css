@@ -509,11 +509,39 @@ h2 {
   background: transparent;
 }
 
+/* Libellé en casse normale : en capitales, « Moyenne par encaissement »
+   passait sur deux lignes et se lisait moins vite. */
 .carte-stat .etiquette {
+  font-size: 13px;
+  color: var(--texte-secondaire);
+}
+
+/* Le texte occupe toute la tuile : la répartition peut ainsi caler ses
+   montants à droite. */
+.carte-stat > div:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Répartition ventes / prestations d'une activité mixte, sous le montant
+   qu'elle décompose. */
+.detail-stat {
+  list-style: none;
+  margin: var(--espace-2) 0 0;
+  padding: 0;
   font-size: 12.5px;
   color: var(--texte-secondaire);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+}
+.detail-stat li {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-2);
+}
+.detail-stat .montant-detail {
+  margin-left: auto;
+  padding-left: var(--espace-3);
+  color: var(--texte);
+  font-variant-numeric: tabular-nums;
 }
 
 .carte-stat .valeur {
@@ -876,8 +904,7 @@ th {
  * qu'il occupe toujours exactement la largeur disponible. Jamais de barre de
  * défilement horizontale : le contenu passe à la ligne au besoin.
  */
-#table-recettes,
-#table-achats {
+.table-registre {
   table-layout: fixed;
 }
 
@@ -1386,6 +1413,13 @@ dialog::backdrop {
 .bandeau-rappel > span {
   margin-right: auto;
 }
+/* Date limite de déclaration dépassée : le rappel change de ton. */
+.bandeau-rappel.en-retard {
+  background: var(--alerte-doux);
+}
+.bandeau-rappel.en-retard > .icone {
+  color: var(--alerte-texte);
+}
 
 /* ---- Bulles d'aide --------------------------------------------------------- */
 
@@ -1458,51 +1492,18 @@ dialog::backdrop {
   }
 }
 
-/* ---- Cotisations URSSAF ---------------------------------------------------- */
+/* ---- Détail du calcul URSSAF ------------------------------------------------ */
 
 /*
- * Estimation de ce qui sera prélevé, sous le montant à déclarer. Le total est
- * mis en avant, le détail par taux reste lisible en dessous : c'est lui qui
- * rend le chiffre crédible.
+ * Replié sous les trois chiffres de la page : de l'encaissé au reste, chaque
+ * prélèvement retranché avec sa base et son taux. C'est lui qui rend les
+ * chiffres crédibles, sans les noyer quand on n'en a pas besoin.
  */
-/* Section d'une carte : séparée par un filet et beaucoup d'air au-dessus, pas
-   par une seconde bordure. */
-.bloc-cotisations {
-  margin-top: var(--espace-6);
-  padding-top: var(--espace-5);
-  border-top: 1px solid var(--bordure-douce);
-  /* Laissé libre, le bloc s'étirait sur toute la carte : les montants
-     partaient loin de leur libellé et les notes s'étalaient sur une ligne trop
-     longue pour être lue confortablement. */
-  max-width: 660px;
+.details-calcul {
+  margin-top: var(--espace-5);
 }
-
-/*
- * Le total se lit dans la foulée de l'intitulé, comme une phrase et sa
- * réponse. Les repousser aux deux bords de la carte creusait un vide sur un
- * écran large, où le regard perdait le lien entre les deux.
- */
-.entete-cotisations {
-  display: flex;
-  /* Le titre et le montant n'ont pas la même taille : alignés sur la ligne de
-     base, le premier paraissait s'enfoncer sous le second. Centrés, ils se
-     lisent comme un libellé suivi de sa valeur. */
-  align-items: center;
-  gap: var(--espace-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--espace-3);
-}
-
-.entete-cotisations h3 {
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
-}
-
-.entete-cotisations strong {
-  font-size: 20px;
-  color: var(--accent-texte);
-  font-variant-numeric: tabular-nums;
+.corps-calcul {
+  margin-top: var(--espace-3);
 }
 
 .ligne-cotisation {
@@ -1532,24 +1533,59 @@ dialog::backdrop {
   font-variant-numeric: tabular-nums;
 }
 
-/* Rappel du montant réellement encaissé sous celui à déclarer, quand l'arrondi
-   à l'euro les sépare : le registre, lui, garde ses centimes. */
-.montant-exact {
-  color: var(--texte-secondaire);
-  font-size: 12.5px;
-  margin-top: 2px;
-  font-variant-numeric: tabular-nums;
-}
-
 .montant-cotisation {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   min-width: 90px;
   text-align: right;
+  white-space: nowrap;
 }
 
-.bloc-cotisations .note-legale {
-  margin-top: var(--espace-3);
+/* Prélèvement calculé sur plusieurs bases : son total, puis le détail en
+   retrait, plus discret. */
+.groupe-cotisation > span:first-child {
+  font-weight: 600;
+}
+.ligne-cotisation.sous-ligne {
+  padding-left: var(--espace-4);
+  border-top-style: dashed;
+  color: var(--texte-secondaire);
+  font-size: 13px;
+}
+.ligne-cotisation.sous-ligne .montant-cotisation {
+  font-weight: 400;
+}
+
+/* Place d'un bouton de copie, en bout des lignes qui n'en ont pas : tous les
+   montants de la page tombent ainsi sur la même colonne. */
+.espace-copie {
+  width: calc(16px + 2 * var(--espace-2));
+  flex-shrink: 0;
+}
+
+/* Aboutissement du calcul, séparé de ce qui précède par un filet plus marqué. */
+.ligne-reste {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espace-3);
+  padding-top: var(--espace-3);
+  border-top: 2px solid var(--bordure);
+}
+.intitule-reste {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.montant-reste {
+  font-size: 15px;
+  color: var(--succes-texte);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.precision-reste {
+  margin: var(--espace-2) 0 0;
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
 }
 
 /* ---- Jauges de seuils ------------------------------------------------------ */
@@ -1796,6 +1832,28 @@ details.anomalies ul {
 details.anomalies li {
   margin-bottom: var(--espace-1);
 }
+.numero-signale {
+  white-space: nowrap;
+}
+/* « ignorer » : action secondaire, en lien discret derrière le numéro. */
+.lien-ignorer {
+  border: 0;
+  background: none;
+  padding: 0 0 0 var(--espace-1);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.lien-ignorer:hover {
+  color: var(--accent-texte);
+}
+.aide-anomalies {
+  margin: var(--espace-2) 0 0;
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
+}
 
 /* ---- Avertissement dans un formulaire ---------------------------------------- */
 
@@ -1836,6 +1894,31 @@ details.anomalies li {
   height: 16px;
   accent-color: var(--accent);
   flex-shrink: 0;
+}
+/* `display: flex` l'emporterait sur l'attribut `hidden`. */
+.option-case[hidden] {
+  display: none;
+}
+
+/* Précisions du régime, sous les listes déroulantes de la même section. */
+.options-regime {
+  margin-top: var(--espace-4);
+}
+
+/* Numéros de facture ignorés, rappelés sous les options. */
+.numeros-ignores {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espace-2) var(--espace-3);
+  margin-top: var(--espace-4);
+  padding-top: var(--espace-4);
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 13.5px;
+}
+.numeros-ignores > span {
+  flex: 1;
+  min-width: 240px;
 }
 
 /* ---- Listes de gestion (modes personnalisés, sauvegardes) --------------------- */
@@ -1880,21 +1963,94 @@ details.anomalies li {
   padding-top: var(--espace-5);
   border-top: 1px solid var(--bordure-douce);
 }
+/* Une seule largeur pour tout le contenu du bilan : la ventilation et les
+   prélèvements partageaient la carte à des largeurs différentes, et leurs
+   montants tombaient sur deux colonnes décalées. Bornée, la largeur garde
+   aussi chaque montant près de son libellé. Le filet du dessus, lui, reste
+   sur toute la carte. */
+.resultat-bilan > * {
+  max-width: 720px;
+}
 
-.etiquette-declaration {
+/* Où en est la déclaration : date limite, retard, ou déjà faite. */
+.statut-declaration {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espace-2) var(--espace-3);
+  margin-top: var(--espace-4);
+  font-size: 13.5px;
+}
+.statut-declaration > .icone {
+  color: var(--accent-texte);
+  flex-shrink: 0;
+}
+.statut-declaration > span {
+  margin-right: auto;
+}
+.statut-declaration.faite > .icone {
+  color: var(--succes-texte);
+}
+.statut-declaration.en-retard {
+  color: var(--alerte-texte);
+}
+.statut-declaration.en-retard > .icone {
+  color: var(--alerte-texte);
+}
+.statut-declaration:focus {
+  outline: none;
+}
+
+/* La période affichée et son nombre d'encaissements, en une ligne. */
+.entete-bilan {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--espace-2);
-  margin: 0;
+  gap: var(--espace-3);
+  margin: 0 0 var(--espace-4);
+  font-size: 14.5px;
+}
+.entete-bilan span {
   font-size: 13px;
   color: var(--texte-secondaire);
 }
-/* La période portée par l'intitulé, pas glissée entre parenthèses dans un
-   libellé déjà long. */
-.periode-declaration {
-  color: var(--texte);
-  font-weight: 600;
+
+/* Les trois réponses de la page, côte à côte : à déclarer, prélevé, reste.
+   Le montant à déclarer domine ; les deux autres, plus petits, le suivent. */
+.chiffres-cles {
+  display: flex;
+  /* Alignés sur leur première ligne : les trois libellés tombent à la même
+     hauteur, quelle que soit la taille du montant qu'ils annoncent. */
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--espace-4) var(--espace-7);
+}
+.chiffre-cle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+}
+.etiquette-chiffre {
+  font-size: 13px;
+  color: var(--texte-secondaire);
+}
+.montant-chiffre {
+  font-size: 24px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.montant-chiffre.reste {
+  color: var(--succes-texte);
+}
+.precision-chiffre {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--texte-secondaire);
+}
+/* Activité non renseignée : l'invitation à la compléter, sous le seul chiffre
+   qui peut s'afficher. */
+.chiffres-cles + .precision-chiffre {
+  margin-top: var(--espace-2);
 }
 
 .ligne-declaration {
@@ -1902,7 +2058,6 @@ details.anomalies li {
   align-items: center;
   flex-wrap: wrap;
   gap: var(--espace-4);
-  margin-top: var(--espace-2);
 }
 
 .montant-declaration {
@@ -1913,20 +2068,14 @@ details.anomalies li {
   letter-spacing: -0.02em;
 }
 
-.compte-encaissements {
-  margin: var(--espace-2) 0 0;
-  font-size: 13px;
-  color: var(--texte-secondaire);
-}
-
 /* Ventilation d'une activité mixte : deux lignes, deux cases du formulaire. */
 .ventilation {
-  margin-top: var(--espace-6);
+  margin-top: var(--espace-5);
 }
 .ventilation h3 {
   margin: 0 0 var(--espace-2);
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
 .ligne-ventilation {
@@ -2103,23 +2252,18 @@ code.chemin {
  * ceux qui ont peu de colonnes gardent leur défilement horizontal.
  */
 @media (max-width: 700px) {
-  #table-recettes,
-  #table-recettes tbody,
-  #table-achats,
-  #table-achats tbody {
+  .table-registre,
+  .table-registre tbody {
     display: block;
   }
-  #table-recettes thead,
-  #table-achats thead {
+  .table-registre thead {
     display: none;
   }
-  #table-recettes colgroup,
-  #table-achats colgroup {
+  .table-registre colgroup {
     display: none;
   }
 
-  #table-recettes tbody tr,
-  #table-achats tbody tr {
+  .table-registre tbody tr {
     display: block;
     border: 1px solid var(--bordure);
     border-radius: var(--rayon-petit);
@@ -2127,13 +2271,11 @@ code.chemin {
     margin-bottom: var(--espace-3);
   }
   /* En carte, le survol de ligne entière n'a plus de sens. */
-  #table-recettes tbody tr:hover,
-  #table-achats tbody tr:hover {
+  .table-registre tbody tr:hover {
     background: transparent;
   }
 
-  #table-recettes td,
-  #table-achats td {
+  .table-registre td {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2144,12 +2286,10 @@ code.chemin {
     text-align: right;
     white-space: normal;
   }
-  #table-recettes tr td:last-child,
-  #table-achats tr td:last-child {
+  .table-registre tr td:last-child {
     border-bottom: none;
   }
-  #table-recettes td::before,
-  #table-achats td::before {
+  .table-registre td::before {
     content: attr(data-label);
     font-weight: 600;
     font-size: 12px;
@@ -2161,41 +2301,33 @@ code.chemin {
 
   /* Case de sélection en tête de carte, actions en pied : ni l'une ni les
      autres n'ont de libellé à afficher. */
-  #table-recettes td.col-case,
-  #table-achats td.col-case {
+  .table-registre td.col-case {
     justify-content: flex-start;
   }
-  #table-recettes td.actions,
-  #table-achats td.actions {
+  .table-registre td.actions {
     justify-content: flex-end;
     gap: var(--espace-2);
   }
-  #table-recettes td.col-case::before,
-  #table-recettes td.actions::before,
-  #table-achats td.col-case::before,
-  #table-achats td.actions::before {
+  .table-registre td.col-case::before,
+  .table-registre td.actions::before {
     content: none;
   }
   /* Le montant, mis en avant, occupe seul sa ligne dans la carte. */
-  #table-recettes td.montant,
-  #table-achats td.montant {
+  .table-registre td.montant {
     font-size: 16px;
   }
 
   /* Ligne « Afficher plus » / « aucun résultat » : un bloc centré, sans carte. */
-  #table-recettes .ligne-vide,
-  #table-achats .ligne-vide {
+  .table-registre .ligne-vide {
     border: none;
     padding: 0;
   }
-  #table-recettes .ligne-vide td,
-  #table-achats .ligne-vide td {
+  .table-registre .ligne-vide td {
     justify-content: center;
     border: none;
     text-align: center;
   }
-  #table-recettes .ligne-vide td::before,
-  #table-achats .ligne-vide td::before {
+  .table-registre .ligne-vide td::before {
     content: none;
   }
 }

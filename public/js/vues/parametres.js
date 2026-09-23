@@ -7,10 +7,11 @@
 import { api } from '../api.js';
 import { etat, definirParametres } from '../etat.js';
 import {
-  toast, echapperHtml, confirmer, infobulle,
+  toast, echapperHtml, infobulle, copierDansPressePapiers,
   afficherErreursFormulaire, effacerErreursFormulaire
 } from '../ui.js';
 import { icone } from '../icones.js';
+import { listeSauvegardes, brancherRestauration } from '../sauvegardes.js';
 import { DEVISES, FORMATS_DATE, MODES_REGLEMENT } from '/partage/constantes.js';
 import { TYPES_ACTIVITE, NATURES_PRESTATIONS } from '/partage/seuils.js';
 
@@ -24,7 +25,7 @@ export async function vueParametres(conteneur) {
     <header class="entete-vue">
       <div>
         <h1>Paramètres</h1>
-        <p>Ces informations figurent en tête de vos exports.</p>
+        <p>Votre entreprise, votre régime et vos préférences.</p>
       </div>
     </header>
 
@@ -120,6 +121,29 @@ export async function vueParametres(conteneur) {
           <span class="erreur-champ"></span>
         </div>
       </div>
+      ${/* Deux précisions qui ne changent que l'estimation de l'écran URSSAF :
+            ce que l'URSSAF prélèvera, donc ce qu'il restera. */ ''}
+      <div class="liste-options options-regime">
+        <label class="option-case" id="option-versement">
+          <input type="checkbox" name="versementLiberatoire" ${p.versementLiberatoire ? 'checked' : ''}>
+          <span>J’ai opté pour le versement libératoire de l’impôt sur le revenu</span>
+          ${infobulle(
+            'L’impôt sur le revenu est alors payé à l’URSSAF avec les cotisations : 1 % du ' +
+            'chiffre d’affaires pour la vente, 1,7 % pour les prestations commerciales ou ' +
+            'artisanales, 2,2 % pour une activité libérale. L’écran URSSAF l’ajoute à son estimation.',
+            'le versement libératoire'
+          )}
+        </label>
+        <label class="option-case" id="option-artisan">
+          <input type="checkbox" name="activiteArtisanale" ${p.activiteArtisanale ? 'checked' : ''}>
+          <span>Mon activité est artisanale (chambre de métiers et de l’artisanat)</span>
+          ${infobulle(
+            'La contribution à la formation professionnelle d’un artisan est de 0,3 % du chiffre ' +
+            'd’affaires, contre 0,1 % pour un commerçant et 0,2 % pour une activité libérale.',
+            'l’activité artisanale'
+          )}
+        </label>
+      </div>
 
       <h2 class="titre-section">Affichage</h2>
       <div class="grille-formulaire">
@@ -143,27 +167,6 @@ export async function vueParametres(conteneur) {
         </div>
       </div>
 
-      <h2 class="titre-section">Options</h2>
-      <div class="liste-options">
-        <label class="option-case">
-          <input type="checkbox" name="alertesNumerotation" ${p.alertesNumerotation ? 'checked' : ''}>
-          <span>Alertes de numérotation des factures (doublons, numéros manquants)</span>
-        </label>
-        <label class="option-case">
-          <input type="checkbox" name="alerteRecetteSimilaire" ${p.alerteRecetteSimilaire ? 'checked' : ''}>
-          <span>Avertissement quand une recette très similaire existe déjà</span>
-        </label>
-        <label class="option-case">
-          <input type="checkbox" name="suiviSeuils" ${p.suiviSeuils ? 'checked' : ''}>
-          <span>Suivi des seuils (plafond micro et franchise de TVA) sur le tableau de bord</span>
-        </label>
-        <label class="option-case">
-          <input type="checkbox" name="verifierMisesAJour" ${p.verifierMisesAJour ? 'checked' : ''}>
-          <span>Signaler les nouvelles versions de l’application (demande la dernière version
-          publiée à GitHub, sans rien envoyer de vos données)</span>
-        </label>
-      </div>
-
       <h2 class="titre-section">Modes de règlement personnalisés${infobulle(
         `Les modes par défaut (${MODES_REGLEMENT.map((m) => m.libelle).join(', ')}) restent ` +
         'toujours disponibles. Un mode utilisé par des recettes peut être renommé, mais pas supprimé.',
@@ -183,6 +186,34 @@ export async function vueParametres(conteneur) {
         <button type="submit" class="btn btn-primaire">Enregistrer</button>
       </div>
     </form>
+
+    ${/* Les options vivent hors du formulaire : chacune s'enregistre dès
+          qu'on la coche, sans passer par le bouton « Enregistrer » situé au
+          bas d'une longue page. */ ''}
+    <div class="carte" id="carte-options">
+      <h2>Options</h2>
+      <p class="indication">Chaque option s’applique dès que vous la cochez.</p>
+      <div class="liste-options">
+        <label class="option-case">
+          <input type="checkbox" name="alertesNumerotation" ${p.alertesNumerotation ? 'checked' : ''}>
+          <span>Alertes de numérotation des factures (doublons, numéros manquants)</span>
+        </label>
+        <label class="option-case">
+          <input type="checkbox" name="alerteRecetteSimilaire" ${p.alerteRecetteSimilaire ? 'checked' : ''}>
+          <span>Avertissement quand une recette très similaire existe déjà</span>
+        </label>
+        <label class="option-case">
+          <input type="checkbox" name="suiviSeuils" ${p.suiviSeuils ? 'checked' : ''}>
+          <span>Suivi des seuils (plafond micro et franchise de TVA) sur le tableau de bord</span>
+        </label>
+        <label class="option-case">
+          <input type="checkbox" name="verifierMisesAJour" ${p.verifierMisesAJour ? 'checked' : ''}>
+          <span>Signaler les nouvelles versions de l’application (demande la dernière version
+          publiée à GitHub, sans rien envoyer de vos données)</span>
+        </label>
+      </div>
+      <div id="numeros-ignores" aria-live="polite"></div>
+    </div>
 
     <div class="carte">
       <h2>Vos données</h2>
@@ -258,8 +289,17 @@ export async function vueParametres(conteneur) {
   // portent déjà la nature de leurs prestations dans leur intitulé.
   const selectActivite = conteneur.querySelector('#param-type-activite');
   const champNature = conteneur.querySelector('#champ-nature-prestations');
+  const optionVersement = conteneur.querySelector('#option-versement');
+  const optionArtisan = conteneur.querySelector('#option-artisan');
 
-  const majNature = () => { champNature.hidden = selectActivite.value !== 'mixte'; };
+  // Le versement libératoire suppose une activité connue ; l'activité
+  // artisanale ne concerne que le commercial (BIC), jamais le libéral seul.
+  const majNature = () => {
+    const type = selectActivite.value;
+    champNature.hidden = type !== 'mixte';
+    optionVersement.hidden = type === '';
+    optionArtisan.hidden = !['ventes', 'prestations', 'mixte'].includes(type);
+  };
   selectActivite.addEventListener('change', majNature);
   majNature();
 
@@ -274,13 +314,15 @@ export async function vueParametres(conteneur) {
       libelle: champ.value
     }));
     // Les cases décochées sont absentes de FormData : booléens explicites.
-    for (const option of ['alertesNumerotation', 'alerteRecetteSimilaire', 'suiviSeuils', 'verifierMisesAJour']) {
+    for (const option of ['versementLiberatoire', 'activiteArtisanale']) {
       donnees[option] = formulaire[option].checked;
     }
-    // Posée par le bouton « C'est fait » du tableau de bord : conservée telle quelle.
-    donnees.dernierePeriodeDeclaree = etat.parametres.dernierePeriodeDeclaree;
     try {
-      const reponse = await api.enregistrerParametres(donnees);
+      // Tout ce que ce formulaire ne montre pas est repris tel quel : les
+      // options (enregistrées à part), la dernière période déclarée, les
+      // numéros de facture ignorés. Seule exception, voulue : enregistrer ses
+      // propres paramètres sort du mode démonstration.
+      const reponse = await api.enregistrerParametres({ ...etat.parametres, ...donnees, jeuDemo: false });
       definirParametres(reponse.parametres);
       // Reconstruit la liste avec les codes définitifs attribués par le serveur.
       listeModes.innerHTML = '';
@@ -300,6 +342,53 @@ export async function vueParametres(conteneur) {
     }
   });
 
+  // ---- Options : enregistrées dès qu'on les coche ---------------------------------------
+  const carteOptions = conteneur.querySelector('#carte-options');
+  const zoneIgnores = conteneur.querySelector('#numeros-ignores');
+
+  /** Enregistre des paramètres modifiés, tout le reste repris à l'identique. */
+  async function enregistrerModification(modification) {
+    const reponse = await api.enregistrerParametres({ ...etat.parametres, ...modification });
+    definirParametres(reponse.parametres);
+  }
+
+  carteOptions.addEventListener('change', async (evenement) => {
+    const caseOption = evenement.target.closest('input[type="checkbox"][name]');
+    if (!caseOption) return;
+    try {
+      await enregistrerModification({ [caseOption.name]: caseOption.checked });
+      toast(caseOption.checked ? 'Option activée.' : 'Option désactivée.');
+    } catch (erreur) {
+      // L'écran ne doit pas montrer un réglage qui n'a pas été enregistré.
+      caseOption.checked = !caseOption.checked;
+      toast(erreur.message, 'erreur');
+    }
+  });
+
+  // Numéros de facture déclarés normaux depuis le registre des recettes : ici
+  // on les voit, et on peut les faire signaler de nouveau.
+  function rendreNumerosIgnores() {
+    const numeros = etat.parametres.numerosIgnores ?? [];
+    zoneIgnores.innerHTML = numeros.length === 0 ? '' : `
+      <div class="numeros-ignores">
+        <span>Numéro${numeros.length > 1 ? 's' : ''} de facture que vous avez choisi de ne plus signaler :
+        ${numeros.map((n) => `« ${echapperHtml(n)} »`).join(', ')}.</span>
+        <button type="button" class="btn btn-tertiaire" id="reafficher-numeros">
+          ${icone('reinitialiser', { taille: 16 })}<span>Les signaler de nouveau</span>
+        </button>
+      </div>`;
+    zoneIgnores.querySelector('#reafficher-numeros')?.addEventListener('click', async () => {
+      try {
+        await enregistrerModification({ numerosIgnores: [] });
+        toast('Ces numéros seront de nouveau signalés.');
+        rendreNumerosIgnores();
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
+    });
+  }
+  rendreNumerosIgnores();
+
   // ---- Jeu de démonstration (première utilisation) -----------------------------------
   conteneur.querySelector('#charger-demo')?.addEventListener('click', async (evenement) => {
     const bouton = evenement.currentTarget;
@@ -317,55 +406,15 @@ export async function vueParametres(conteneur) {
 
   // ---- Copie d'un chemin dans le presse-papiers --------------------------------------
   conteneur.querySelectorAll('[data-copier]').forEach((bouton) => {
-    bouton.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(bouton.dataset.copier);
-        toast('Chemin copié dans le presse-papiers.');
-      } catch {
-        toast('Copie impossible : sélectionnez le chemin à la main.', 'erreur');
-      }
-    });
+    bouton.addEventListener('click', () => copierDansPressePapiers(bouton.dataset.copier, 'chemin'));
   });
 
   // ---- Sauvegardes -------------------------------------------------------------------
-  const resumeSauvegardes = conteneur.querySelector('#resume-sauvegardes');
-  const listeSauvegardes = conteneur.querySelector('#liste-sauvegardes');
-
-  async function chargerSauvegardes() {
-    const { sauvegardes } = await api.listerSauvegardes();
-    resumeSauvegardes.textContent = sauvegardes.length === 0
-      ? 'Aucune sauvegarde pour l’instant : la première sera créée à la prochaine modification.'
-      : `${sauvegardes.length} sauvegarde${sauvegardes.length > 1 ? 's' : ''}, de la plus récente à la plus ancienne.`;
-
-    listeSauvegardes.innerHTML = sauvegardes.map((s) => `
-      <div class="ligne-gestion">
-        <span class="libelle-gestion">${echapperHtml(s.fichier)}</span>
-        <span class="details-gestion">${echapperHtml(new Date(s.date).toLocaleString('fr-FR'))} (${Math.max(1, Math.round(s.taille / 1024))} Ko)</span>
-        <button type="button" class="btn btn-secondaire" data-fichier="${echapperHtml(s.fichier)}">
-          ${icone('reinitialiser', { taille: 16 })}<span>Restaurer</span>
-        </button>
-      </div>`).join('');
-
-    listeSauvegardes.querySelectorAll('[data-fichier]').forEach((bouton) => {
-      bouton.addEventListener('click', async () => {
-        const fichier = bouton.dataset.fichier;
-        const accord = await confirmer({
-          titre: 'Restaurer cette sauvegarde ?',
-          message: `Toutes les données reviendront à l’état de « ${fichier} ». ` +
-            'Le fichier actuel est d’abord mis de côté : rien n’est effacé.',
-          boutonOk: 'Restaurer'
-        });
-        if (!accord) return;
-        try {
-          await api.restaurerSauvegarde(fichier);
-          toast('Sauvegarde restaurée.');
-          window.location.reload();
-        } catch (erreur) {
-          toast(erreur.message, 'erreur');
-        }
-      });
-    });
-  }
-
-  await chargerSauvegardes();
+  const { sauvegardes } = await api.listerSauvegardes();
+  conteneur.querySelector('#resume-sauvegardes').textContent = sauvegardes.length === 0
+    ? 'Aucune sauvegarde pour l’instant : la première sera créée à la prochaine modification.'
+    : `${sauvegardes.length} sauvegarde${sauvegardes.length > 1 ? 's' : ''}, de la plus récente à la plus ancienne.`;
+  const zoneSauvegardes = conteneur.querySelector('#liste-sauvegardes');
+  zoneSauvegardes.innerHTML = listeSauvegardes(sauvegardes);
+  brancherRestauration(zoneSauvegardes);
 }

@@ -9,16 +9,15 @@
 import express from 'express';
 import { bilanPeriode, selectionPeriode } from '../totaux.js';
 import { cotisationsUrssaf } from '../cotisations.js';
+import { lireAnnee } from './requetes.js';
 
 export function routesUrssaf(stockage) {
   const routeur = express.Router();
 
   // GET /api/urssaf?annee=2026&type=trimestre&valeur=3
   routeur.get('/', (req, res) => {
-    const annee = Number.parseInt(req.query.annee, 10);
-    if (!Number.isInteger(annee) || annee < 2000 || annee > 2100) {
-      return res.status(400).json({ erreur: 'Paramètre « annee » manquant ou invalide.' });
-    }
+    const annee = lireAnnee(req, res);
+    if (annee === null) return;
     const type = req.query.type;
     if (!['mois', 'trimestre', 'annee'].includes(type)) {
       return res.status(400).json({ erreur: 'Paramètre « type » invalide (mois, trimestre ou annee).' });

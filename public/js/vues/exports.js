@@ -14,19 +14,14 @@
 import { api, urlExport, urlRapportAnnuel } from '../api.js';
 import { registreAchatsUtile } from '../etat.js';
 import { icone } from '../icones.js';
-import { infobulle, toast, echapperHtml } from '../ui.js';
+import { infobulle, toast, echapperHtml, optionsAnnees, OPTIONS_MOIS } from '../ui.js';
 import { controlerAvantExport } from '../controle-export.js';
-import { NOMS_MOIS } from '/partage/dates.js';
-
-const OPTIONS_MOIS = NOMS_MOIS.map((nom, i) => `<option value="${i + 1}">${nom}</option>`).join('');
-
-/** Liste d'options d'années, la plus récente en premier. */
-const optionsAnnees = (annees) => annees.map((a) => `<option value="${a}">${a}</option>`).join('');
+import { titrePeriode } from '/partage/dates.js';
 
 /** Sélecteurs de période et boutons de format d'un registre légal. */
 function carteRegistre({ id, titre, colonnes, annees }) {
   return `
-    <div class="carte">
+    <div class="carte" id="carte-${id}">
       <h2>${titre}</h2>
       <p class="resume-filtre">${colonnes}</p>
       ${/* Trois formats, trois usages : le dire évite de lire la hiérarchie
@@ -52,7 +47,26 @@ function carteRegistre({ id, titre, colonnes, annees }) {
     </div>`;
 }
 
-export async function vueExports(conteneur) {
+/**
+ * Arrivée depuis le bouton « Exporter » d'un registre
+ * (`#/exports?registre=achats&annee=2026&mois=7`) : la carte de ce registre
+ * reprend la période filtrée à l'écran et vient sous les yeux. Une valeur
+ * absente des listes est ignorée, la carte garde alors son choix par défaut.
+ */
+function preselectionner(conteneur, params) {
+  const registre = params?.get('registre');
+  const carte = registre ? conteneur.querySelector(`#carte-${registre}`) : null;
+  if (!carte) return;
+  const choisir = (select, valeur) => {
+    if (valeur && [...select.options].some((o) => o.value === valeur)) select.value = valeur;
+  };
+  choisir(carte.querySelector(`#${registre}-annee`), params.get('annee'));
+  choisir(carte.querySelector(`#${registre}-mois`), params.get('mois'));
+  // Après la mise en place de la page, qui ramène le focus en haut.
+  setTimeout(() => carte.scrollIntoView({ block: 'nearest' }), 0);
+}
+
+export async function vueExports(conteneur, params) {
   const anneeCourante = new Date().getFullYear();
   const avecAchats = registreAchatsUtile();
   const [recettes, achats] = await Promise.all([
@@ -112,12 +126,7 @@ export async function vueExports(conteneur) {
           cette trace, la vérification se terminait sur un écran inchangé. */ ''}
     <p class="note-legale" id="dernier-export" hidden></p>`;
 
-  /** Nomme la période choisie : « Année 2026 » ou « Mars 2026 ». */
-  const periodeLisible = ({ annee, mois }) => {
-    if (!mois) return `Année ${annee}`;
-    const nom = NOMS_MOIS[Number(mois) - 1];
-    return `${nom.charAt(0).toUpperCase()}${nom.slice(1)} ${annee}`;
-  };
+  preselectionner(conteneur, params);
 
   const trace = conteneur.querySelector('#dernier-export');
 
@@ -125,7 +134,7 @@ export async function vueExports(conteneur) {
   const telecharger = async ({ titre, periode, registre, url, format }) => {
     const confirme = await controlerAvantExport({
       titre,
-      periodeLisible: periodeLisible(periode),
+      periodeLisible: titrePeriode(periode),
       periode,
       registre
     });
@@ -135,7 +144,7 @@ export async function vueExports(conteneur) {
     // Le fichier atterrit dans le dossier de téléchargements du navigateur :
     // l'application dit au moins ce qu'elle vient d'envoyer, et quand.
     const heure = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const nom = `${titre} · ${periodeLisible(periode)}${format ? ` (${format.toUpperCase()})` : ''}`;
+    const nom = `${titre} · ${titrePeriode(periode)}${format ? ` (${format.toUpperCase()})` : ''}`;
     trace.hidden = false;
     trace.innerHTML = `${icone('cercle-valide', { taille: 16 })}
       <span>Téléchargement lancé à ${heure} : <strong>${echapperHtml(nom)}</strong>.

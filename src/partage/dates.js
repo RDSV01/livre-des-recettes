@@ -5,8 +5,10 @@
  * `AAAA-MM-JJ` (chaîne de caractères, sans heure ni fuseau). Le format choisi
  * par l'utilisateur ne sert qu'à l'affichage.
  *
- * Module partagé serveur / navigateur : aucune dépendance.
+ * Module partagé serveur / navigateur : aucune dépendance hors `partage/`.
  */
+
+import { majusculeInitiale } from './texte.js';
 
 export const NOMS_MOIS = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
@@ -64,6 +66,14 @@ export function nomMois(mois) {
 }
 
 /**
+ * Titre d'une période d'export : « Année 2026 » ou, si un mois est donné,
+ * « Juillet 2026 ». Le mois peut venir d'un `<select>`, donc en texte.
+ */
+export function titrePeriode({ annee, mois }) {
+  return mois ? `${majusculeInitiale(nomMois(Number(mois)))} ${annee}` : `Année ${annee}`;
+}
+
+/**
  * Date ISO en toutes lettres (« 28 mai 2026 »), pour confirmer sous un champ
  * ce que l'utilisateur vient de saisir. Chaîne vide si la date est incomplète.
  * Calcul purement textuel : aucun décalage de fuseau possible.
@@ -94,6 +104,74 @@ export function moisDe(iso) {
 /** Trimestre civil (1 à 4) d'un numéro de mois. */
 export function trimestreDe(mois) {
   return Math.ceil(mois / 3);
+}
+
+/** « 2026-07-31 » : date ISO construite sans passer par un fuseau horaire. */
+const iso = (annee, mois, jour) =>
+  `${annee}-${String(mois).padStart(2, '0')}-${String(jour).padStart(2, '0')}`;
+
+/** Nombre de jours d'un mois (1 à 12). Le jour 0 du mois suivant est le dernier. */
+const joursDuMois = (annee, mois) => new Date(Date.UTC(annee, mois, 0)).getUTCDate();
+
+/**
+ * Identifiant d'une période de déclaration : « 2026-07 » pour un mois,
+ * « 2026-T2 » pour un trimestre. C'est la forme mémorisée par le bouton
+ * « C'est fait ». Retourne `null` pour une année entière, qui n'est pas une
+ * périodicité de déclaration.
+ */
+export function idPeriode(annee, type, valeur) {
+  if (type === 'mois') return `${annee}-${String(valeur).padStart(2, '0')}`;
+  if (type === 'trimestre') return `${annee}-T${valeur}`;
+  return null;
+}
+
+/** Inverse d'`idPeriode` : `{ annee, type, valeur }`, ou `null` si illisible. */
+export function periodeDepuisId(id) {
+  const m = /^(\d{4})-(?:T([1-4])|(0[1-9]|1[0-2]))$/.exec(String(id ?? ''));
+  if (!m) return null;
+  return m[2]
+    ? { annee: Number(m[1]), type: 'trimestre', valeur: Number(m[2]) }
+    : { annee: Number(m[1]), type: 'mois', valeur: Number(m[3]) };
+}
+
+/** Dernier mois (1 à 12) couvert par une période de déclaration. */
+const dernierMois = (type, valeur) => (type === 'mois' ? valeur : valeur * 3);
+
+/**
+ * Dernier jour d'une période de déclaration (date ISO), ou `null` pour une
+ * année entière.
+ */
+export function finPeriode(annee, type, valeur) {
+  if (type !== 'mois' && type !== 'trimestre') return null;
+  const mois = dernierMois(type, valeur);
+  return iso(annee, mois, joursDuMois(annee, mois));
+}
+
+/**
+ * Date limite de la déclaration URSSAF d'une période : le dernier jour du
+ * mois qui suit sa fin. En mensuel, juillet se déclare au plus tard le
+ * 31 août ; en trimestriel, cela donne les 30 avril, 31 juillet, 31 octobre
+ * et 31 janvier. Retourne `null` pour une année entière.
+ */
+export function echeanceDeclaration(annee, type, valeur) {
+  if (type !== 'mois' && type !== 'trimestre') return null;
+  const suivant = dernierMois(type, valeur) + 1;
+  const [a, m] = suivant === 13 ? [annee + 1, 1] : [annee, suivant];
+  return iso(a, m, joursDuMois(a, m));
+}
+
+/**
+ * Une période est-elle couverte par la dernière déclaration marquée comme
+ * faite ? Les déclarations se suivent dans l'ordre : avoir déclaré le
+ * 2e trimestre, c'est avoir déclaré le 1er. Deux identifiants de forme
+ * différente (mois contre trimestre, après un changement de périodicité) ne
+ * se comparent pas.
+ */
+export function periodeDeclaree(id, dernierePeriodeDeclaree) {
+  const a = periodeDepuisId(id);
+  const b = periodeDepuisId(dernierePeriodeDeclaree);
+  if (!a || !b || a.type !== b.type) return false;
+  return id <= dernierePeriodeDeclaree;
 }
 
 /**

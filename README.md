@@ -79,9 +79,12 @@ télédéclaration.
   prestations »).
 - **Déclaration URSSAF** : choisissez une année puis un mois, un trimestre ou l'année entière,
   l'application calcule le chiffre d'affaires encaissé et le nombre d'encaissements de la période,
-  puis estime les **cotisations sociales** qui seront prélevées. Une activité mixte voit chaque part calculée à
+  la **date limite** pour le déclarer, puis estime ce que l'URSSAF prélèvera (**cotisations
+  sociales**, **formation professionnelle** et, si vous l'avez choisi, **versement libératoire**)
+  et surtout **ce qu'il vous restera**. Une activité mixte voit chaque part calculée à
   son propre taux, selon la nature de prestations déclarée dans les paramètres. Un rappel
-  s'affiche sur le tableau de bord quand une période à déclarer s'achève.
+  s'affiche sur le tableau de bord quand une période à déclarer s'achève, avec le montant à
+  déclarer et la date limite.
   _Aucune connexion à l'URSSAF : c'est un simple calcul local._
 
 ### Échanges et sécurité des données

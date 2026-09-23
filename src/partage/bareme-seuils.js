@@ -13,7 +13,8 @@
  *    (on compare un chiffre d'affaires annuel à un plafond annuel), d'où des
  *    bornes en années.
  *
- *  - `PALIERS_COTISATIONS` : les taux de cotisations sociales. Ils changent à
+ *  - `PALIERS_COTISATIONS` : les taux prélevés par l'URSSAF (cotisations
+ *    sociales, formation professionnelle, versement libératoire). Ils changent à
  *    DATE FIXE, parfois en cours d'année (relèvement par paliers des taux BNC,
  *    par exemple). Chaque encaissement cotise au taux en vigueur le jour où il
  *    a été encaissé : les bornes sont donc des dates, au jour près.
@@ -154,14 +155,40 @@ export const BAREMES = [
  *     { duJour: '2026-07-01', auJour: null,         liberal: 27.1, … },
  *     { duJour: '2026-01-01', auJour: '2026-06-30', liberal: 26.1, … },
  *
- * Ces taux ne comprennent ni la contribution à la formation professionnelle,
- * ni le versement libératoire de l'impôt sur le revenu, qui s'ajoutent quand
- * ils s'appliquent : le montant affiché est un ordre de grandeur, pas un appel
- * de cotisations.
+ * Chaque palier porte trois jeux de taux, prélevés ensemble par l'URSSAF sur
+ * le même chiffre d'affaires déclaré :
+ *
+ *  - les cotisations sociales, à la racine du palier (`ventes`, `prestations`,
+ *    `liberal`, `liberalCipav`) ;
+ *  - `formationPro` : la contribution à la formation professionnelle (CFP),
+ *    toujours due. Elle dépend de l'immatriculation plus que de l'activité :
+ *    0,1 % pour une activité commerciale (ventes comme prestations BIC), 0,3 %
+ *    pour une activité artisanale (clé `artisan`, sur tout le chiffre
+ *    d'affaires BIC), 0,2 % pour une activité libérale, CIPAV comprise ;
+ *  - `versementLiberatoire` : l'impôt sur le revenu payé avec les
+ *    cotisations, pour qui a choisi cette option.
+ *
+ * Sources de la CFP et du versement libératoire : service-public.gouv.fr
+ * (fiche F23459), impots.gouv.fr, et les règles publiées du simulateur de
+ * l'URSSAF (mon-entreprise.urssaf.fr). Ni l'une ni l'autre n'a changé sur la
+ * période couverte : le taux libéral de la CFP était de 0,1 % hors CIPAV avant
+ * 2022, donc avant le plus ancien palier.
+ *
+ * Restent hors estimation : la taxe pour frais de chambre consulaire (CCI ou
+ * chambre de métiers, dont le taux varie selon la région) et la réduction de
+ * début d'activité (ACRE). Le montant affiché reste un ordre de grandeur, pas
+ * un appel de cotisations.
  *
  * Une activité mixte n'a pas de taux propre : chacune de ses parts est
  * calculée au sien.
  */
+
+/** CFP, identique sur toute la période couverte. */
+const FORMATION_PRO = { ventes: 0.1, prestations: 0.1, liberal: 0.2, liberalCipav: 0.2, artisan: 0.3 };
+
+/** Versement libératoire, identique sur toute la période couverte. */
+const VERSEMENT_LIBERATOIRE = { ventes: 1, prestations: 1.7, liberal: 2.2, liberalCipav: 2.2 };
+
 export const PALIERS_COTISATIONS = [
   {
     duJour: '2026-01-01',
@@ -171,7 +198,9 @@ export const PALIERS_COTISATIONS = [
     // Dernière marche de la hausse des libérales : 26,1 % était prévu, ramené
     // à 25,6 % par le décret 2025-943 du 8 septembre 2025.
     liberal: 25.6,
-    liberalCipav: 23.2
+    liberalCipav: 23.2,
+    formationPro: FORMATION_PRO,
+    versementLiberatoire: VERSEMENT_LIBERATOIRE
   },
 
   {
@@ -181,7 +210,9 @@ export const PALIERS_COTISATIONS = [
     prestations: 21.2,
     // Deuxième marche de la hausse des libérales du régime général.
     liberal: 24.6,
-    liberalCipav: 23.2
+    liberalCipav: 23.2,
+    formationPro: FORMATION_PRO,
+    versementLiberatoire: VERSEMENT_LIBERATOIRE
   },
 
   {
@@ -193,7 +224,9 @@ export const PALIERS_COTISATIONS = [
     ventes: 12.3,
     prestations: 21.2,
     liberal: 23.1,
-    liberalCipav: 23.2
+    liberalCipav: 23.2,
+    formationPro: FORMATION_PRO,
+    versementLiberatoire: VERSEMENT_LIBERATOIRE
   },
 
   {
@@ -205,6 +238,8 @@ export const PALIERS_COTISATIONS = [
     ventes: 12.3,
     prestations: 21.2,
     liberal: 21.1,
-    liberalCipav: 21.2
+    liberalCipav: 21.2,
+    formationPro: FORMATION_PRO,
+    versementLiberatoire: VERSEMENT_LIBERATOIRE
   }
 ];

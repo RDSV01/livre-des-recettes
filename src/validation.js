@@ -48,6 +48,70 @@ export function cleSirenValide(chiffres) {
     [...chiffres].reduce((s, c) => s + Number(c), 0) % 5 === 0;
 }
 
+// ---- Contrôles de champ communs --------------------------------------------------
+//
+// Chacun inscrit son message dans `erreurs` sous la clé du champ, et ne dit
+// rien quand la valeur convient : les validateurs n'ont plus qu'à les enchaîner.
+
+/** Résultat d'un validateur : les valeurs si rien n'a été refusé. */
+function resultat(erreurs, valeurs) {
+  return Object.keys(erreurs).length > 0
+    ? { erreurs, valeurs: null }
+    : { erreurs: null, valeurs };
+}
+
+/** Date obligatoire et réelle (`AAAA-MM-JJ`) ; `nom` la désigne (« d’encaissement »). */
+function verifierDate(erreurs, cle, date, nom) {
+  if (!date) erreurs[cle] = `La date ${nom} est obligatoire.`;
+  else if (!estDateIso(date)) erreurs[cle] = 'Date invalide (format attendu : AAAA-MM-JJ).';
+}
+
+/** Nom obligatoire d'un tiers (« client », « fournisseur »), de longueur raisonnable. */
+function verifierNom(erreurs, cle, nom, tiers) {
+  if (!nom) erreurs[cle] = `Le nom du ${tiers} est obligatoire.`;
+  else if (nom.length > LONGUEUR_MAX) erreurs[cle] = `Le nom du ${tiers} dépasse ${LONGUEUR_MAX} caractères.`;
+}
+
+/**
+ * Montant obligatoire, strictement positif et vraisemblable, sous toutes ses
+ * écritures (« 12,5 » vaut 12,50). Retourne le montant arrondi au centime.
+ * `quoi` le désigne dans le message (« encaissé », « de l’achat »).
+ */
+function verifierMontant(erreurs, valeur, quoi) {
+  const montant = analyserMontant(valeur);
+  if (montant === null) {
+    erreurs.montant = `Le montant ${quoi} est obligatoire et doit être un nombre.`;
+  } else if (montant <= 0) {
+    erreurs.montant = 'Le montant doit être strictement positif.';
+  } else if (montant > MONTANT_MAX) {
+    erreurs.montant = 'Le montant est invraisemblablement élevé.';
+  }
+  return montant === null ? null : Math.round(montant * 100) / 100;
+}
+
+/** Mode connu : un mode par défaut, ou un mode personnalisé de l'utilisateur. */
+function verifierMode(erreurs, code, modesPersonnalises, nom) {
+  if (!MODES_REGLEMENT.some((m) => m.code === code) && !modesPersonnalises.some((m) => m.code === code)) {
+    erreurs.modeReglement = `Mode de ${nom} inconnu.`;
+  }
+}
+
+/**
+ * SIREN (9 chiffres) ou SIRET (14) facultatif : s'il est renseigné, le format
+ * puis la clé de contrôle. Les espaces de présentation sont tolérés ; la
+ * valeur nettoyée est retournée.
+ */
+function verifierIdentifiant(erreurs, cle, valeur, type) {
+  const chiffres = texte(valeur).replace(/\s/g, '');
+  const longueur = type === 'SIREN' ? 9 : 14;
+  if (chiffres && !new RegExp(`^\\d{${longueur}}$`).test(chiffres)) {
+    erreurs[cle] = `Un ${type} comporte exactement ${longueur} chiffres.`;
+  } else if (chiffres && !cleSirenValide(chiffres)) {
+    erreurs[cle] = `Ce ${type} ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.`;
+  }
+  return chiffres;
+}
+
 /**
  * Valide et normalise une recette.
  *
@@ -69,33 +133,12 @@ export function validerRecette(entree, modesPersonnalises = []) {
   const erreurs = {};
 
   const dateEncaissement = texte(e.dateEncaissement);
-  if (!dateEncaissement) {
-    erreurs.dateEncaissement = 'La date d’encaissement est obligatoire.';
-  } else if (!estDateIso(dateEncaissement)) {
-    erreurs.dateEncaissement = 'Date invalide (format attendu : AAAA-MM-JJ).';
-  }
-
+  verifierDate(erreurs, 'dateEncaissement', dateEncaissement, 'd’encaissement');
   const client = texte(e.client);
-  if (!client) {
-    erreurs.client = 'Le nom du client est obligatoire.';
-  } else if (client.length > LONGUEUR_MAX) {
-    erreurs.client = `Le nom du client dépasse ${LONGUEUR_MAX} caractères.`;
-  }
-
-  const montant = analyserMontant(e.montant);
-  if (montant === null) {
-    erreurs.montant = 'Le montant encaissé est obligatoire et doit être un nombre.';
-  } else if (montant <= 0) {
-    erreurs.montant = 'Le montant doit être strictement positif.';
-  } else if (montant > MONTANT_MAX) {
-    erreurs.montant = 'Le montant est invraisemblablement élevé.';
-  }
-
+  verifierNom(erreurs, 'client', client, 'client');
+  const montant = verifierMontant(erreurs, e.montant, 'encaissé');
   const modeReglement = texte(e.modeReglement);
-  if (!MODES_REGLEMENT.some((m) => m.code === modeReglement) &&
-      !modesPersonnalises.some((m) => m.code === modeReglement)) {
-    erreurs.modeReglement = 'Mode de règlement inconnu.';
-  }
+  verifierMode(erreurs, modeReglement, modesPersonnalises, 'règlement');
 
   const libelle = texte(e.libelle);
   const numeroFacture = texte(e.numeroFacture);
@@ -107,21 +150,9 @@ export function validerRecette(entree, modesPersonnalises = []) {
     erreurs.categorie = 'Catégorie inconnue (vente ou prestation).';
   }
 
-  if (Object.keys(erreurs).length > 0) {
-    return { erreurs, valeurs: null };
-  }
-  return {
-    erreurs: null,
-    valeurs: {
-      dateEncaissement,
-      client,
-      libelle,
-      numeroFacture,
-      montant: Math.round(montant * 100) / 100,
-      modeReglement,
-      categorie
-    }
-  };
+  return resultat(erreurs, {
+    dateEncaissement, client, libelle, numeroFacture, montant, modeReglement, categorie
+  });
 }
 
 /**
@@ -139,51 +170,40 @@ export function validerAchat(entree, modesPersonnalises = []) {
   const erreurs = {};
 
   const dateReglement = texte(e.dateReglement);
-  if (!dateReglement) {
-    erreurs.dateReglement = 'La date du règlement est obligatoire.';
-  } else if (!estDateIso(dateReglement)) {
-    erreurs.dateReglement = 'Date invalide (format attendu : AAAA-MM-JJ).';
-  }
-
+  verifierDate(erreurs, 'dateReglement', dateReglement, 'du règlement');
   const fournisseur = texte(e.fournisseur);
-  if (!fournisseur) {
-    erreurs.fournisseur = 'Le nom du fournisseur est obligatoire.';
-  } else if (fournisseur.length > LONGUEUR_MAX) {
-    erreurs.fournisseur = `Le nom du fournisseur dépasse ${LONGUEUR_MAX} caractères.`;
-  }
-
-  const montant = analyserMontant(e.montant);
-  if (montant === null) {
-    erreurs.montant = 'Le montant de l’achat est obligatoire et doit être un nombre.';
-  } else if (montant <= 0) {
-    erreurs.montant = 'Le montant doit être strictement positif.';
-  } else if (montant > MONTANT_MAX) {
-    erreurs.montant = 'Le montant est invraisemblablement élevé.';
-  }
-
+  verifierNom(erreurs, 'fournisseur', fournisseur, 'fournisseur');
+  const montant = verifierMontant(erreurs, e.montant, 'de l’achat');
   const modeReglement = texte(e.modeReglement);
-  if (!MODES_REGLEMENT.some((m) => m.code === modeReglement) &&
-      !modesPersonnalises.some((m) => m.code === modeReglement)) {
-    erreurs.modeReglement = 'Mode de paiement inconnu.';
-  }
+  verifierMode(erreurs, modeReglement, modesPersonnalises, 'paiement');
 
   const referenceFacture = texte(e.referenceFacture);
   if (referenceFacture.length > 100) {
     erreurs.referenceFacture = 'La référence dépasse 100 caractères.';
   }
 
-  if (Object.keys(erreurs).length > 0) {
-    return { erreurs, valeurs: null };
+  return resultat(erreurs, { dateReglement, fournisseur, referenceFacture, montant, modeReglement });
+}
+
+/**
+ * Valide l'identité technique d'une ligne rendue au registre par une
+ * annulation : son identifiant et ses horodatages d'origine. Une ligne
+ * supprimée par erreur revient ainsi telle qu'elle était, au lieu de renaître
+ * sous un autre identifiant avec une date de création du jour.
+ *
+ * Un horodatage illisible est remplacé par `null` : le stockage y met alors
+ * l'heure courante, plutôt que de refuser la restauration.
+ */
+export function validerIdentite(entree) {
+  const id = texte(entree?.id);
+  if (!/^[A-Za-z0-9-]{1,100}$/.test(id)) {
+    return { erreur: 'Identifiant de ligne invalide.', valeurs: null };
   }
+  const horodatage = (valeur) =>
+    (typeof valeur === 'string' && !Number.isNaN(Date.parse(valeur)) ? valeur : null);
   return {
-    erreurs: null,
-    valeurs: {
-      dateReglement,
-      fournisseur,
-      referenceFacture,
-      montant: Math.round(montant * 100) / 100,
-      modeReglement
-    }
+    erreur: null,
+    valeurs: { id, creeLe: horodatage(entree.creeLe), modifieLe: horodatage(entree.modifieLe) }
   };
 }
 
@@ -197,25 +217,11 @@ export function validerClient(entree) {
   const erreurs = {};
 
   const nom = texte(e.nom);
-  if (!nom) {
-    erreurs.nom = 'Le nom du client est obligatoire.';
-  } else if (nom.length > LONGUEUR_MAX) {
-    erreurs.nom = `Le nom dépasse ${LONGUEUR_MAX} caractères.`;
-  }
+  verifierNom(erreurs, 'nom', nom, 'client');
+  // SIRET facultatif : il sert à la recherche automatique du nom.
+  const siret = verifierIdentifiant(erreurs, 'siret', e.siret, 'SIRET');
 
-  // SIRET facultatif ; s'il est renseigné, on vérifie le format (14 chiffres)
-  // puis la clé de contrôle. Les espaces de présentation sont tolérés.
-  const siret = texte(e.siret).replace(/\s/g, '');
-  if (siret && !/^\d{14}$/.test(siret)) {
-    erreurs.siret = 'Un SIRET comporte exactement 14 chiffres.';
-  } else if (siret && !cleSirenValide(siret)) {
-    erreurs.siret = 'Ce SIRET ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.';
-  }
-
-  if (Object.keys(erreurs).length > 0) {
-    return { erreurs, valeurs: null };
-  }
-  return { erreurs: null, valeurs: { nom, siret } };
+  return resultat(erreurs, { nom, siret });
 }
 
 /**
@@ -263,6 +269,36 @@ function booleen(valeur, defaut) {
   return valeur === true || valeur === 'true' || valeur === 'on';
 }
 
+const NUMEROS_IGNORES_MAX = 500;
+
+/**
+ * Valide la liste des numéros de facture à ne plus signaler. Les doublons de
+ * saisie (casse, accents) sont fusionnés : l'analyse de la numérotation les
+ * compare de la même façon.
+ */
+function validerNumerosIgnores(entree) {
+  if (!Array.isArray(entree)) {
+    return { erreur: 'Liste de numéros ignorés invalide.', valeurs: null };
+  }
+  const vus = new Set();
+  const valeurs = [];
+  for (const brut of entree) {
+    const numero = texte(brut);
+    if (!numero) continue;
+    if (numero.length > 100) {
+      return { erreur: 'Un numéro ignoré dépasse 100 caractères.', valeurs: null };
+    }
+    const cle = normaliserTexte(numero);
+    if (vus.has(cle)) continue;
+    vus.add(cle);
+    valeurs.push(numero);
+  }
+  if (valeurs.length > NUMEROS_IGNORES_MAX) {
+    return { erreur: `Au plus ${NUMEROS_IGNORES_MAX} numéros ignorés.`, valeurs: null };
+  }
+  return { erreur: null, valeurs };
+}
+
 /** Valide et normalise les paramètres de l'application. */
 export function validerParametres(entree) {
   const e = entree ?? {};
@@ -275,20 +311,8 @@ export function validerParametres(entree) {
   if (adresse.length > LONGUEUR_MAX) erreurs.adresse = 'Adresse trop longue.';
   if (activite.length > LONGUEUR_MAX) erreurs.activite = 'Activité trop longue.';
 
-  // SIREN / SIRET : facultatifs ; s'ils sont renseignés, on vérifie le format
-  // (9 et 14 chiffres) puis la clé de contrôle. Les espaces sont tolérés.
-  const siren = texte(e.siren).replace(/\s/g, '');
-  if (siren && !/^\d{9}$/.test(siren)) {
-    erreurs.siren = 'Un SIREN comporte exactement 9 chiffres.';
-  } else if (siren && !cleSirenValide(siren)) {
-    erreurs.siren = 'Ce SIREN ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.';
-  }
-  const siret = texte(e.siret).replace(/\s/g, '');
-  if (siret && !/^\d{14}$/.test(siret)) {
-    erreurs.siret = 'Un SIRET comporte exactement 14 chiffres.';
-  } else if (siret && !cleSirenValide(siret)) {
-    erreurs.siret = 'Ce SIRET ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.';
-  }
+  const siren = verifierIdentifiant(erreurs, 'siren', e.siren, 'SIREN');
+  const siret = verifierIdentifiant(erreurs, 'siret', e.siret, 'SIRET');
 
   const typeActivite = texte(e.typeActivite);
   if (!TYPES_ACTIVITE.some((t) => t.code === typeActivite)) {
@@ -328,22 +352,27 @@ export function validerParametres(entree) {
     erreurs.modesPersonnalises = modes.erreur;
   }
 
-  if (Object.keys(erreurs).length > 0) {
-    return { erreurs, valeurs: null };
+  // Liste absente de la requête : elle est conservée telle qu'enregistrée
+  // (voir plus bas). Une requête qui oublierait ce champ ne doit pas effacer
+  // en silence ce que l'utilisateur a choisi de ne plus voir.
+  const ignores = e.numerosIgnores === undefined ? null : validerNumerosIgnores(e.numerosIgnores);
+  if (ignores?.erreur) {
+    erreurs.numerosIgnores = ignores.erreur;
   }
-  return {
-    erreurs: null,
-    valeurs: {
-      nomEntreprise, siren, siret, adresse, activite, typeActivite, naturePrestations,
-      devise, formatDate, modesPersonnalises: modes.valeurs,
-      periodiciteUrssaf, dernierePeriodeDeclaree,
-      alertesNumerotation: booleen(e.alertesNumerotation, true),
-      alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
-      suiviSeuils: booleen(e.suiviSeuils, true),
-      verifierMisesAJour: booleen(e.verifierMisesAJour, true),
-      // Le formulaire ne renvoie pas ce drapeau : enregistrer ses paramètres
-      // sort donc du mode démonstration.
-      jeuDemo: booleen(e.jeuDemo, false)
-    }
-  };
+
+  return resultat(erreurs, {
+    nomEntreprise, siren, siret, adresse, activite, typeActivite, naturePrestations,
+    versementLiberatoire: booleen(e.versementLiberatoire, false),
+    activiteArtisanale: booleen(e.activiteArtisanale, false),
+    devise, formatDate, modesPersonnalises: modes.valeurs,
+    periodiciteUrssaf, dernierePeriodeDeclaree,
+    alertesNumerotation: booleen(e.alertesNumerotation, true),
+    ...(ignores ? { numerosIgnores: ignores.valeurs } : {}),
+    alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
+    suiviSeuils: booleen(e.suiviSeuils, true),
+    verifierMisesAJour: booleen(e.verifierMisesAJour, true),
+    // Le formulaire des paramètres renvoie ce drapeau à faux : enregistrer
+    // ses propres paramètres sort du mode démonstration.
+    jeuDemo: booleen(e.jeuDemo, false)
+  });
 }

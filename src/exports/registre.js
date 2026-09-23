@@ -17,7 +17,7 @@
  */
 
 import { filtrerParPeriode, totalMontants, parDateAsc } from '../totaux.js';
-import { moisDe, nomMois, formaterDate } from '../partage/dates.js';
+import { moisDe, nomMois, formaterDate, titrePeriode } from '../partage/dates.js';
 import { libelleMode, libelleCategorieCourt } from '../partage/constantes.js';
 
 /**
@@ -200,13 +200,6 @@ export function registreAchats(achats, periode) {
     nomLigne: 'achat',
     messageVide: 'Aucun achat sur la période.'
   });
-}
-
-/** Titre humain d'une période : « Année 2026 » ou « Juillet 2026 ». */
-function titrePeriode({ annee, mois }) {
-  if (!mois) return `Année ${annee}`;
-  const nom = nomMois(mois);
-  return `${nom.charAt(0).toUpperCase()}${nom.slice(1)} ${annee}`;
 }
 
 /** Nom de fichier sans accent : `livre-recettes-2026` ou `registre-achats-2026-07`. */

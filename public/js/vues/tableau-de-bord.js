@@ -11,9 +11,12 @@ import { api } from '../api.js';
 import { etat, definirParametres, registreAchatsUtile } from '../etat.js';
 import { echapperHtml, toast, animerCompteurs, infobulle } from '../ui.js';
 import { icone } from '../icones.js';
-import { formaterMontant } from '/partage/montants.js';
+import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
 import { libelleCategorieCourt } from '/partage/constantes.js';
-import { formaterDate, nomMois, dernierePeriodeEchue } from '/partage/dates.js';
+import {
+  formaterDate, nomMois, dernierePeriodeEchue, periodeDepuisId, periodeDeclaree,
+  echeanceDeclaration, dateEnFrancaisLong, aujourdHuiIso
+} from '/partage/dates.js';
 import {
   bilanSeuils, seuilsValentPour, libelleActivite, periodeSeuils
 } from '/partage/seuils.js';
@@ -21,13 +24,10 @@ import {
 /** Abréviations françaises des mois, pour l'axe du graphique. */
 const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
 
-/** « 4 prestations », « 1 vente » : le nombre suivi du mot accordé. */
-const accord = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? 's' : ''}`;
-
 /** « de mars », mais « d'août » : l'élision devant une voyelle. */
 const deMois = (mois) => (/^[aeiouâéèêîôû]/i.test(mois) ? `d’${mois}` : `de ${mois}`);
 
-/** Dimensions communes aux deux graphiques mensuels. */
+/** Dimensions du graphique mensuel. */
 const GRAPHE = { largeur: 720, hauteur: 210, margeGauche: 56, margeHaut: 10, margeBas: 26 };
 
 /** Plafond « rond » de l'axe : multiple lisible juste au-dessus du maximum. */
@@ -53,130 +53,111 @@ function grilleAxe(plafond, devise) {
   }).join('');
 }
 
-/**
- * Graphique à barres du CA mensuel, une seule série en teinte accent. SVG
- * généré à la main : barres fines aux coins supérieurs arrondis ancrées sur la
- * ligne de base, grille de repères, info-bulle par colonne.
- */
-function graphiqueCaMensuel(points, devise) {
-  const { largeur, hauteur, margeGauche, margeHaut, margeBas } = GRAPHE;
-  const zoneHauteur = hauteur - margeHaut - margeBas;
-  const zoneLargeur = largeur - margeGauche - 8;
-
-  const plafond = plafondAxe(Math.max(...points.map((p) => p.total)));
-
-  const pasX = zoneLargeur / points.length;
-  const largeurBarre = Math.min(38, Math.max(8, pasX - 10));
-  const ligneBase = margeHaut + zoneHauteur;
-
-  const grille = grilleAxe(plafond, devise);
-
-  const colonnes = points.map((p, i) => {
-    const x = margeGauche + i * pasX + (pasX - largeurBarre) / 2;
-    const h = (p.total / plafond) * zoneHauteur;
-    const y = ligneBase - h;
-    const r = Math.min(4, largeurBarre / 2, h);
-    const barre = h <= 0 ? '' : `
-      <path class="barre barre-graphique" d="M ${x.toFixed(1)} ${ligneBase}
-        L ${x.toFixed(1)} ${(y + r).toFixed(1)}
-        Q ${x.toFixed(1)} ${y.toFixed(1)} ${(x + r).toFixed(1)} ${y.toFixed(1)}
-        L ${(x + largeurBarre - r).toFixed(1)} ${y.toFixed(1)}
-        Q ${(x + largeurBarre).toFixed(1)} ${y.toFixed(1)} ${(x + largeurBarre).toFixed(1)} ${(y + r).toFixed(1)}
-        L ${(x + largeurBarre).toFixed(1)} ${ligneBase} Z"/>`;
-    // L'année est portée par le titre de la carte : l'axe n'affiche que les mois.
-    const etiquette = MOIS_ABREGES[p.mois - 1];
-    // La zone de survol couvre toute la colonne : cible plus large que la barre.
-    // Le montant exact est porté par `data-info` et affiché par l'info-bulle
-    // maison, instantanée (l'info-bulle native a un délai imposé par le système).
-    return `
-      <g class="colonne" data-info="${echapperHtml(`${nomMois(p.mois)} ${p.annee} : ${formaterMontant(p.total, devise)}`)}">
-        <rect x="${(margeGauche + i * pasX).toFixed(1)}" y="${margeHaut}" width="${pasX.toFixed(1)}" height="${zoneHauteur + margeBas}" fill="transparent"/>
-        ${barre}
-        <text x="${(x + largeurBarre / 2).toFixed(1)}" y="${hauteur - 8}" text-anchor="middle">${echapperHtml(etiquette)}</text>
-      </g>`;
-  }).join('');
-
-  return `
-    <svg class="graphique-ca" viewBox="0 0 ${largeur} ${hauteur}" role="img"
-      aria-label="Chiffre d’affaires mensuel">
-      ${grille}
-      ${colonnes}
-    </svg>`;
+/** Chemin d'une barre aux seuls coins supérieurs arrondis, posée sur sa base. */
+function barreArrondieEnHaut(x, y, largeur, hauteur, rayon) {
+  const f = (n) => n.toFixed(1);
+  return `M ${f(x)} ${f(y + hauteur)} L ${f(x)} ${f(y + rayon)}
+    Q ${f(x)} ${f(y)} ${f(x + rayon)} ${f(y)} L ${f(x + largeur - rayon)} ${f(y)}
+    Q ${f(x + largeur)} ${f(y)} ${f(x + largeur)} ${f(y + rayon)} L ${f(x + largeur)} ${f(y + hauteur)} Z`;
 }
 
 /**
- * Graphique du chiffre d'affaires mensuel ventilé en une seule barre par mois :
- * ventes (bleu) et prestations (vert) empilées, plus le non catégorisé (gris)
- * s'il y en a. Remplace, en activité mixte, les trois graphiques distincts par
- * un seul où la répartition d'un mois se lit d'un coup d'œil.
+ * Graphique à barres du chiffre d'affaires mensuel, SVG généré à la main : une
+ * barre par mois ancrée sur la ligne de base, grille de repères, info-bulle
+ * par colonne.
  *
- * `total` de chaque série vient du serveur ; le non catégorisé se déduit du
- * total global, arrondi au centime pour ne pas traîner l'imprécision des
- * flottants (un « reste » de -0,004 € ne doit pas dessiner de segment).
+ * Avec plusieurs séries (activité mixte), elles s'empilent dans la barre du
+ * mois, chacune dans sa couleur du langage commun (ventes en bleu,
+ * prestations en vert, non catégorisé en gris), et une légende les nomme : la
+ * composition d'un mois se lit d'un coup d'œil. Seul le haut de la pile
+ * s'arrondit.
+ *
+ * @param {{ mois: number, annee: number, total: number }[]} points total de chaque mois.
+ * @param {{ libelle: string, classe: string, valeurs: number[], facultative?: boolean }[]} series
+ *   empilées du bas vers le haut ; une série facultative restée à zéro
+ *   n'entre pas dans la légende.
  */
-function graphiqueCaEmpile(pointsGlobal, ventesPts, prestationsPts, devise) {
+function graphiqueCa(points, series, devise) {
   const { largeur, hauteur, margeGauche, margeHaut, margeBas } = GRAPHE;
   const zoneHauteur = hauteur - margeHaut - margeBas;
-  const zoneLargeur = largeur - margeGauche - 8;
   const ligneBase = margeHaut + zoneHauteur;
-
-  const plafond = plafondAxe(Math.max(...pointsGlobal.map((p) => p.total)));
-  const grille = grilleAxe(plafond, devise);
-
-  const pasX = zoneLargeur / pointsGlobal.length;
+  const plafond = plafondAxe(Math.max(...points.map((p) => p.total)));
+  const pasX = (largeur - margeGauche - 8) / points.length;
   const largeurBarre = Math.min(38, Math.max(8, pasX - 10));
-  const GAP = 1.5; // léger espace entre deux segments empilés
+  const ESPACE = 1.5; // entre deux segments empilés
+  const empile = series.length > 1;
 
-  const nonCat = (i) => Math.max(0,
-    Math.round((pointsGlobal[i].total - ventesPts[i].total - prestationsPts[i].total) * 100) / 100);
-  const auMoinsUnNonCat = pointsGlobal.some((_, i) => nonCat(i) > 0);
-
-  const series = (i) => [
-    { libelle: 'Ventes', classe: 'seg-vente', valeur: ventesPts[i].total },
-    { libelle: 'Prestations', classe: 'seg-prestation', valeur: prestationsPts[i].total },
-    { libelle: 'Non catégorisé', classe: 'seg-neutre', valeur: nonCat(i) }
-  ];
-
-  const colonnes = pointsGlobal.map((p, i) => {
+  const colonnes = points.map((p, i) => {
     const x = margeGauche + i * pasX + (pasX - largeurBarre) / 2;
+    const presentes = series.filter((s) => s.valeurs[i] > 0);
     let sommet = ligneBase;
-    const segments = series(i)
-      .filter((s) => s.valeur > 0)
-      .map((s) => {
-        const h = (s.valeur / plafond) * zoneHauteur;
-        const y = sommet - h;
-        sommet = y - GAP;
-        const r = Math.min(2, largeurBarre / 2, h / 2);
-        return `<rect class="segment ${s.classe}" x="${x.toFixed(1)}" y="${y.toFixed(1)}"
-          width="${largeurBarre.toFixed(1)}" height="${h.toFixed(1)}" rx="${r.toFixed(1)}"/>`;
-      }).join('');
+    const segments = presentes.map((s, rang) => {
+      const h = (s.valeurs[i] / plafond) * zoneHauteur;
+      const y = sommet - h;
+      sommet = y - ESPACE;
+      const classe = empile ? `segment ${s.classe}` : s.classe;
+      return rang < presentes.length - 1
+        ? `<rect class="${classe}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${largeurBarre.toFixed(1)}" height="${h.toFixed(1)}"/>`
+        : `<path class="${classe}" d="${barreArrondieEnHaut(x, y, largeurBarre, h, Math.min(4, largeurBarre / 2, h))}"/>`;
+    }).join('');
 
-    const detail = series(i).filter((s) => s.valeur > 0)
-      .map((s) => `${s.libelle} : ${formaterMontant(s.valeur, devise)}`).join('\n');
-    const info = `${nomMois(p.mois)} ${p.annee}\n${detail || 'Aucun encaissement'}` +
-      (detail ? `\nTotal : ${formaterMontant(p.total, devise)}` : '');
+    // Le montant exact est porté par `data-info` et affiché par l'info-bulle
+    // maison, instantanée (l'info-bulle native a un délai imposé par le système).
+    const titre = `${nomMois(p.mois)} ${p.annee}`;
+    const detail = presentes.map((s) => `${s.libelle} : ${formaterMontant(s.valeurs[i], devise)}`);
+    let info = `${titre} : ${formaterMontant(p.total, devise)}`;
+    if (empile) {
+      info = detail.length === 0
+        ? `${titre}\nAucun encaissement`
+        : `${titre}\n${detail.join('\n')}\nTotal : ${formaterMontant(p.total, devise)}`;
+    }
 
+    // La zone de survol couvre toute la colonne : cible plus large que la
+    // barre. L'année est portée par le titre de la carte : l'axe n'affiche que
+    // les mois.
     return `
       <g class="colonne" data-info="${echapperHtml(info)}">
         <rect x="${(margeGauche + i * pasX).toFixed(1)}" y="${margeHaut}" width="${pasX.toFixed(1)}" height="${zoneHauteur + margeBas}" fill="transparent"/>
-        ${segments}
+        ${segments ? `<g class="barre-graphique">${segments}</g>` : ''}
         <text x="${(x + largeurBarre / 2).toFixed(1)}" y="${hauteur - 8}" text-anchor="middle">${echapperHtml(MOIS_ABREGES[p.mois - 1])}</text>
       </g>`;
   }).join('');
 
-  const legende = [
-    { libelle: 'Ventes', classe: 'seg-vente' },
-    { libelle: 'Prestations', classe: 'seg-prestation' },
-    ...(auMoinsUnNonCat ? [{ libelle: 'Non catégorisé', classe: 'seg-neutre' }] : [])
-  ].map((s) => `<span class="entree-legende"><span class="pastille-legende ${s.classe}"></span>${s.libelle}</span>`).join('');
+  const legende = !empile ? '' : `
+    <div class="legende-graphique">${series
+      .filter((s) => !s.facultative || s.valeurs.some((v) => v > 0))
+      .map((s) => `<span class="entree-legende"><span class="pastille-legende ${s.classe}"></span>${s.libelle}</span>`)
+      .join('')}</div>`;
 
   return `
     <svg class="graphique-ca" viewBox="0 0 ${largeur} ${hauteur}" role="img"
-      aria-label="Chiffre d’affaires mensuel ventilé par activité">
-      ${grille}
+      aria-label="Chiffre d’affaires mensuel${empile ? ' ventilé par activité' : ''}">
+      ${grilleAxe(plafond, devise)}
       ${colonnes}
-    </svg>
-    <div class="legende-graphique">${legende}</div>`;
+    </svg>${legende}`;
+}
+
+/**
+ * Séries du graphique d'une activité mixte : ventes, prestations, et le non
+ * catégorisé s'il y en a. Ce dernier se déduit du total, arrondi au centime
+ * pour ne pas traîner l'imprécision des flottants (un « reste » de -0,004 €
+ * ne doit pas dessiner de segment).
+ */
+function seriesVentilees(stats) {
+  const valeurs = (points) => points.map((p) => p.total);
+  const ventes = valeurs(stats.caParMoisVentes);
+  const prestations = valeurs(stats.caParMoisPrestations);
+  return [
+    { libelle: 'Ventes', classe: 'seg-vente', valeurs: ventes },
+    { libelle: 'Prestations', classe: 'seg-prestation', valeurs: prestations },
+    {
+      libelle: 'Non catégorisé',
+      classe: 'seg-neutre',
+      facultative: true,
+      valeurs: stats.caParMois.map((p, i) =>
+        Math.max(0, Math.round((p.total - ventes[i] - prestations[i]) * 100) / 100))
+    }
+  ];
 }
 
 /**
@@ -427,19 +408,40 @@ function carteSeuils(stats, devise) {
 }
 
 /**
- * Rappel de déclaration URSSAF : affiché quand une période est
- * entièrement écoulée et n'a pas été marquée « déclarée » via le bouton
- * « C'est fait » (mémorisé dans les paramètres).
+ * Période dont il faut rappeler la déclaration : la dernière entièrement
+ * écoulée, tant qu'elle n'a pas été marquée « déclarée » (bouton « C'est
+ * fait » ici, ou « Marquer comme déclarée » sur l'écran URSSAF). Retourne
+ * `null` quand il n'y a rien à rappeler.
  */
-function bandeauRappelUrssaf() {
+function periodeARappeler() {
   const p = etat.parametres;
-  const periode = dernierePeriodeEchue(p.periodiciteUrssaf);
-  if (!periode || periode.id === p.dernierePeriodeDeclaree) return '';
+  const echue = dernierePeriodeEchue(p.periodiciteUrssaf);
+  if (!echue || periodeDeclaree(echue.id, p.dernierePeriodeDeclaree)) return null;
+  return { ...echue, ...periodeDepuisId(echue.id) };
+}
+
+/**
+ * Rappel de déclaration URSSAF, avec le montant à déclarer et la date limite :
+ * tout ce qu'il faut pour la faire sans ouvrir une autre page. Passé la date
+ * limite, le rappel le dit.
+ */
+function bandeauRappelUrssaf(periode, bilan, devise) {
+  if (!periode) return '';
+  const echeance = echeanceDeclaration(periode.annee, periode.type, periode.valeur);
+  const enRetard = aujourdHuiIso() > echeance;
+  // « du 2e trimestre », « de juillet », « d'août ».
+  const intitule = periode.type === 'trimestre' ? `du ${periode.libelle}` : deMois(periode.libelle);
+  const montant = bilan
+    ? `<strong>${echapperHtml(formaterMontantEntier(bilan.aDeclarer, devise))}</strong> à déclarer, `
+    : '';
+  const quand = enRetard
+    ? `échéance du ${echapperHtml(dateEnFrancaisLong(echeance))} dépassée.`
+    : `au plus tard le ${echapperHtml(dateEnFrancaisLong(echeance))}.`;
   return `
-    <div class="bandeau-rappel">
-      ${icone('urssaf', { taille: 18 })}
-      <span>Déclaration URSSAF de ${echapperHtml(periode.libelle)} : pensez à la faire si ce n’est pas déjà fait.</span>
-      <a class="btn btn-tertiaire" href="#/urssaf">Voir le montant</a>
+    <div class="bandeau-rappel${enRetard ? ' en-retard' : ''}">
+      ${icone(enRetard ? 'cercle-alerte' : 'urssaf', { taille: 18 })}
+      <span>Déclaration URSSAF ${echapperHtml(intitule)} : ${montant}${quand}</span>
+      <a class="btn btn-tertiaire" href="#/urssaf">Voir le détail</a>
       <button type="button" class="btn btn-tertiaire" id="declaration-faite" data-periode="${periode.id}">
         ${icone('cercle-valide', { taille: 16 })}<span>C’est fait</span>
       </button>
@@ -455,7 +457,15 @@ export async function vueTableauDeBord(conteneur) {
     // Pas de squelette ici : la page précédente reste affichée le temps du
     // calcul (quelques millisecondes en local), ce qui évite tout clignotement
     // au changement d'année. Le squelette global couvre les chargements lents.
-    const stats = await api.tableauDeBord({ annee: anneeChoisie });
+    // Le montant du rappel URSSAF arrive dans le même temps ; s'il manque, le
+    // rappel s'affiche sans lui plutôt que de bloquer la page.
+    const rappel = periodeARappeler();
+    const [stats, bilanRappel] = await Promise.all([
+      api.tableauDeBord({ annee: anneeChoisie }),
+      rappel
+        ? api.bilanUrssaf({ annee: rappel.annee, type: rappel.type, valeur: rappel.valeur }).catch(() => null)
+        : null
+    ]);
     const { devise, formatDate, suiviSeuils } = etat.parametres;
     // La catégorie n'est renseignée, et n'a de sens, qu'en activité mixte.
     const estMixte = etat.parametres.typeActivite === 'mixte';
@@ -464,32 +474,47 @@ export async function vueTableauDeBord(conteneur) {
     // affichée en découle.
     const formaterValeur = (cible, format) => format === 'entier' ? String(cible) : formaterMontant(cible, devise);
 
+    /**
+     * Répartition ventes / prestations d'un chiffre d'affaires, en activité
+     * mixte, portée sous la tuile qu'elle décompose. Quatre tuiles de plus la
+     * répétaient auparavant : « 3 prestations en septembre » redisait le CA du
+     * mois dès qu'il n'y avait eu aucune vente. Le non catégorisé n'apparaît
+     * que s'il existe.
+     */
+    const repartition = (total, ventes, prestations) => {
+      if (!estMixte) return null;
+      const nonCategorise = Math.max(0, Math.round((total - ventes - prestations) * 100) / 100);
+      return [
+        { libelle: 'Ventes', classe: 'seg-vente', montant: ventes },
+        { libelle: 'Prestations', classe: 'seg-prestation', montant: prestations },
+        ...(nonCategorise > 0 ? [{ libelle: 'Non catégorisé', classe: 'seg-neutre', montant: nonCategorise }] : [])
+      ];
+    };
+
     // Tous les chiffres clés dans une même grille de tuiles. Les deux premières
     // portent la pastille d'accent : le CA du mois et celui de l'année restent
     // les repères de la page, sans que les autres changent de nature.
     const cartes = [
-      { etiquette: `CA ${deMois(nomMois(stats.mois))} ${stats.annee}`, cible: stats.caMois, format: 'montant', icone: 'billet', principale: true },
-      { etiquette: `CA de l’année ${stats.annee}`, cible: stats.caAnnee, format: 'montant', icone: 'calendrier', principale: true },
+      {
+        etiquette: `CA ${deMois(nomMois(stats.mois))} ${stats.annee}`, cible: stats.caMois, format: 'montant', icone: 'billet', principale: true,
+        detail: repartition(stats.caMois, stats.caMoisVentes, stats.caMoisPrestations)
+      },
+      {
+        etiquette: `CA de l’année ${stats.annee}`, cible: stats.caAnnee, format: 'montant', icone: 'calendrier', principale: true,
+        detail: repartition(stats.caAnnee, stats.caAnneeVentes, stats.caAnneePrestations)
+      },
       { etiquette: 'Moyenne par encaissement', cible: stats.moyenneEncaissement, format: 'montant', icone: 'tendance' },
       // Total des achats : seulement quand le registre des achats est tenu.
       ...(registreAchatsUtile() ? [
         { etiquette: `Achats en ${stats.annee}`, cible: stats.achatsAnnee, format: 'montant', icone: 'achats' }
-      ] : []),
-      // Activité mixte : le détail par catégorie, sur le mois puis sur l'année.
-      // L'étiquette porte le nombre d'encaissements concernés.
-      ...(estMixte ? [
-        { etiquette: `${accord(stats.nombreMoisPrestations, 'prestation')} en ${nomMois(stats.mois)}`, cible: stats.caMoisPrestations, format: 'montant', icone: 'billet' },
-        { etiquette: `${accord(stats.nombreMoisVentes, 'vente')} en ${nomMois(stats.mois)}`, cible: stats.caMoisVentes, format: 'montant', icone: 'billet' },
-        { etiquette: `${accord(stats.nombreAnneePrestations, 'prestation')} en ${stats.annee}`, cible: stats.caAnneePrestations, format: 'montant', icone: 'calendrier' },
-        { etiquette: `${accord(stats.nombreAnneeVentes, 'vente')} en ${stats.annee}`, cible: stats.caAnneeVentes, format: 'montant', icone: 'calendrier' }
       ] : [])
     ];
 
     /** Une tuile de chiffre clé. */
     const tuile = (carte) => {
-      // Une tuile secondaire à zéro (« 0 vente en juillet ») n'apporte rien :
-      // en retrait, elle laisse ressortir les chiffres qui comptent. Les deux
-      // tuiles principales gardent leur poids, un CA nul y étant une info.
+      // Une tuile secondaire à zéro n'apporte rien : en retrait, elle laisse
+      // ressortir les chiffres qui comptent. Les deux tuiles principales
+      // gardent leur poids, un CA nul y étant une info.
       const vide = carte.cible === 0 && !carte.principale;
       return `
         <div class="carte-stat ${carte.principale ? 'principale' : ''} ${vide ? 'vide' : ''}">
@@ -497,6 +522,15 @@ export async function vueTableauDeBord(conteneur) {
           <div>
             <div class="etiquette">${echapperHtml(carte.etiquette)}</div>
             <div class="valeur" data-compteur="${carte.cible}" data-format="${carte.format}">${echapperHtml(formaterValeur(carte.cible, carte.format))}</div>
+            ${carte.detail ? `
+              <ul class="detail-stat">
+                ${carte.detail.map((d) => `
+                  <li>
+                    <span class="pastille-legende ${d.classe}" aria-hidden="true"></span>
+                    <span>${d.libelle}</span>
+                    <span class="montant-detail">${echapperHtml(formaterMontant(d.montant, devise))}</span>
+                  </li>`).join('')}
+              </ul>` : ''}
           </div>
         </div>`;
     };
@@ -509,10 +543,10 @@ export async function vueTableauDeBord(conteneur) {
            <div class="grande-icone">${icone('tendance', { taille: 32 })}</div>
            Le graphique apparaîtra dès vos premiers encaissements.
          </div>`
-      : (estMixte
-        ? graphiqueCaEmpile(stats.caParMois, stats.caParMoisVentes, stats.caParMoisPrestations, devise)
-        : graphiqueCaMensuel(stats.caParMois, devise)
-      ) + tableauEquivalent(stats.caParMois, devise, estMixte
+      : graphiqueCa(stats.caParMois, estMixte
+        ? seriesVentilees(stats)
+        : [{ libelle: 'Chiffre d’affaires', classe: 'barre', valeurs: stats.caParMois.map((p) => p.total) }],
+      devise) + tableauEquivalent(stats.caParMois, devise, estMixte
         ? { ventes: stats.caParMoisVentes, prestations: stats.caParMoisPrestations }
         : {});
 
@@ -592,7 +626,7 @@ export async function vueTableauDeBord(conteneur) {
         </div>
       </header>
 
-      ${bandeauRappelUrssaf()}
+      ${bandeauRappelUrssaf(rappel, bilanRappel, devise)}
 
       <section class="grille-stats">
         ${cartes.map(tuile).join('')}

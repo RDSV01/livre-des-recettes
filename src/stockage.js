@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { PARAMETRES_DEFAUT } from './partage/constantes.js';
+import { aujourdHuiIso } from './partage/dates.js';
 import { dossierSauvegardesParDefaut } from './emplacements.js';
 
 const NOM_FICHIER = 'livre-des-recettes.json';
@@ -49,6 +50,49 @@ const ROTATION_MENSUELLE_JOURS = 366;
 
 /** Nom de fichier accepté pour une sauvegarde (borne toute traversée de chemin). */
 const MOTIF_SAUVEGARDE = /^livre-des-recettes-[A-Za-z0-9-]+\.json$/;
+
+/**
+ * Horodatage d'un nom de sauvegarde étiquetée, à l'heure LOCALE
+ * (« 2026-09-22-21-52-17 ») : c'est celle que l'utilisateur lit sur sa
+ * montre. L'heure universelle affichait 19 h 52 pour une copie faite à 21 h 52.
+ */
+function horodatageFichier(date = new Date()) {
+  const deux = (n) => String(n).padStart(2, '0');
+  return [
+    date.getFullYear(), deux(date.getMonth() + 1), deux(date.getDate()),
+    deux(date.getHours()), deux(date.getMinutes()), deux(date.getSeconds())
+  ].join('-');
+}
+
+/**
+ * Écrit un fichier de façon durable : contenu dans un fichier temporaire,
+ * vidé jusqu'au disque (`fsync`), puis renommé par-dessus la cible.
+ *
+ * Sans le `fsync`, le renommage peut atteindre le disque AVANT le contenu :
+ * une coupure de courant à ce moment laisse, sur certains systèmes de
+ * fichiers, un fichier de données vide sous le bon nom. Le renommage, lui,
+ * garantit qu'on lit toujours l'ancien fichier entier ou le nouveau entier.
+ */
+function ecrireDurablement(chemin, contenu) {
+  const temporaire = `${chemin}.tmp`;
+  const fd = fs.openSync(temporaire, 'w');
+  try {
+    fs.writeFileSync(fd, contenu, 'utf8');
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(temporaire, chemin);
+  // Sous Linux et macOS, le renommage lui-même vit dans le dossier : on le
+  // fige aussi. Windows ne sait pas ouvrir un dossier ainsi, et NTFS
+  // journalise déjà l'opération.
+  if (process.platform !== 'win32') {
+    try {
+      const dossier = fs.openSync(path.dirname(chemin), 'r');
+      try { fs.fsyncSync(dossier); } finally { fs.closeSync(dossier); }
+    } catch { /* système de fichiers qui refuse : le contenu est déjà sur disque */ }
+  }
+}
 
 /**
  * Applique la rotation aux dates (`AAAA-MM-JJ`) des sauvegardes quotidiennes
@@ -197,26 +241,23 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     }
     fs.mkdirSync(dossierDonnees, { recursive: true });
     creerSauvegardeQuotidienne();
-    const temporaire = `${cheminFichier}.tmp`;
-    fs.writeFileSync(temporaire, JSON.stringify(donnees, null, 2), 'utf8');
-    fs.renameSync(temporaire, cheminFichier);
-    rafraichirCopieDeSecours();
+    const contenu = JSON.stringify(donnees, null, 2);
+    ecrireDurablement(cheminFichier, contenu);
+    rafraichirCopieDeSecours(contenu);
   }
 
   /**
-   * Met à jour la copie de secours, hors du dossier de données.
+   * Met à jour la copie de secours, hors du dossier de données, avec le
+   * contenu qui vient d'être écrit.
    *
    * Son échec (disque plein, dossier inaccessible) ne doit jamais empêcher
    * l'utilisateur de travailler : le fichier principal vient d'être écrit,
    * et la copie repartira à l'écriture suivante.
    */
-  function rafraichirCopieDeSecours() {
+  function rafraichirCopieDeSecours(contenu) {
     try {
       fs.mkdirSync(dossierSauvegardes, { recursive: true });
-      const cible = path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS);
-      const temporaire = `${cible}.tmp`;
-      fs.copyFileSync(cheminFichier, temporaire);
-      fs.renameSync(temporaire, cible);
+      ecrireDurablement(path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS), contenu);
       copieDeSecoursEnEchec = false;
     } catch {
       // Réessayé à la prochaine écriture ; l'interface signale l'absence de filet.
@@ -247,7 +288,9 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     if (!fs.existsSync(cheminFichier)) return;
     try {
       fs.mkdirSync(dossierSauvegardes, { recursive: true });
-      const jour = new Date().toISOString().slice(0, 10);
+      // Jour LOCAL : entre minuit et 2 h en été, l'heure universelle datait
+      // encore la sauvegarde de la veille.
+      const jour = aujourdHuiIso();
       const cible = path.join(dossierSauvegardes, `livre-des-recettes-${jour}.json`);
       if (fs.existsSync(cible)) return;
       fs.copyFileSync(cheminFichier, cible);
@@ -281,6 +324,83 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     }
     return resultat;
   }
+
+  // ---- Opérations sur les listes ------------------------------------------------
+  //
+  // Une seule écriture par opération, en tout ou rien, qu'elle porte sur une
+  // ligne ou sur deux cents. Chaque opération remplace la liste par une
+  // nouvelle : l'ancienne, restée intacte, sert à tout remettre en place si
+  // l'écriture échoue.
+
+  /** Copies des lignes : le stockage reste seul maître des originaux. */
+  const copies = (lignes) => lignes.map((e) => ({ ...e }));
+
+  /** Ligne neuve : identifiant et horodatages sont attribués ici. */
+  const nouvelleLigne = (champs, maintenant) =>
+    ({ id: crypto.randomUUID(), ...champs, creeLe: maintenant, modifieLe: maintenant });
+
+  /** Remplace une liste en une écriture ; `resultat` est renvoyé si elle réussit. */
+  function remplacer(collection, nouvelle, resultat) {
+    const avant = donnees[collection];
+    return ecrire(
+      () => { donnees[collection] = nouvelle; return resultat; },
+      () => { donnees[collection] = avant; }
+    );
+  }
+
+  /** Ajoute des lignes déjà validées ; retourne les lignes créées. */
+  function ajouterLot(collection, lot) {
+    const maintenant = horodatage();
+    const creees = lot.map((champs) => nouvelleLigne(champs, maintenant));
+    return remplacer(collection, [...donnees[collection], ...creees], copies(creees));
+  }
+
+  /** Retire les lignes dont l'identifiant est donné ; retourne celles retirées. */
+  function supprimerLot(collection, ids) {
+    const cibles = new Set(ids);
+    const retirees = donnees[collection].filter((e) => cibles.has(e.id));
+    if (retirees.length === 0) return [];
+    return remplacer(collection, donnees[collection].filter((e) => !cibles.has(e.id)), copies(retirees));
+  }
+
+  /**
+   * Remet des lignes complètes (identifiant et horodatages d'origine compris),
+   * pour annuler une suppression. Refuse un identifiant déjà présent :
+   * restaurer deux fois créerait un doublon.
+   */
+  function restaurerLot(collection, lignes) {
+    const presents = new Set(donnees[collection].map((e) => e.id));
+    for (const ligne of lignes) {
+      if (presents.has(ligne.id)) {
+        throw Object.assign(new Error('Cette ligne figure déjà dans le registre.'), { code: 'EXISTE' });
+      }
+      presents.add(ligne.id);
+    }
+    const maintenant = horodatage();
+    const restaurees = lignes.map((e) => ({
+      ...e, creeLe: e.creeLe ?? maintenant, modifieLe: e.modifieLe ?? maintenant
+    }));
+    return remplacer(collection, [...donnees[collection], ...restaurees], copies(restaurees));
+  }
+
+  /**
+   * Applique des modifications déjà validées (`[{ id, champs }]`). Retourne
+   * `null`, sans rien écrire, si un identifiant est inconnu.
+   */
+  function modifierLot(collection, changements) {
+    const parId = new Map(changements.map((c) => [c.id, c.champs]));
+    const liste = donnees[collection];
+    if (liste.filter((e) => parId.has(e.id)).length !== parId.size) return null;
+    const maintenant = horodatage();
+    const apres = liste.map((e) => (parId.has(e.id) ? { ...e, ...parId.get(e.id), modifieLe: maintenant } : e));
+    return remplacer(collection, apres, copies(apres.filter((e) => parId.has(e.id))));
+  }
+
+  /** Une ligne modifiée, ou `null` si elle est absente. */
+  const modifierUn = (collection, id, champs) => modifierLot(collection, [{ id, champs }])?.[0] ?? null;
+
+  /** Vrai si la ligne existait et a été supprimée. */
+  const supprimerUn = (collection, id) => supprimerLot(collection, [id]).length > 0;
 
   return {
     cheminFichier,
@@ -319,7 +439,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     repartirDeZero() {
       const secours = path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS);
       if (fs.existsSync(secours)) {
-        const horo = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        const horo = horodatageFichier();
         fs.copyFileSync(secours, path.join(dossierSauvegardes, `livre-des-recettes-${horo}-avant-remise-a-zero.json`));
         purger(/^livre-des-recettes-.*-avant-remise-a-zero\.json$/, SAUVEGARDES_ETIQUETEES_CONSERVEES);
       }
@@ -336,7 +456,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
      */
     chargerDemo(jeu) {
       const maintenant = horodatage();
-      const avecId = (champs) => ({ id: crypto.randomUUID(), ...champs, creeLe: maintenant, modifieLe: maintenant });
+      const avecId = (champs) => nouvelleLigne(champs, maintenant);
       const nouveau = normaliser({
         parametres: jeu.parametres,
         recettes: (jeu.recettes ?? []).map(avecId),
@@ -359,144 +479,42 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       };
     },
 
-    // ---- Recettes ------------------------------------------------------------
+    // ---- Registres et carnet de clients ----------------------------------------
+    //
+    // Chaque opération unitaire est un cas particulier de l'opération groupée :
+    // une seule implémentation par opération, pour les trois listes.
 
-    /** Toutes les recettes (copies : le stockage reste seul maître des originaux). */
-    listerRecettes() {
-      return donnees.recettes.map((r) => ({ ...r }));
-    },
-
-    /** Ajoute une recette déjà validée. Retourne la recette créée. */
-    ajouterRecette(champs) {
-      return this.ajouterRecettes([champs])[0];
-    },
-
+    /** Toutes les recettes. */
+    listerRecettes: () => copies(donnees.recettes),
+    /** Ajoute une recette déjà validée ; retourne la recette créée. */
+    ajouterRecette: (champs) => ajouterLot('recettes', [champs])[0],
     /** Ajoute un lot de recettes validées en une seule écriture (import). */
-    ajouterRecettes(lot) {
-      const maintenant = horodatage();
-      const creees = lot.map((champs) => ({
-        id: crypto.randomUUID(),
-        ...champs,
-        creeLe: maintenant,
-        modifieLe: maintenant
-      }));
-      return ecrire(
-        () => { donnees.recettes.push(...creees); return creees.map((r) => ({ ...r })); },
-        () => { donnees.recettes.length -= creees.length; }
-      );
-    },
+    ajouterRecettes: (lot) => ajouterLot('recettes', lot),
+    /** Met à jour une recette ; `null` si elle est absente. */
+    modifierRecette: (id, champs) => modifierUn('recettes', id, champs),
+    /** Supprime une recette ; `false` si l'identifiant est inconnu. */
+    supprimerRecette: (id) => supprimerUn('recettes', id),
+    /** Supprime plusieurs recettes en une écriture ; retourne celles supprimées. */
+    supprimerRecettes: (ids) => supprimerLot('recettes', ids),
+    /** Remet des recettes supprimées, identifiant et dates d'origine compris. */
+    restaurerRecettes: (lignes) => restaurerLot('recettes', lignes),
+    /** Modifie plusieurs recettes en une écriture (`null` si l'une est inconnue). */
+    modifierRecettes: (changements) => modifierLot('recettes', changements),
 
-    /** Met à jour une recette. Retourne la recette modifiée, ou `null` si absente. */
-    modifierRecette(id, champs) {
-      const recette = donnees.recettes.find((r) => r.id === id);
-      if (!recette) return null;
-      const avant = { ...recette };
-      return ecrire(
-        () => { Object.assign(recette, champs, { modifieLe: horodatage() }); return { ...recette }; },
-        () => { Object.assign(recette, avant); }
-      );
-    },
-
-    /** Supprime une recette. Retourne `false` si l'identifiant est inconnu. */
-    supprimerRecette(id) {
-      const index = donnees.recettes.findIndex((r) => r.id === id);
-      if (index === -1) return false;
-      const [supprimee] = donnees.recettes.slice(index, index + 1);
-      return ecrire(
-        () => { donnees.recettes.splice(index, 1); return true; },
-        () => { donnees.recettes.splice(index, 0, supprimee); }
-      );
-    },
-
-    // ---- Achats (registre des achats) ----------------------------------------
-
-    /** Tous les achats (copies : le stockage reste seul maître des originaux). */
-    listerAchats() {
-      return donnees.achats.map((a) => ({ ...a }));
-    },
-
-    /** Ajoute un achat déjà validé. Retourne l'achat créé. */
-    ajouterAchat(champs) {
-      return this.ajouterAchats([champs])[0];
-    },
-
-    /** Ajoute un lot d'achats validés en une seule écriture (import). */
-    ajouterAchats(lot) {
-      const maintenant = horodatage();
-      const crees = lot.map((champs) => ({
-        id: crypto.randomUUID(),
-        ...champs,
-        creeLe: maintenant,
-        modifieLe: maintenant
-      }));
-      return ecrire(
-        () => { donnees.achats.push(...crees); return crees.map((a) => ({ ...a })); },
-        () => { donnees.achats.length -= crees.length; }
-      );
-    },
-
-    /** Met à jour un achat. Retourne l'achat modifié, ou `null` si absent. */
-    modifierAchat(id, champs) {
-      const achat = donnees.achats.find((a) => a.id === id);
-      if (!achat) return null;
-      const avant = { ...achat };
-      return ecrire(
-        () => { Object.assign(achat, champs, { modifieLe: horodatage() }); return { ...achat }; },
-        () => { Object.assign(achat, avant); }
-      );
-    },
-
-    /** Supprime un achat. Retourne `false` si l'identifiant est inconnu. */
-    supprimerAchat(id) {
-      const index = donnees.achats.findIndex((a) => a.id === id);
-      if (index === -1) return false;
-      const [supprime] = donnees.achats.slice(index, index + 1);
-      return ecrire(
-        () => { donnees.achats.splice(index, 1); return true; },
-        () => { donnees.achats.splice(index, 0, supprime); }
-      );
-    },
-
-    // ---- Clients -------------------------------------------------------------
+    listerAchats: () => copies(donnees.achats),
+    ajouterAchat: (champs) => ajouterLot('achats', [champs])[0],
+    ajouterAchats: (lot) => ajouterLot('achats', lot),
+    modifierAchat: (id, champs) => modifierUn('achats', id, champs),
+    supprimerAchat: (id) => supprimerUn('achats', id),
+    supprimerAchats: (ids) => supprimerLot('achats', ids),
+    restaurerAchats: (lignes) => restaurerLot('achats', lignes),
 
     /** Tous les clients, triés par nom. */
-    listerClients() {
-      return donnees.clients
-        .map((c) => ({ ...c }))
-        .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' }));
-    },
-
-    /** Ajoute un client déjà validé. Retourne le client créé. */
-    ajouterClient(champs) {
-      const maintenant = horodatage();
-      const cree = { id: crypto.randomUUID(), ...champs, creeLe: maintenant, modifieLe: maintenant };
-      return ecrire(
-        () => { donnees.clients.push(cree); return { ...cree }; },
-        () => { donnees.clients.pop(); }
-      );
-    },
-
-    /** Met à jour un client. Retourne le client modifié, ou `null` si absent. */
-    modifierClient(id, champs) {
-      const client = donnees.clients.find((c) => c.id === id);
-      if (!client) return null;
-      const avant = { ...client };
-      return ecrire(
-        () => { Object.assign(client, champs, { modifieLe: horodatage() }); return { ...client }; },
-        () => { Object.assign(client, avant); }
-      );
-    },
-
-    /** Supprime un client. Retourne `false` si l'identifiant est inconnu. */
-    supprimerClient(id) {
-      const index = donnees.clients.findIndex((c) => c.id === id);
-      if (index === -1) return false;
-      const [supprime] = donnees.clients.slice(index, index + 1);
-      return ecrire(
-        () => { donnees.clients.splice(index, 1); return true; },
-        () => { donnees.clients.splice(index, 0, supprime); }
-      );
-    },
+    listerClients: () => copies(donnees.clients)
+      .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' })),
+    ajouterClient: (champs) => ajouterLot('clients', [champs])[0],
+    modifierClient: (id, champs) => modifierUn('clients', id, champs),
+    supprimerClient: (id) => supprimerUn('clients', id),
 
     // ---- Paramètres ----------------------------------------------------------
 
@@ -523,7 +541,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     creerSauvegarde(etiquette) {
       if (!fs.existsSync(cheminFichier)) return null;
       fs.mkdirSync(dossierSauvegardes, { recursive: true });
-      const horo = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const horo = horodatageFichier();
       const nom = `livre-des-recettes-${horo}-${etiquette}.json`;
       fs.copyFileSync(cheminFichier, path.join(dossierSauvegardes, nom));
       purger(new RegExp(`^livre-des-recettes-.*-${etiquette}\\.json$`), SAUVEGARDES_ETIQUETEES_CONSERVEES);
@@ -559,7 +577,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       // Mise de côté du fichier courant (même corrompu : ce sont des octets).
       if (fs.existsSync(cheminFichier)) {
         fs.mkdirSync(dossierSauvegardes, { recursive: true });
-        const horo = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        const horo = horodatageFichier();
         fs.copyFileSync(cheminFichier, path.join(dossierSauvegardes, `livre-des-recettes-${horo}-avant-restauration.json`));
         purger(/^livre-des-recettes-.*-avant-restauration\.json$/, SAUVEGARDES_ETIQUETEES_CONSERVEES);
       }

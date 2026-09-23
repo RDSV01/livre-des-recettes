@@ -8,11 +8,16 @@
  */
 
 import ExcelJS from 'exceljs';
-import { formaterDate } from '../partage/dates.js';
+import { formaterDate, aujourdHuiIso } from '../partage/dates.js';
 import { symboleDevise } from '../partage/montants.js';
+import { COULEURS, identiteEntreprise } from './commun.js';
 
-const COULEUR_ENTETE = 'FFE9EDF5';
-const COULEUR_TOTAL = 'FFF3F5FA';
+/** Couleur de la palette commune au format d'ExcelJS (« FFE9EDF5 »). */
+const argb = (hex) => `FF${hex.slice(1).toUpperCase()}`;
+
+const COULEUR_ENTETE = argb(COULEURS.fondEntete);
+const COULEUR_TOTAL = argb(COULEURS.fondTotal);
+const COULEUR_SECONDAIRE = argb(COULEURS.secondaire);
 
 /** Génère le classeur ; l'appelant l'écrit où il veut (`classeur.xlsx.write(...)`). */
 export async function genererXlsx(registre, parametres) {
@@ -30,20 +35,16 @@ export async function genererXlsx(registre, parametres) {
     const ligne = feuille.addRow([parametres.nomEntreprise]);
     ligne.font = { bold: true, size: 14 };
   }
-  const identite = [
-    parametres.siren && `SIREN ${parametres.siren}`,
-    parametres.siret && `SIRET ${parametres.siret}`,
-    parametres.adresse
-  ].filter(Boolean).join(' · ');
+  const identite = identiteEntreprise(parametres).join(' · ');
   if (identite) {
-    feuille.addRow([identite]).font = { color: { argb: 'FF6B7280' }, size: 10 };
+    feuille.addRow([identite]).font = { color: { argb: COULEUR_SECONDAIRE }, size: 10 };
   }
   const titre = feuille.addRow([`${registre.titreDocument} - ${registre.titrePeriode}`]);
   titre.font = { bold: true, size: 12 };
   feuille.addRow([
-    `Édité le ${formaterDate(new Date().toISOString().slice(0, 10), parametres.formatDate)}` +
+    `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}` +
     ` · ${registre.resume}`
-  ]).font = { color: { argb: 'FF6B7280' }, size: 10 };
+  ]).font = { color: { argb: COULEUR_SECONDAIRE }, size: 10 };
   feuille.addRow([]);
 
   // ---- En-tête du tableau --------------------------------------------------

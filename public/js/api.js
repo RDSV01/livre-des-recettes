@@ -37,6 +37,10 @@ export const api = {
   modifierRecette: (id, recette) => requete(`/api/recettes/${id}`, { methode: 'PUT', corps: recette }),
   supprimerRecette: (id) => requete(`/api/recettes/${id}`, { methode: 'DELETE' }),
   importerRecettes: (demande) => requete('/api/recettes/import', { methode: 'POST', corps: demande }),
+  // Opérations groupées, en une seule écriture (voir `src/routes/lots.js`).
+  supprimerRecettes: (ids) => requete('/api/recettes/lot/supprimer', { methode: 'POST', corps: { ids } }),
+  restaurerRecettes: (lignes) => requete('/api/recettes/lot/restaurer', { methode: 'POST', corps: { lignes } }),
+  modifierRecettes: (lignes) => requete('/api/recettes/lot', { methode: 'PUT', corps: { lignes } }),
 
   // Achats
   listerAchats: () => requete('/api/achats'),
@@ -45,6 +49,8 @@ export const api = {
   modifierAchat: (id, achat) => requete(`/api/achats/${id}`, { methode: 'PUT', corps: achat }),
   supprimerAchat: (id) => requete(`/api/achats/${id}`, { methode: 'DELETE' }),
   importerAchats: (demande) => requete('/api/achats/import', { methode: 'POST', corps: demande }),
+  supprimerAchats: (ids) => requete('/api/achats/lot/supprimer', { methode: 'POST', corps: { ids } }),
+  restaurerAchats: (lignes) => requete('/api/achats/lot/restaurer', { methode: 'POST', corps: { lignes } }),
 
   // Sauvegardes
   listerSauvegardes: () => requete('/api/sauvegardes'),

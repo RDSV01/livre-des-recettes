@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { creerStockage, sauvegardesObsoletes } from '../src/stockage.js';
+import { aujourdHuiIso } from '../src/partage/dates.js';
 
 function dossierTemporaire() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-test-'));
@@ -353,4 +354,62 @@ test('cycle complet des clients, triés par nom et persistés', (t) => {
   // Persistance après réouverture.
   const second = ouvrir();
   assert.deepEqual(second.listerClients().map((c) => c.nom), ['Atelier Alpha']);
+});
+
+// ---- Opérations groupées ---------------------------------------------------------
+
+test('une suppression groupée se fait en une écriture et s’annule à l’identique', (t) => {
+  const { ouvrir } = environnement(t);
+  const stockage = ouvrir();
+  const [a, b] = stockage.ajouterRecettes([
+    { ...CHAMPS, client: 'A' }, { ...CHAMPS, client: 'B' }, { ...CHAMPS, client: 'C' }
+  ]);
+  const c = stockage.listerRecettes().find((r) => r.client === 'C');
+
+  const supprimees = stockage.supprimerRecettes([a.id, c.id, 'inconnu']);
+  assert.deepEqual(supprimees.map((r) => r.client), ['A', 'C'], 'un identifiant inconnu est ignoré');
+  assert.deepEqual(stockage.listerRecettes().map((r) => r.client), ['B']);
+
+  // Restaurer rend les mêmes lignes : même identifiant, même date de création.
+  stockage.restaurerRecettes(supprimees);
+  const relues = ouvrir().listerRecettes();
+  assert.equal(relues.length, 3, 'la restauration est bien écrite sur le disque');
+  const a2 = relues.find((r) => r.client === 'A');
+  assert.equal(a2.id, a.id);
+  assert.equal(a2.creeLe, a.creeLe);
+  assert.ok(relues.some((r) => r.id === b.id));
+
+  // Restaurer deux fois créerait un doublon : refusé, rien n'est écrit.
+  assert.throws(() => stockage.restaurerRecettes(supprimees), { code: 'EXISTE' });
+  assert.equal(stockage.listerRecettes().length, 3);
+});
+
+test('une modification groupée est en tout ou rien', (t) => {
+  const { ouvrir } = environnement(t);
+  const stockage = ouvrir();
+  const [a, b] = stockage.ajouterRecettes([{ ...CHAMPS, client: 'A' }, { ...CHAMPS, client: 'B' }]);
+
+  // Un identifiant inconnu fait tout refuser, sans rien modifier.
+  assert.equal(stockage.modifierRecettes([
+    { id: a.id, champs: { ...CHAMPS, client: 'A', categorie: 'ventes' } },
+    { id: 'inconnu', champs: CHAMPS }
+  ]), null);
+  assert.ok(stockage.listerRecettes().every((r) => !r.categorie));
+
+  const modifiees = stockage.modifierRecettes([
+    { id: a.id, champs: { ...CHAMPS, client: 'A', categorie: 'ventes' } },
+    { id: b.id, champs: { ...CHAMPS, client: 'B', categorie: 'ventes' } }
+  ]);
+  assert.equal(modifiees.length, 2);
+  assert.ok(ouvrir().listerRecettes().every((r) => r.categorie === 'ventes'));
+});
+
+test('la sauvegarde quotidienne porte la date locale', (t) => {
+  const { sauvegardes: dossierSauvegardes, ouvrir } = environnement(t);
+  const stockage = ouvrir();
+  stockage.ajouterRecette(CHAMPS);
+  stockage.ajouterRecette(CHAMPS);
+  // Nommée d'après le calendrier de l'utilisateur, et non l'heure universelle
+  // qui, entre minuit et 2 h, datait encore la copie de la veille.
+  assert.ok(fs.readdirSync(dossierSauvegardes).includes(`livre-des-recettes-${aujourdHuiIso()}.json`));
 });

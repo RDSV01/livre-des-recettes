@@ -64,6 +64,12 @@ export const PARAMETRES_DEFAUT = {
   // régime de bénéfices et du taux de cotisations de cette part. Ignorée pour
   // les autres types d'activité, qui portent déjà la leur.
   naturePrestations: 'prestations',
+  // Deux réglages qui ne servent qu'à l'estimation de ce que l'URSSAF
+  // prélèvera : l'option pour le versement libératoire de l'impôt sur le
+  // revenu, et l'immatriculation comme artisan, dont le taux de contribution
+  // à la formation professionnelle diffère de celui d'un commerçant.
+  versementLiberatoire: false,
+  activiteArtisanale: false,
   devise: 'EUR',
   formatDate: 'JJ/MM/AAAA',
   modesPersonnalises: [],
@@ -73,6 +79,10 @@ export const PARAMETRES_DEFAUT = {
   dernierePeriodeDeclaree: '',
   // Options d'interface, désactivables dans les paramètres.
   alertesNumerotation: true,
+  // Numéros de facture que l'utilisateur a déclarés normaux (facture annulée,
+  // facture réglée en plusieurs fois) : ils ne sont plus signalés comme
+  // manquants ou en double.
+  numerosIgnores: [],
   alerteRecetteSimilaire: true,
   suiviSeuils: true,
   // Vrai tant que le livre contient le jeu de démonstration : un bandeau

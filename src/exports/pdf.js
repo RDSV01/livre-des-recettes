@@ -8,13 +8,14 @@
  * Les polices standard du PDF (Helvetica) utilisent l'encodage WinAnsi : les
  * espaces insécables produits par `Intl.NumberFormat` (U+202F, U+00A0) doivent
  * être remplacés avant écriture, d'où le passage systématique par `texteSur`
- * (voir `pdf-commun.js`, partagé avec le rapport annuel).
+ * (voir `commun.js`, partagé avec le rapport annuel).
  */
 
-import PDFDocument from 'pdfkit';
-import { formaterDate } from '../partage/dates.js';
+import { formaterDate, aujourdHuiIso } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
-import { texteSur, MARGE, COULEURS } from './pdf-commun.js';
+import {
+  texteSur, MARGE, COULEURS, identiteEntreprise, creerDocumentPdf, numeroterPages
+} from './commun.js';
 
 const TAILLE_TEXTE = 9;
 const REMPLISSAGE_CELLULE = 5;
@@ -36,14 +37,7 @@ export function genererPdf(registre, parametres, flux) {
   const DEBUT_MONTANT = COLONNES.slice(0, INDEX_MONTANT).reduce((acc, c) => acc + c.largeurPdf, 0);
 
   const titreComplet = `${registre.titreDocument} - ${registre.titrePeriode}`;
-  const doc = new PDFDocument({
-    size: 'A4',
-    layout: 'landscape',
-    margin: MARGE,
-    bufferPages: true,
-    info: { Title: titreComplet, Author: parametres.nomEntreprise || 'Livre des recettes' }
-  });
-  doc.pipe(flux);
+  const doc = creerDocumentPdf(flux, { titre: titreComplet, parametres, paysage: true });
 
   const basDePage = () => doc.page.height - MARGE - 15;
   const largeurCellule = (colonne) => colonne.largeurPdf - REMPLISSAGE_CELLULE * 2;
@@ -54,19 +48,14 @@ export function genererPdf(registre, parametres, flux) {
       doc.font('Helvetica-Bold').fontSize(15).fillColor(COULEUR_TEXTE)
         .text(texteSur(parametres.nomEntreprise), MARGE, MARGE);
     }
-    const identite = [
-      parametres.siren && `SIREN ${parametres.siren}`,
-      parametres.siret && `SIRET ${parametres.siret}`,
-      parametres.adresse,
-      parametres.activite
-    ].filter(Boolean).join('  ·  ');
+    const identite = identiteEntreprise(parametres).join('  ·  ');
     if (identite) {
       doc.font('Helvetica').fontSize(9).fillColor(COULEUR_SECONDAIRE)
         .text(texteSur(identite), { width: LARGEUR_TABLEAU });
     }
     doc.moveDown(0.8);
     doc.font('Helvetica-Bold').fontSize(13).fillColor(COULEUR_TEXTE).text(titreComplet);
-    const sousTitre = `Édité le ${formaterDate(new Date().toISOString().slice(0, 10), parametres.formatDate)}` +
+    const sousTitre = `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}` +
       `  ·  ${registre.resume}` +
       `  ·  total ${texteSur(formaterMontant(registre.total, parametres.devise))}`;
     doc.font('Helvetica').fontSize(9).fillColor(COULEUR_SECONDAIRE).text(texteSur(sousTitre));
@@ -176,22 +165,7 @@ export function genererPdf(registre, parametres, flux) {
     }
   }
 
-  // ---- Numérotation des pages ----------------------------------------------
-  const pages = doc.bufferedPageRange();
-  for (let i = 0; i < pages.count; i += 1) {
-    doc.switchToPage(i);
-    // Écrire sous la marge basse déclencherait l'ajout d'une page :
-    // on neutralise la marge le temps d'écrire le pied de page.
-    const margeBasse = doc.page.margins.bottom;
-    doc.page.margins.bottom = 0;
-    doc.font('Helvetica').fontSize(8).fillColor(COULEUR_SECONDAIRE)
-      .text(`Page ${i + 1} / ${pages.count}`, MARGE, doc.page.height - MARGE + 8, {
-        width: LARGEUR_TABLEAU,
-        align: 'right',
-        lineBreak: false
-      });
-    doc.page.margins.bottom = margeBasse;
-  }
+  numeroterPages(doc, { largeur: LARGEUR_TABLEAU });
 
   doc.end();
 }

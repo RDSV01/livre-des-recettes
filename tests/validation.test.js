@@ -231,3 +231,24 @@ test('les modes personnalisés reçoivent un code stable et refusent les doublon
     modesPersonnalises: [{ libelle: 'Lydia' }, { libelle: 'lydia' }]
   }).erreurs.modesPersonnalises);
 });
+
+test('versement libératoire et activité artisanale sont des booléens, faux par défaut', () => {
+  const { valeurs } = validerParametres({ typeActivite: 'prestations' });
+  assert.equal(valeurs.versementLiberatoire, false);
+  assert.equal(valeurs.activiteArtisanale, false);
+  const coches = validerParametres({ typeActivite: 'prestations', versementLiberatoire: true, activiteArtisanale: 'on' });
+  assert.equal(coches.valeurs.versementLiberatoire, true);
+  assert.equal(coches.valeurs.activiteArtisanale, true);
+});
+
+test('les numéros ignorés sont nettoyés, et conservés quand la requête les omet', () => {
+  const { valeurs } = validerParametres({ numerosIgnores: [' FAC-015 ', 'fac-015', '', 'FAC-003'] });
+  assert.deepEqual(valeurs.numerosIgnores, ['FAC-015', 'FAC-003'], 'doublons de casse fusionnés');
+
+  // Absente de la requête, la liste n'est pas renvoyée : l'enregistrement
+  // garde alors celle qui existe, au lieu de l'effacer en silence.
+  assert.equal('numerosIgnores' in validerParametres({}).valeurs, false);
+
+  assert.ok(validerParametres({ numerosIgnores: 'FAC-015' }).erreurs.numerosIgnores, 'une liste est exigée');
+  assert.ok(validerParametres({ numerosIgnores: ['x'.repeat(101)] }).erreurs.numerosIgnores);
+});

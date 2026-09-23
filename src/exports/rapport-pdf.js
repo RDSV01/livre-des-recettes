@@ -9,12 +9,13 @@
  * polices standard du PDF ignorent les espaces insécables des montants.
  */
 
-import PDFDocument from 'pdfkit';
-import { formaterDate } from '../partage/dates.js';
+import { formaterDate, aujourdHuiIso } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
 import { libelleCategorieCourt } from '../partage/constantes.js';
 import { libelleActivite } from '../partage/seuils.js';
-import { texteSur, MARGE, COULEURS } from './pdf-commun.js';
+import {
+  texteSur, MARGE, COULEURS, identiteEntreprise, creerDocumentPdf, numeroterPages
+} from './commun.js';
 
 const LARGEUR = 515;
 const TAILLE_TEXTE = 9;
@@ -53,13 +54,7 @@ function colonnesDetail(avecCategorie) {
  */
 export function genererRapportPdf(rapport, parametres, flux) {
   const titre = `Rapport annuel ${rapport.annee}`;
-  const doc = new PDFDocument({
-    size: 'A4',
-    margin: MARGE,
-    bufferPages: true,
-    info: { Title: titre, Author: parametres.nomEntreprise || 'Livre des recettes' }
-  });
-  doc.pipe(flux);
+  const doc = creerDocumentPdf(flux, { titre, parametres });
 
   const euros = (montant) => texteSur(formaterMontant(montant, parametres.devise));
   const basDePage = () => doc.page.height - MARGE - 18;
@@ -99,12 +94,7 @@ export function genererRapportPdf(rapport, parametres, flux) {
       doc.font('Helvetica-Bold').fontSize(16).fillColor(COULEURS.texte)
         .text(texteSur(parametres.nomEntreprise), MARGE, MARGE, { width: LARGEUR });
     }
-    const identite = [
-      parametres.siren && `SIREN ${parametres.siren}`,
-      parametres.siret && `SIRET ${parametres.siret}`,
-      parametres.adresse,
-      parametres.activite
-    ].filter(Boolean).join('  ·  ');
+    const identite = identiteEntreprise(parametres).join('  ·  ');
     if (identite) {
       doc.font('Helvetica').fontSize(9).fillColor(COULEURS.secondaire)
         .text(texteSur(identite), { width: LARGEUR });
@@ -116,7 +106,7 @@ export function genererRapportPdf(rapport, parametres, flux) {
     // Le libellé de l'activité porte déjà sa catégorie de bénéfices
     // (« Activité libérale (BNC) ») : la répéter n'apprendrait rien.
     const sousTitre = [
-      `Édité le ${formaterDate(new Date().toISOString().slice(0, 10), parametres.formatDate)}`,
+      `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}`,
       libelleActivite(parametres)
     ].filter(Boolean).join('  ·  ');
     doc.font('Helvetica').fontSize(9).fillColor(COULEURS.secondaire).text(texteSur(sousTitre));
@@ -390,23 +380,7 @@ export function genererRapportPdf(rapport, parametres, flux) {
     );
   }
 
-  // ---- Pied de page -------------------------------------------------------------
-  const pages = doc.bufferedPageRange();
-  for (let i = 0; i < pages.count; i += 1) {
-    doc.switchToPage(i);
-    // Écrire sous la marge basse déclencherait l'ajout d'une page :
-    // on la neutralise le temps d'écrire le pied.
-    const margeBasse = doc.page.margins.bottom;
-    doc.page.margins.bottom = 0;
-    doc.font('Helvetica').fontSize(8).fillColor(COULEURS.secondaire)
-      .text(texteSur(`${titre}  ·  document de gestion interne`), MARGE, doc.page.height - MARGE + 8, {
-        width: LARGEUR, align: 'left', lineBreak: false
-      })
-      .text(`Page ${i + 1} / ${pages.count}`, MARGE, doc.page.height - MARGE + 8, {
-        width: LARGEUR, align: 'right', lineBreak: false
-      });
-    doc.page.margins.bottom = margeBasse;
-  }
+  numeroterPages(doc, { largeur: LARGEUR, mention: `${titre}  ·  document de gestion interne` });
 
   doc.end();
 }

@@ -12,13 +12,10 @@
 
 import { api } from './api.js';
 import { icone } from './icones.js';
-import { echapperHtml } from './ui.js';
+import { echapperHtml, dialogueTemporaire, mouvementReduit } from './ui.js';
 
 /** Temps entre deux points, assez long pour suivre des yeux. */
 const DELAI_POINT = 260;
-
-/** L'utilisateur préfère-t-il moins de mouvement ? */
-const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const pause = (ms) => new Promise((suite) => setTimeout(suite, ms));
 
@@ -63,91 +60,72 @@ function conclusion(points, nombre) {
  * @returns {Promise<boolean>} vrai si l'utilisateur confirme le téléchargement.
  */
 export function controlerAvantExport({ titre, periodeLisible, periode, registre = '' }) {
-  return new Promise((resoudre) => {
-    const dialogue = document.createElement('dialog');
-    dialogue.className = 'dialogue-controle';
-    dialogue.setAttribute('aria-labelledby', 'titre-controle-export');
-    dialogue.innerHTML = `
-      <div class="corps-dialogue">
-        <h2 id="titre-controle-export">Vérification avant export</h2>
-        <p class="sous-titre-controle">${echapperHtml(titre)} · ${echapperHtml(periodeLisible)}</p>
-        <ul class="liste-controle" aria-live="polite"></ul>
-        <p class="conclusion-controle" hidden></p>
-        <div class="pied-dialogue">
-          <button type="button" class="btn btn-secondaire" data-role="annuler">Annuler</button>
-          <button type="button" class="btn btn-primaire" data-role="ok" disabled>
-            ${icone('telecharger', { taille: 16 })}<span>Télécharger</span>
-          </button>
-        </div>
-      </div>`;
-    document.body.appendChild(dialogue);
+  // Le focus retourne au bouton de format d'où le contrôle est parti.
+  const { dialogue, reponse } = dialogueTemporaire((idTitre) => `
+    <div class="corps-dialogue">
+      <h2 id="${idTitre}">Vérification avant export</h2>
+      <p class="sous-titre-controle">${echapperHtml(titre)} · ${echapperHtml(periodeLisible)}</p>
+      <ul class="liste-controle" aria-live="polite"></ul>
+      <p class="conclusion-controle" hidden></p>
+      <div class="pied-dialogue">
+        <button type="button" class="btn btn-secondaire" data-role="annuler">Annuler</button>
+        <button type="button" class="btn btn-primaire" data-role="ok" disabled>
+          ${icone('telecharger', { taille: 16 })}<span>Télécharger</span>
+        </button>
+      </div>
+    </div>`, 'dialogue-controle');
 
-    const liste = dialogue.querySelector('.liste-controle');
-    const zoneConclusion = dialogue.querySelector('.conclusion-controle');
-    const boutonOk = dialogue.querySelector('[data-role="ok"]');
+  const liste = dialogue.querySelector('.liste-controle');
+  const zoneConclusion = dialogue.querySelector('.conclusion-controle');
+  const boutonOk = dialogue.querySelector('[data-role="ok"]');
 
-    // Le focus retourne au bouton de format d'où le contrôle est parti.
-    const origine = document.activeElement;
-    const terminer = (resultat) => {
-      dialogue.close();
-      dialogue.remove();
-      if (origine instanceof HTMLElement && origine.isConnected) origine.focus();
-      resoudre(resultat);
-    };
-    boutonOk.addEventListener('click', () => terminer(true));
-    dialogue.querySelector('[data-role="annuler"]').addEventListener('click', () => terminer(false));
-    dialogue.addEventListener('cancel', (evenement) => {
-      evenement.preventDefault();
-      terminer(false);
-    });
-    dialogue.showModal();
+  /** Ajoute un point à la liste ; `anime` déclenche son apparition. */
+  const ajouterPoint = (point, anime) => {
+    const apparence = APPARENCE[point.etat] ?? APPARENCE.attention;
+    const element = document.createElement('li');
+    element.className = `point-controle ${apparence.classe}${anime ? ' apparait' : ''}`;
+    element.innerHTML =
+      `<span class="marque-controle">${icone(apparence.icone, { taille: 18 })}</span>` +
+      `<span class="texte-controle"><strong>${echapperHtml(point.libelle)}</strong>` +
+      `<span>${echapperHtml(point.detail)}</span></span>`;
+    liste.appendChild(element);
+  };
 
-    /** Ajoute un point à la liste ; `anime` déclenche son apparition. */
-    const ajouterPoint = (point, anime) => {
-      const apparence = APPARENCE[point.etat] ?? APPARENCE.attention;
-      const element = document.createElement('li');
-      element.className = `point-controle ${apparence.classe}${anime ? ' apparait' : ''}`;
-      element.innerHTML =
-        `<span class="marque-controle">${icone(apparence.icone, { taille: 18 })}</span>` +
-        `<span class="texte-controle"><strong>${echapperHtml(point.libelle)}</strong>` +
-        `<span>${echapperHtml(point.detail)}</span></span>`;
-      liste.appendChild(element);
-    };
+  const afficherConclusion = ({ classe, texte }) => {
+    zoneConclusion.className = `conclusion-controle ${classe}`;
+    zoneConclusion.textContent = texte;
+    zoneConclusion.hidden = false;
+    boutonOk.disabled = false;
+    boutonOk.focus();
+  };
 
-    const afficherConclusion = ({ classe, texte }) => {
-      zoneConclusion.className = `conclusion-controle ${classe}`;
-      zoneConclusion.textContent = texte;
-      zoneConclusion.hidden = false;
-      boutonOk.disabled = false;
-      boutonOk.focus();
-    };
-
-    (async () => {
-      liste.innerHTML = '<li class="point-controle en-cours">Analyse du registre…</li>';
-      let rapport;
-      try {
-        rapport = await api.controlerExport(periode, registre);
-      } catch (erreur) {
-        // Le contrôle n'est qu'une aide : s'il échoue, l'export reste possible.
-        liste.innerHTML = '';
-        ajouterPoint({
-          etat: 'attention',
-          libelle: 'Contrôle indisponible',
-          detail: `${erreur.message}. Le téléchargement reste possible.`
-        }, false);
-        afficherConclusion({ classe: 'attention', texte: 'La vérification n’a pas pu être menée.' });
-        return;
-      }
-
+  (async () => {
+    liste.innerHTML = '<li class="point-controle en-cours">Analyse du registre…</li>';
+    let rapport;
+    try {
+      rapport = await api.controlerExport(periode, registre);
+    } catch (erreur) {
+      // Le contrôle n'est qu'une aide : s'il échoue, l'export reste possible.
       liste.innerHTML = '';
-      const anime = !mouvementReduit();
-      for (const point of rapport.points) {
-        ajouterPoint(point, anime);
-        if (anime) await pause(DELAI_POINT);
-        // La modale a pu être fermée pendant l'animation.
-        if (!dialogue.isConnected) return;
-      }
-      afficherConclusion(conclusion(rapport.points, rapport.nombre));
-    })();
-  });
+      ajouterPoint({
+        etat: 'attention',
+        libelle: 'Contrôle indisponible',
+        detail: `${erreur.message}. Le téléchargement reste possible.`
+      }, false);
+      afficherConclusion({ classe: 'attention', texte: 'La vérification n’a pas pu être menée.' });
+      return;
+    }
+
+    liste.innerHTML = '';
+    const anime = !mouvementReduit();
+    for (const point of rapport.points) {
+      ajouterPoint(point, anime);
+      if (anime) await pause(DELAI_POINT);
+      // La modale a pu être fermée pendant l'animation.
+      if (!dialogue.isConnected) return;
+    }
+    afficherConclusion(conclusion(rapport.points, rapport.nombre));
+  })();
+
+  return reponse;
 }

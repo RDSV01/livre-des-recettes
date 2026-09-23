@@ -13,36 +13,12 @@ import { genererPdf } from '../exports/pdf.js';
 import { genererRapportPdf } from '../exports/rapport-pdf.js';
 import { rapportAnnuel } from '../rapport-annuel.js';
 import { controlerRecettes, controlerAchats } from '../controle-export.js';
+import { lireAnnee, lirePeriode } from './requetes.js';
 
-/**
- * Lit et valide l'année demandée. Répond 400 et retourne `null` si elle
- * manque ou sort des bornes plausibles.
- */
-function lireAnnee(req, res) {
-  const annee = Number.parseInt(req.query.annee, 10);
-  if (!Number.isInteger(annee) || annee < 2000 || annee > 2100) {
-    res.status(400).json({ erreur: 'Paramètre « annee » manquant ou invalide.' });
-    return null;
-  }
-  return annee;
-}
-
-/**
- * Lit et valide la période demandée (`annee` obligatoire, `mois` facultatif).
- * Répond 400 et retourne `null` si la période est invalide.
- */
-function lirePeriode(req, res) {
-  const annee = lireAnnee(req, res);
-  if (annee === null) return null;
-  let mois;
-  if (req.query.mois !== undefined && req.query.mois !== '') {
-    mois = Number.parseInt(req.query.mois, 10);
-    if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
-      res.status(400).json({ erreur: 'Paramètre « mois » invalide (1 à 12).' });
-      return null;
-    }
-  }
-  return { annee, mois };
+/** En-têtes d'un fichier à télécharger, sous le nom donné. */
+function telechargement(res, type, nomFichier) {
+  res.setHeader('Content-Type', type);
+  res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);
 }
 
 export function routesExports(stockage) {
@@ -67,8 +43,7 @@ export function routesExports(stockage) {
     routeur.get(`${prefixe}/csv`, (req, res) => {
       const prepare = preparer(req, res);
       if (!prepare) return;
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${prepare.registre.nomFichier}.csv"`);
+      telechargement(res, 'text/csv; charset=utf-8', `${prepare.registre.nomFichier}.csv`);
       res.send(genererCsv(prepare.registre, prepare.parametres));
     });
 
@@ -77,8 +52,7 @@ export function routesExports(stockage) {
         const prepare = preparer(req, res);
         if (!prepare) return;
         const classeur = await genererXlsx(prepare.registre, prepare.parametres);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${prepare.registre.nomFichier}.xlsx"`);
+        telechargement(res, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `${prepare.registre.nomFichier}.xlsx`);
         await classeur.xlsx.write(res);
         res.end();
       } catch (erreur) {
@@ -89,8 +63,7 @@ export function routesExports(stockage) {
     routeur.get(`${prefixe}/pdf`, (req, res) => {
       const prepare = preparer(req, res);
       if (!prepare) return;
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${prepare.registre.nomFichier}.pdf"`);
+      telechargement(res, 'application/pdf', `${prepare.registre.nomFichier}.pdf`);
       genererPdf(prepare.registre, prepare.parametres, res);
     });
 
@@ -132,8 +105,7 @@ export function routesExports(stockage) {
       achats: stockage.listerAchats(),
       parametres
     }, annee);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="rapport-annuel-${annee}.pdf"`);
+    telechargement(res, 'application/pdf', `rapport-annuel-${annee}.pdf`);
     genererRapportPdf(rapport, parametres, res);
   });
 

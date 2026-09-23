@@ -105,3 +105,15 @@ test('suggererNumeroSuivant vaut null sans numéro exploitable', () => {
   // Sans partie numérique finale, rien à incrémenter.
   assert.equal(suggererNumeroSuivant([saisie('CLIENT-X', '2026-01-01T10:00:00Z')]), null);
 });
+
+test('un numéro déclaré normal n’est plus signalé, ni manquant ni en double', () => {
+  const liste = recettes('F-1', 'F-3', 'F-4', 'F-4');
+  const avant = analyserNumerotation(liste);
+  assert.deepEqual(avant.manquants.map((s) => s.numeros), [['F-2']]);
+  assert.equal(avant.doublons.length, 1);
+
+  // Casse et accents ne comptent pas, comme pour les doublons.
+  const apres = analyserNumerotation(liste, { ignores: ['f-2', 'F-4'] });
+  assert.deepEqual(apres.manquants, [], 'la série sans trou restant disparaît');
+  assert.deepEqual(apres.doublons, []);
+});
