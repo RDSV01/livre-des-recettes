@@ -1,5 +1,5 @@
 /**
- * Historique Annuler / Rétablir des actions sur les deux registres.
+ * Historique Annuler / Rétablir des actions sur les registres.
  *
  * Chaque action enregistrée fournit deux fonctions inverses (`annuler`,
  * `retablir`) qui rejouent l'opération via l'API. L'historique vit uniquement
@@ -15,7 +15,7 @@ const pileRetablissement = [];
 /**
  * Enregistre une action qui vient d'être effectuée.
  * @param {{ annuler: () => Promise<void>, retablir: () => Promise<void> }} action
- * @returns {object} l'action enregistrée, à passer à `annulerSi`.
+ * @returns {object} l'action enregistrée, à passer à `annulerAction`.
  */
 export function enregistrerAction(action) {
   pileAnnulation.push(action);
@@ -26,16 +26,24 @@ export function enregistrerAction(action) {
 }
 
 /**
- * Annule `action`, mais seulement si elle est encore la dernière effectuée.
+ * Annule une action précise, depuis le « Annuler » posé là où elle a eu lieu
+ * (une ligne, la barre de sélection).
  *
- * C'est ce que vise le bouton « Annuler » d'un toast : il doit défaire la
- * suppression qu'il annonce, jamais celle qui l'a suivie entre-temps.
+ * La dernière action s'annule comme au clavier, et peut donc se rétablir.
+ * Une action plus ancienne s'annule seule : chaque retour sur place porte sur
+ * ses propres lignes, qu'aucune action suivante n'a touchées (une ligne
+ * retouchée perd son ancien retour). Elle quitte alors l'historique.
  *
- * @returns {Promise<boolean>} faux si une autre action est passée devant.
+ * @returns {Promise<boolean>} faux si l'action n'est plus dans l'historique
+ *   (déjà annulée au clavier, ou trop ancienne).
  */
-export async function annulerSi(action) {
-  if (pileAnnulation.at(-1) !== action) return false;
-  return annuler();
+export async function annulerAction(action) {
+  const rang = pileAnnulation.lastIndexOf(action);
+  if (rang === -1) return false;
+  if (rang === pileAnnulation.length - 1) return annuler();
+  await action.annuler();
+  pileAnnulation.splice(rang, 1);
+  return true;
 }
 
 /** Annule la dernière action. Retourne `false` s'il n'y a rien à annuler. */

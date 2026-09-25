@@ -57,6 +57,15 @@ test('les taux officiels sont bien ceux appliqués, année par année', () => {
   assert.equal(sur1000('2024-06-30', 'liberal'), 211, 'BNC régime général : 21,1 %');
   assert.equal(sur1000('2024-06-30', 'liberalCipav'), 212, 'BNC CIPAV : 21,2 %');
   assert.equal(sur1000('2023-06-15', 'liberal'), 211, 'inchangé sur toute l’année 2023');
+
+  // 2023, d'un bout à l'autre de l'année : les taux du 1er octobre 2022
+  // (vérifiés en septembre 2026 sur les règles du simulateur de l'URSSAF).
+  for (const date of ['2023-01-01', '2023-12-31']) {
+    assert.equal(sur1000(date, 'ventes'), 123, `${date} : vente 12,3 %`);
+    assert.equal(sur1000(date, 'prestations'), 212, `${date} : prestations BIC 21,2 %`);
+    assert.equal(sur1000(date, 'liberal'), 211, `${date} : BNC régime général 21,1 %`);
+    assert.equal(sur1000(date, 'liberalCipav'), 212, `${date} : BNC CIPAV 21,2 %`);
+  }
 });
 
 test('la marche du 1er juillet 2024 tombe au bon jour', () => {

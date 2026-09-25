@@ -46,16 +46,17 @@ const json = (chemin, options) => appel(chemin, options).then((r) => r.json());
 for (const chemin of [
   '/api/systeme', '/api/tableau-de-bord', '/api/recettes', '/api/recettes/annees',
   '/api/achats', '/api/achats/annees', '/api/clients', '/api/parametres', '/api/sauvegardes',
-  '/api/urssaf?annee=2026&type=annee'
+  '/api/urssaf?annee=2026&type=annee', '/api/urssaf/periodes?annee=2026&type=trimestre'
 ]) {
   await verifier(`GET ${chemin}`, 200, () => statut(chemin));
 }
 
 // ---- 2. Interface servie ----------------------------------------------------
 for (const chemin of [
-  '/', '/css/style.css', '/js/app.js', '/js/preferences-vues.js',
-  '/js/controle-export.js', '/partage/doublons.js', '/partage/seuils.js',
-  '/partage/bareme-seuils.js'
+  '/', '/css/theme.css', '/css/style.css', '/polices/commissioner-latin.woff2',
+  '/js/app.js', '/js/preferences-vues.js', '/js/panneau.js', '/js/pieces.js', '/js/accueil.js', '/js/calendrier.js',
+  '/partage/doublons.js', '/partage/seuils.js', '/partage/bareme-seuils.js', '/partage/declarations.js',
+  '/partage/salutations.js', '/partage/acre.js'
 ]) {
   await verifier(`GET ${chemin}`, 200, () => statut(chemin));
 }

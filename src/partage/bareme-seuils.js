@@ -23,7 +23,9 @@
  * par part, sans que l'utilisateur ait à s'en occuper.
  *
  * Sources à vérifier en cas de doute : service-public.fr, urssaf.fr,
- * autoentrepreneur.urssaf.fr, economie.gouv.fr.
+ * autoentrepreneur.urssaf.fr, economie.gouv.fr, et les règles publiées du
+ * simulateur de l'URSSAF (dépôt betagouv/mon-entreprise, dossier
+ * modele-social/règles), qui datent chaque changement de taux.
  *
  * Module partagé serveur / navigateur : aucune dépendance.
  */
@@ -58,7 +60,7 @@ export const BAREMES = [
     aPartirDe: 2026,
     jusqua: 2028,
 
-    /** Achat / revente de marchandises (et fourniture de logement). */
+    /** Ventes de marchandises (achat / revente, et fourniture de logement). */
     marchandises: {
       plafondMicro: 203_100,
       franchiseTva: 85_000,
@@ -71,6 +73,14 @@ export const BAREMES = [
       franchiseTva: 37_500,
       franchiseTvaMajore: 41_250
     },
+
+    /**
+     * Au-delà du seuil majoré, la franchise de TVA cesse dès le jour du
+     * dépassement (`jour`, depuis 2025) ou dès le premier jour du mois du
+     * dépassement (`mois`, auparavant). Le seuil de base dépassé, elle court
+     * dans les deux cas jusqu'au 31 décembre.
+     */
+    finFranchiseMajore: 'jour',
 
     /**
      * Abattements forfaitaires pour frais, en pourcentage du chiffre
@@ -104,6 +114,8 @@ export const BAREMES = [
       franchiseTvaMajore: 41_250
     },
 
+    finFranchiseMajore: 'jour',
+
     abattements: {
       ventes: 71,
       prestations: 50,
@@ -127,6 +139,10 @@ export const BAREMES = [
       franchiseTva: 36_800,
       franchiseTvaMajore: 39_100
     },
+
+    // Avant la réforme de 2025, la TVA était due dès le 1er du mois du
+    // dépassement du seuil majoré.
+    finFranchiseMajore: 'mois',
 
     abattements: {
       ventes: 71,
@@ -164,9 +180,16 @@ export const BAREMES = [
  *    toujours due. Elle dépend de l'immatriculation plus que de l'activité :
  *    0,1 % pour une activité commerciale (ventes comme prestations BIC), 0,3 %
  *    pour une activité artisanale (clé `artisan`, sur tout le chiffre
- *    d'affaires BIC), 0,2 % pour une activité libérale, CIPAV comprise ;
+ *    d'affaires BIC), 0,2 % pour une activité libérale, CIPAV comprise. Ce
+ *    sont les taux que l'URSSAF prélève (règles de son simulateur) : l'article
+ *    L6331-48 du code du travail vise 0,2 % pour toute prestation de services,
+ *    mais l'application suit ce qui est réellement prélevé ;
  *  - `versementLiberatoire` : l'impôt sur le revenu payé avec les
  *    cotisations, pour qui a choisi cette option.
+ *
+ * S'y ajoute `plancherAcre` : le taux de cotisations sociales sous lequel
+ * l'ACRE ne peut pas descendre (voir `FRACTIONS_ACRE`). Seule la CIPAV en a
+ * un : l'ACRE n'y exonère ni la CSG-CRDS ni la retraite complémentaire.
  *
  * Sources de la CFP et du versement libératoire : service-public.gouv.fr
  * (fiche F23459), impots.gouv.fr, et les règles publiées du simulateur de
@@ -175,9 +198,11 @@ export const BAREMES = [
  * 2022, donc avant le plus ancien palier.
  *
  * Restent hors estimation : la taxe pour frais de chambre consulaire (CCI ou
- * chambre de métiers, dont le taux varie selon la région) et la réduction de
- * début d'activité (ACRE). Le montant affiché reste un ordre de grandeur, pas
- * un appel de cotisations.
+ * chambre de métiers, dont le taux varie selon la région) et, pour l'ACRE, la
+ * limite de chiffre d'affaires au-delà de laquelle le taux normal revient (un
+ * revenu égal au plafond annuel de la sécurité sociale, soit 72 818 € de
+ * recettes BNC en 2026). Le montant affiché reste un ordre de grandeur, pas un
+ * appel de cotisations.
  *
  * Une activité mixte n'a pas de taux propre : chacune de ses parts est
  * calculée au sien.
@@ -188,6 +213,26 @@ const FORMATION_PRO = { ventes: 0.1, prestations: 0.1, liberal: 0.2, liberalCipa
 
 /** Versement libératoire, identique sur toute la période couverte. */
 const VERSEMENT_LIBERATOIRE = { ventes: 1, prestations: 1.7, liberal: 2.2, liberalCipav: 2.2 };
+
+/**
+ * ACRE (aide à la création ou à la reprise d'entreprise) : part du taux normal
+ * de cotisations sociales payée pendant l'exonération, selon la date de
+ * création ou de reprise, du plus récent au plus ancien (article D131-6-3 du
+ * code de la sécurité sociale). Le taux réduit est arrondi au dixième de point
+ * SUPÉRIEUR : 75 % de 12,3 % donnent 9,3 %, pas 9,2 %.
+ *
+ * L'exonération court du début d'activité à la fin du 3e trimestre civil qui
+ * suit. Elle ne touche que les cotisations sociales : la formation
+ * professionnelle et le versement libératoire restent dus en entier.
+ *
+ * Avant 2020, l'ACRE des micro-entrepreneurs suivait d'autres règles ; elle
+ * s'achevait de toute façon avant le plus ancien palier ci-dessous.
+ */
+export const FRACTIONS_ACRE = [
+  // Décret 2026-69 du 6 février 2026 : l'exonération passe de 50 % à 25 %.
+  { creeDepuis: '2026-07-01', fraction: 75 },
+  { creeDepuis: '2020-01-01', fraction: 50 }
+];
 
 export const PALIERS_COTISATIONS = [
   {
@@ -200,7 +245,8 @@ export const PALIERS_COTISATIONS = [
     liberal: 25.6,
     liberalCipav: 23.2,
     formationPro: FORMATION_PRO,
-    versementLiberatoire: VERSEMENT_LIBERATOIRE
+    versementLiberatoire: VERSEMENT_LIBERATOIRE,
+    plancherAcre: { liberalCipav: 13.4 }
   },
 
   {
@@ -212,7 +258,8 @@ export const PALIERS_COTISATIONS = [
     liberal: 24.6,
     liberalCipav: 23.2,
     formationPro: FORMATION_PRO,
-    versementLiberatoire: VERSEMENT_LIBERATOIRE
+    versementLiberatoire: VERSEMENT_LIBERATOIRE,
+    plancherAcre: { liberalCipav: 13.9 }
   },
 
   {
@@ -226,7 +273,8 @@ export const PALIERS_COTISATIONS = [
     liberal: 23.1,
     liberalCipav: 23.2,
     formationPro: FORMATION_PRO,
-    versementLiberatoire: VERSEMENT_LIBERATOIRE
+    versementLiberatoire: VERSEMENT_LIBERATOIRE,
+    plancherAcre: { liberalCipav: 13.9 }
   },
 
   {
@@ -240,6 +288,7 @@ export const PALIERS_COTISATIONS = [
     liberal: 21.1,
     liberalCipav: 21.2,
     formationPro: FORMATION_PRO,
-    versementLiberatoire: VERSEMENT_LIBERATOIRE
+    versementLiberatoire: VERSEMENT_LIBERATOIRE,
+    plancherAcre: { liberalCipav: 12.1 }
   }
 ];

@@ -2,8 +2,10 @@
  * Vue « Import CSV », pour les deux registres (recettes et achats), en trois
  * étapes :
  *  1. choix du fichier (clic ou glisser-déposer) ;
- *  2. correspondance des colonnes du fichier avec les champs du registre ;
- *  3. analyse (simulation côté serveur : validation + doublons) puis import.
+ *  2. correspondance de chaque colonne du fichier avec un champ du registre,
+ *     devinée d'après son titre et sa première valeur montrée ;
+ *  3. analyse (simulation côté serveur : validation et doublons), puis import.
+ * La réussite s'affiche dans la carte elle-même.
  *
  * Le registre visé se choisit en tête quand l'activité tient aussi un registre
  * des achats ; sinon seules les recettes sont proposées.
@@ -11,7 +13,8 @@
 
 import { api } from '../api.js';
 import { etat, registreAchatsUtile } from '../etat.js';
-import { echapperHtml, toast } from '../ui.js';
+import { echapperHtml, selecteur, accorder } from '../ui.js';
+import { patienter, halo, annoncer, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
 import { analyserCsv, lireFichierCsv } from '../csv.js';
 import { analyserDateSouple } from '/partage/dates.js';
@@ -52,17 +55,18 @@ function devinerMode(texte, modesPersonnalises) {
 const REGISTRES = {
   recettes: {
     libelle: 'Recettes',
+    nom: ['recette', 'recettes'],
     lien: '#/recettes',
     obligatoires: ['dateEncaissement', 'client', 'montant'],
     importer: (demande) => api.importerRecettes(demande),
     cibles: ({ estMixte }) => [
-      { cle: 'dateEncaissement', libelle: 'Date d’encaissement *', indices: ['date', 'encaissement'] },
-      { cle: 'client', libelle: 'Client *', indices: ['client', 'nom'] },
-      { cle: 'montant', libelle: 'Montant *', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
+      { cle: 'dateEncaissement', libelle: 'Date d’encaissement', indices: ['date', 'encaissement'] },
+      { cle: 'client', libelle: 'Client', indices: ['client', 'nom'] },
+      { cle: 'montant', libelle: 'Montant', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
       { cle: 'libelle', libelle: 'Libellé', indices: ['libelle', 'description', 'objet', 'designation'] },
       { cle: 'modeReglement', libelle: 'Mode de règlement', indices: ['mode', 'paiement', 'reglement'] },
-      { cle: 'numeroFacture', libelle: 'Numéro de facture', indices: ['facture', 'reference'] },
-      ...(estMixte ? [{ cle: 'categorie', libelle: 'Catégorie (vente / prestation)', indices: ['categorie'] }] : [])
+      { cle: 'numeroFacture', libelle: 'N° de facture', indices: ['facture', 'reference'] },
+      ...(estMixte ? [{ cle: 'categorie', libelle: 'Catégorie (vente ou prestation)', indices: ['categorie', 'type'] }] : [])
     ],
     construire: (v, { estMixte, categorieDefaut, modes }) => ({
       dateEncaissement: analyserDateSouple(v('dateEncaissement')) ?? v('dateEncaissement'),
@@ -76,13 +80,14 @@ const REGISTRES = {
   },
   achats: {
     libelle: 'Achats',
+    nom: ['achat', 'achats'],
     lien: '#/achats',
     obligatoires: ['dateReglement', 'fournisseur', 'montant'],
     importer: (demande) => api.importerAchats(demande),
     cibles: () => [
-      { cle: 'dateReglement', libelle: 'Date du règlement *', indices: ['date', 'reglement', 'paiement'] },
-      { cle: 'fournisseur', libelle: 'Fournisseur *', indices: ['fournisseur', 'nom', 'vendeur'] },
-      { cle: 'montant', libelle: 'Montant *', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
+      { cle: 'dateReglement', libelle: 'Date du règlement', indices: ['date', 'reglement', 'paiement'] },
+      { cle: 'fournisseur', libelle: 'Fournisseur', indices: ['fournisseur', 'nom', 'vendeur'] },
+      { cle: 'montant', libelle: 'Montant', indices: ['montant', 'prix', 'somme', 'total', 'ttc'] },
       { cle: 'modeReglement', libelle: 'Mode de paiement', indices: ['mode', 'paiement', 'reglement'] },
       { cle: 'referenceFacture', libelle: 'Référence de la pièce', indices: ['reference', 'facture', 'piece', 'justificatif'] }
     ],
@@ -96,281 +101,293 @@ const REGISTRES = {
   }
 };
 
+const ETAPES = ['Fichier', 'Colonnes', 'Vérification'];
+
 export async function vueImport(conteneur) {
   const estMixte = etat.parametres.typeActivite === 'mixte';
   const modes = etat.parametres.modesPersonnalises;
   const achatsUtiles = registreAchatsUtile();
   let registre = 'recettes';
+  let etape = 1;
   let donneesCsv = null; // { entetes, lignes }
   let nomFichier = '';
+  let colonnes = [];     // champ du registre choisi pour chaque colonne du fichier
+  let lignes = [];       // lignes construites, envoyées au serveur
+  let rapport = null;    // résultat de la simulation
+  let resultat = null;   // résultat de l'import
 
   conteneur.innerHTML = `
-    <header class="entete-vue">
-      <div>
-        <h1>Import CSV</h1>
-        <p>Reprenez l’historique tenu dans un tableur : rien n’est importé sans votre confirmation.</p>
-      </div>
-    </header>
+    <div class="page">
+      <header class="entete-page">
+        <div>
+          <h1>Import CSV</h1>
+          <p class="sous-titre">Reprenez un historique tenu dans un tableur : rien n’est importé sans votre confirmation.</p>
+        </div>
+      </header>
+      <section class="carte" id="import" aria-label="Import CSV"></section>
+    </div>`;
+  const zone = conteneur.querySelector('#import');
 
-    ${achatsUtiles ? `
-    <div class="carte">
-      <h2>Que voulez-vous importer ?</h2>
-      ${/* Deux boutons à bascule, pas des onglets : sans panneau associé ni
-            navigation aux flèches, `role="tab"` promettait un fonctionnement
-            que rien ne tenait. `aria-pressed` décrit ce qui existe vraiment. */ ''}
-      <div class="choix-registre">
-        ${Object.entries(REGISTRES).map(([cle, r]) => `
-          <button type="button" class="btn ${cle === registre ? 'btn-primaire' : 'btn-secondaire'}"
-            data-registre="${cle}" aria-pressed="${cle === registre}">
-            ${echapperHtml(r.libelle)}
-          </button>`).join('')}
-      </div>
-    </div>` : ''}
+  const desc = () => REGISTRES[registre];
+  const cibles = () => desc().cibles({ estMixte });
 
-    <div class="carte" id="etape-fichier">
-      <h2>1. Choisir le fichier</h2>
-      <div class="zone-fichier" id="zone-fichier" role="button" tabindex="0">
-        <div>${icone('import', { taille: 30 })}</div>
-        <strong>Cliquez ici</strong> ou déposez un fichier CSV.<br>
-        <span class="indication">Séparateur « ; » ou « , ». La première ligne doit contenir les en-têtes.</span>
-      </div>
-      <input type="file" id="champ-fichier" accept=".csv,text/csv" hidden>
-    </div>
+  function etapesHtml() {
+    return `<ol class="etapes" aria-label="Étapes de l’import">${ETAPES.map((titre, i) => {
+      const faite = etape > i + 1;
+      return `<li class="etape${etape === i + 1 ? ' active' : ''}${faite ? ' faite' : ''}"${etape === i + 1 ? ' aria-current="step"' : ''}>
+        <span class="num">${faite ? icone('coche', { taille: 13 }) : i + 1}</span>${titre}</li>`;
+    }).join('')}</ol>`;
+  }
 
-    <div class="carte" id="etape-correspondance" hidden>
-      <h2>2. Faire correspondre les colonnes</h2>
-      <p class="resume-filtre" id="resume-fichier"></p>
-      <div class="grille-correspondance" id="grille-correspondance"></div>
-      <div class="actions-formulaire">
-        <button type="button" class="btn btn-primaire" id="bouton-analyser">${icone('liste', { taille: 16 })}<span>Analyser le fichier</span></button>
-      </div>
-    </div>
+  /** Premier contenu non vide d'une colonne : il aide à la reconnaître. */
+  const premiereValeur = (i) => donneesCsv.lignes.map((l) => (l[i] ?? '').trim()).find(Boolean) ?? '';
 
-    <div class="carte rapport-import" id="etape-rapport" hidden></div>`;
+  /** Devine le champ de chaque colonne d'après les en-têtes, sans jamais en donner un à deux colonnes. */
+  function devinerColonnes() {
+    const entetes = donneesCsv.entetes.map(normaliserTexte);
+    colonnes = entetes.map(() => '');
+    for (const cible of cibles()) {
+      for (const indice of cible.indices) {
+        const index = entetes.findIndex((e, i) => e.includes(indice) && colonnes[i] === '');
+        if (index !== -1) { colonnes[index] = cible.cle; break; }
+      }
+    }
+  }
 
-  const refs = {
-    zone: conteneur.querySelector('#zone-fichier'),
-    champFichier: conteneur.querySelector('#champ-fichier'),
-    etapeCorrespondance: conteneur.querySelector('#etape-correspondance'),
-    resumeFichier: conteneur.querySelector('#resume-fichier'),
-    grille: conteneur.querySelector('#grille-correspondance'),
-    boutonAnalyser: conteneur.querySelector('#bouton-analyser'),
-    etapeRapport: conteneur.querySelector('#etape-rapport')
+  function corpsHtml() {
+    if (etape === 1) {
+      return `${achatsUtiles ? `<div class="carte-corps choix-registre">
+          <span class="etiquette-champ" id="i-registre">Registre à compléter</span>
+          <div class="segmente compact" role="group" aria-labelledby="i-registre">
+            ${Object.entries(REGISTRES).map(([cle, r]) => `<button type="button" data-registre="${cle}" aria-pressed="${cle === registre}">
+              ${icone(cle, { taille: 15 })}${r.libelle}</button>`).join('')}
+          </div>
+        </div>` : ''}
+        <label class="depot" id="depot">
+          <span class="tuile">${icone('import', { taille: 22 })}</span>
+          <strong>Déposez un fichier CSV ici</strong>
+          <span>ou cliquez pour le choisir. Séparateur « ; » ou « , », la première ligne portant les titres des colonnes.</span>
+          <input type="file" accept=".csv,text/csv" class="hors-ecran" id="i-fichier">
+        </label>
+        ${donneesCsv ? `<p class="reprise-fichier"><button type="button" class="lien-bouton" id="i-reprendre">Reprendre « ${echapperHtml(nomFichier)} »</button> avec ce registre</p>` : ''}
+        <p class="message-erreur centre" data-erreur></p>`;
+    }
+    if (etape === 2) {
+      const options = `<option value="">Ne pas importer</option>${cibles().map((c) => `<option value="${c.cle}">${echapperHtml(c.libelle)}</option>`).join('')}`;
+      const obligatoires = cibles().filter((c) => desc().obligatoires.includes(c.cle)).map((c) => c.libelle.toLowerCase());
+      return `<p class="resume-registre fichier-importe">${icone('fichier-tableur', { taille: 16 })}<span><strong>${echapperHtml(nomFichier)}</strong> :
+          ${accorder(donneesCsv.lignes.length, 'ligne')}, ${accorder(donneesCsv.entetes.length, 'colonne')}. Colonnes reconnues d’après leur titre, à corriger au besoin.</span></p>
+        <table class="tableau">
+          <thead><tr><th>Colonne du fichier</th><th>Première valeur</th><th>Champ du ${registre === 'achats' ? 'registre' : 'livre'}</th></tr></thead>
+          <tbody>${donneesCsv.entetes.map((entete, i) => `<tr>
+            <td><strong>${echapperHtml(entete || `Colonne ${i + 1}`)}</strong></td>
+            <td class="attenue">${echapperHtml(premiereValeur(i))}</td>
+            <td class="col-correspondance">${selecteur({ id: `i-col-${i}`, etiquette: `Champ pour la colonne ${entete || i + 1}`, options })}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+        ${registre === 'recettes' && estMixte ? `<div class="carte-corps defaut-categorie">
+          <label class="etiquette-champ" for="i-categorie-defaut">Catégorie des lignes qui n’en ont pas</label>
+          ${selecteur({ id: 'i-categorie-defaut', options: '<option value="prestations">Prestation de services</option><option value="ventes">Vente de marchandises</option>' })}
+        </div>` : ''}
+        <p class="message-erreur centre" data-erreur></p>
+        <div class="carte-pied">
+          <span class="attenue">Obligatoires : ${obligatoires.join(', ')}. Les colonnes « Ne pas importer » sont ignorées.</span>
+          <div class="actions">
+            <button type="button" class="btn btn-fantome" data-etape="1">Retour</button>
+            <button type="button" class="btn btn-principal" id="i-analyser">Analyser le fichier${icone('fleche-droite', { taille: 16 })}</button>
+          </div>
+        </div>`;
+    }
+    if (etape === 3) {
+      const [un, plusieurs] = desc().nom;
+      const feminin = registre === 'recettes';
+      const nom = (n) => (n > 1 ? plusieurs : un);
+      return `<div class="carte-corps corps-verification">
+          <ul class="points points-import">
+            <li class="vu">${icone('cercle-valide', { taille: 16 })}<span><strong>${accorder(rapport.valides, `${un} ${feminin ? 'prête' : 'prêt'}`, `${plusieurs} ${feminin ? 'prêtes' : 'prêts'}`)} à importer</strong>
+              ${feminin ? 'Elles rejoindront le livre des recettes' : 'Ils rejoindront le registre des achats'}.</span></li>
+            ${rapport.doublons.length > 0 ? `<li class="vu alerte">${icone('triangle-alerte', { taille: 16 })}<span>
+              <strong>${accorder(rapport.doublons.length, 'doublon détecté', 'doublons détectés')}</strong>
+              Même date, même ${registre === 'achats' ? 'fournisseur' : 'client'}, même montant qu’une ligne déjà enregistrée :
+              ${rapport.doublons.slice(0, 6).map((d) => `ligne ${d.ligne} (${echapperHtml(d.date)}, ${echapperHtml(d.tiers)}, ${echapperHtml(String(d.montant))})`).join(' ; ')}${rapport.doublons.length > 6 ? ` et ${rapport.doublons.length - 6} autres` : ''}.
+              <label class="option-pieces"><input type="checkbox" class="case" id="i-doublons"><span>Importer aussi les doublons</span></label></span></li>` : ''}
+            ${rapport.erreurs.length > 0 ? `<li class="vu erreur">${icone('cercle-alerte', { taille: 16 })}<span>
+              <strong>${accorder(rapport.erreurs.length, 'ligne en erreur', 'lignes en erreur')}, non importée${rapport.erreurs.length > 1 ? 's' : ''}</strong>
+              ${rapport.erreurs.slice(0, 6).map((e) => `ligne ${e.ligne} : ${echapperHtml(Object.values(e.erreurs).join(' '))}`).join(' ; ')}${rapport.erreurs.length > 6 ? ` et ${rapport.erreurs.length - 6} autres` : ''}.</span></li>` : ''}
+            <li class="vu info">${icone('bouclier', { taille: 16 })}<span><strong>Une sauvegarde sera faite juste avant</strong>
+              L’import peut donc être annulé depuis les Paramètres.</span></li>
+          </ul>
+        </div>
+        <p class="message-erreur centre" data-erreur></p>
+        <div class="carte-pied">
+          <span class="attenue">Les numéros de facture du fichier sont repris tels quels.</span>
+          <div class="actions">
+            <button type="button" class="btn btn-fantome" data-etape="2">Retour</button>
+            <button type="button" class="btn btn-principal" id="i-importer" ${rapport.valides + rapport.doublons.length === 0 ? 'disabled' : ''}>
+              ${icone('coche', { taille: 16 })}<span>Importer ${accorder(rapport.valides, nom(rapport.valides))}</span></button>
+          </div>
+        </div>`;
+    }
+    // Étape finale : la réussite s'affiche dans la carte, pas dans un coin de l'écran.
+    const [un, plusieurs] = desc().nom;
+    const n = resultat.importees;
+    return `<div class="reussite-import">
+        <span class="sceau-reussite">${icone('coche', { taille: 30, classe: 'trace-coche' })}</span>
+        <h2>${accorder(n, `${un} importé${registre === 'achats' ? '' : 'e'}`, `${plusieurs} importé${registre === 'achats' ? '' : 'e'}s`)}</h2>
+        <p>${resultat.erreurs.length > 0 ? `${accorder(resultat.erreurs.length, 'ligne en erreur ignorée', 'lignes en erreur ignorées')}. ` : ''}${resultat.sauvegarde ? 'Une sauvegarde des données précédentes a été créée : elle se restaure depuis les Paramètres.' : ''}</p>
+        <div class="actions">
+          <button type="button" class="btn" data-etape="1">Importer un autre fichier</button>
+          <a class="btn btn-principal" href="${desc().lien}">Voir les ${desc().libelle.toLowerCase()}${icone('fleche-droite', { taille: 16 })}</a>
+        </div>
+      </div>`;
+  }
+
+  function aller(n) {
+    etape = n;
+    zone.innerHTML = (etape < 4 ? etapesHtml() : '') + corpsHtml();
+    zone.classList.remove('arrive');
+    void zone.offsetWidth;
+    zone.classList.add('arrive');
+    brancher();
+  }
+
+  const signaler = (texte) => {
+    const cible = zone.querySelector('[data-erreur]');
+    if (cible) cible.innerHTML = texte ? `${icone('cercle-alerte', { taille: 15 })}<span>${echapperHtml(texte)}</span>` : '';
   };
-
-  /** Cibles du registre courant (les recettes mixtes ont une colonne de plus). */
-  const ciblesCourantes = () => REGISTRES[registre].cibles({ estMixte });
-
-  // ---- Choix du registre (recettes / achats) -----------------------------------
-  conteneur.querySelectorAll('[data-registre]').forEach((bouton) => {
-    bouton.addEventListener('click', () => {
-      if (bouton.dataset.registre === registre) return;
-      registre = bouton.dataset.registre;
-      conteneur.querySelectorAll('[data-registre]').forEach((b) => {
-        const actif = b.dataset.registre === registre;
-        b.classList.toggle('btn-primaire', actif);
-        b.classList.toggle('btn-secondaire', !actif);
-        b.setAttribute('aria-pressed', String(actif));
-      });
-      // Un fichier déjà chargé se relit pour l'autre registre ; sinon on repart
-      // de l'étape 1.
-      refs.etapeRapport.hidden = true;
-      if (donneesCsv) afficherCorrespondance();
-    });
-  });
-
-  // ---- Étape 1 : fichier -------------------------------------------------------
-  refs.zone.addEventListener('click', () => refs.champFichier.click());
-  refs.zone.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    // Sans cela, la barre d'espace ouvrait le sélecteur ET faisait défiler la
-    // page sous l'utilisateur.
-    e.preventDefault();
-    refs.champFichier.click();
-  });
-  refs.zone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    refs.zone.classList.add('survol');
-  });
-  refs.zone.addEventListener('dragleave', () => refs.zone.classList.remove('survol'));
-  refs.zone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    refs.zone.classList.remove('survol');
-    const fichier = e.dataTransfer.files?.[0];
-    if (fichier) chargerFichier(fichier);
-  });
-  refs.champFichier.addEventListener('change', () => {
-    const fichier = refs.champFichier.files?.[0];
-    if (fichier) chargerFichier(fichier);
-  });
 
   async function chargerFichier(fichier) {
     try {
       const texte = await lireFichierCsv(fichier);
-      donneesCsv = analyserCsv(texte);
-      nomFichier = fichier.name;
-      if (donneesCsv.entetes.length < 2 || donneesCsv.lignes.length === 0) {
-        toast('Fichier vide ou illisible : vérifiez qu’il s’agit bien d’un CSV avec en-têtes.', 'erreur');
+      const donnees = analyserCsv(texte);
+      if (donnees.entetes.length < 2 || donnees.lignes.length === 0) {
+        signaler('Fichier vide ou illisible : vérifiez qu’il s’agit bien d’un CSV avec une ligne de titres.');
         return;
       }
-      afficherCorrespondance();
+      donneesCsv = donnees;
+      nomFichier = fichier.name;
+      devinerColonnes();
+      aller(2);
     } catch (erreur) {
-      toast(`Lecture impossible : ${erreur.message}`, 'erreur');
+      signaler(`Lecture impossible : ${erreur.message}`);
     }
   }
 
-  // ---- Étape 2 : correspondance ---------------------------------------------------
-  function afficherCorrespondance() {
-    refs.etapeRapport.hidden = true;
-    refs.etapeCorrespondance.hidden = false;
-    refs.resumeFichier.textContent =
-      `${nomFichier} : ${donneesCsv.lignes.length} ligne${donneesCsv.lignes.length > 1 ? 's' : ''}, ` +
-      `${donneesCsv.entetes.length} colonnes détectées.`;
-
-    const besoinCategorie = registre === 'recettes' && estMixte;
-    refs.grille.innerHTML = ciblesCourantes().map((cible) => `
-      <div class="champ">
-        <label for="correspondance-${cible.cle}">${echapperHtml(cible.libelle)}</label>
-        <select id="correspondance-${cible.cle}" data-cible="${cible.cle}">
-          <option value="">(ignorer cette colonne)</option>
-          ${donneesCsv.entetes.map((entete, i) =>
-            `<option value="${i}" ${devinerColonne(cible) === i ? 'selected' : ''}>${echapperHtml(entete)}</option>`
-          ).join('')}
-        </select>
-      </div>` ).join('') + (besoinCategorie ? `
-      <div class="champ">
-        <label for="categorie-defaut">Catégorie par défaut (lignes sans catégorie)</label>
-        <select id="categorie-defaut">
-          <option value="prestations">Prestation de services</option>
-          <option value="ventes">Vente de marchandises</option>
-        </select>
-      </div>` : '');
-  }
-
-  /** Devine l'index de colonne correspondant à une cible d'après les en-têtes. */
-  function devinerColonne(cible) {
-    const entetes = donneesCsv.entetes.map(normaliserTexte);
-    for (const indice of cible.indices) {
-      const index = entetes.findIndex((e) => e.includes(indice));
-      if (index !== -1) return index;
-    }
-    return -1;
-  }
-
-  /** Construit les lignes à envoyer au serveur d'après la correspondance choisie. */
+  /** Construit les lignes à envoyer au serveur d'après la correspondance choisie ; `null` si elle est incomplète. */
   function construireLignes() {
     const correspondance = {};
-    refs.grille.querySelectorAll('select[data-cible]').forEach((select) => {
-      if (select.value !== '') correspondance[select.dataset.cible] = Number(select.value);
+    const doubles = new Set();
+    colonnes.forEach((cle, i) => {
+      if (!cle) return;
+      if (cle in correspondance) doubles.add(cle);
+      correspondance[cle] = i;
     });
-
-    const desc = REGISTRES[registre];
-    const manquantes = desc.obligatoires.filter((cle) => correspondance[cle] === undefined);
-    if (manquantes.length > 0) {
-      const libelles = ciblesCourantes()
-        .filter((c) => manquantes.includes(c.cle))
-        .map((c) => c.libelle.replace(' *', ''));
-      toast(`Colonnes obligatoires non associées : ${libelles.join(', ')}.`, 'erreur');
+    const libelleDe = (cle) => cibles().find((c) => c.cle === cle)?.libelle ?? cle;
+    if (doubles.size > 0) {
+      signaler(`Un champ ne peut venir que d’une colonne : ${[...doubles].map(libelleDe).join(', ')} ${doubles.size > 1 ? 'sont choisis' : 'est choisi'} deux fois.`);
       return null;
     }
-
-    const valeur = (rangee, cle) =>
-      correspondance[cle] === undefined ? '' : (rangee[correspondance[cle]] ?? '').trim();
-    const categorieDefaut = refs.grille.querySelector('#categorie-defaut')?.value ?? '';
-
-    return donneesCsv.lignes.map((rangee) =>
-      desc.construire((cle) => valeur(rangee, cle), { estMixte, categorieDefaut, modes }));
-  }
-
-  // ---- Étape 3 : analyse puis import ------------------------------------------------
-  refs.boutonAnalyser.addEventListener('click', async () => {
-    const lignes = construireLignes();
-    if (!lignes) return;
-    refs.boutonAnalyser.disabled = true;
-    try {
-      const rapport = await REGISTRES[registre].importer({ lignes, simulation: true });
-      afficherRapport(rapport, lignes);
-    } catch (erreur) {
-      toast(erreur.message, 'erreur');
-    } finally {
-      refs.boutonAnalyser.disabled = false;
+    const manquantes = desc().obligatoires.filter((cle) => correspondance[cle] === undefined);
+    if (manquantes.length > 0) {
+      signaler(`Associez une colonne ${manquantes.length > 1 ? 'aux champs' : 'au champ'} : ${manquantes.map(libelleDe).join(', ')}.`);
+      return null;
     }
-  });
-
-  function afficherRapport(rapport, lignes) {
-    const desc = REGISTRES[registre];
-    const nom = registre === 'achats' ? 'achat' : 'recette';
-    const accord = (n) => `${nom}${n > 1 ? 's' : ''}`;
-
-    refs.etapeRapport.hidden = false;
-    refs.etapeRapport.innerHTML = `
-      <h2>3. Vérifier puis importer</h2>
-      ${/* Le filet de sécurité était caché derrière une bulle au survol, au
-            moment précis où il fallait le dire tout haut. */ ''}
-      <p class="note-legale">
-        ${icone('cercle-valide', { taille: 16 })}
-        <span>Une sauvegarde de vos données est créée juste avant l’import : en cas de
-        problème, restaurez-la depuis les paramètres.</span>
-      </p>
-      <div class="compteurs-import">
-        <div class="compteur ok"><strong>${rapport.valides}</strong> ${accord(rapport.valides)} prêt${rapport.valides > 1 ? 's' : ''} à importer</div>
-        <div class="compteur attention"><strong>${rapport.doublons.length}</strong> doublons détectés</div>
-        <div class="compteur erreur"><strong>${rapport.erreurs.length}</strong> lignes en erreur</div>
-      </div>
-
-      ${rapport.doublons.length > 0 ? `
-        <p><strong>Doublons</strong> (même date, même tiers, même montant qu’une ligne existante) :</p>
-        <ul>
-          ${rapport.doublons.slice(0, 15).map((d) =>
-            `<li>Ligne ${d.ligne} : ${echapperHtml(d.date)}, ${echapperHtml(d.tiers)}, ${d.montant}</li>`
-          ).join('')}
-          ${rapport.doublons.length > 15 ? `<li>… et ${rapport.doublons.length - 15} autres.</li>` : ''}
-        </ul>
-        <div class="liste-options">
-          <label class="option-case">
-            <input type="checkbox" id="importer-doublons">
-            <span>Importer aussi les doublons</span>
-          </label>
-        </div>` : ''}
-
-      ${rapport.erreurs.length > 0 ? `
-        <p><strong>Lignes en erreur</strong> (elles ne seront pas importées) :</p>
-        <ul>
-          ${rapport.erreurs.slice(0, 15).map((e) =>
-            `<li>Ligne ${e.ligne} : ${echapperHtml(Object.values(e.erreurs).join(' '))}</li>`
-          ).join('')}
-          ${rapport.erreurs.length > 15 ? `<li>… et ${rapport.erreurs.length - 15} autres.</li>` : ''}
-        </ul>` : ''}
-
-      <div class="actions-formulaire">
-        <button type="button" class="btn btn-primaire" id="bouton-importer"
-          ${rapport.valides + rapport.doublons.length === 0 ? 'disabled' : ''}>
-          ${icone('import', { taille: 16 })}<span>Importer maintenant</span>
-        </button>
-      </div>`;
-
-    refs.etapeRapport.querySelector('#bouton-importer')?.addEventListener('click', async (evenement) => {
-      const bouton = evenement.currentTarget;
-      bouton.disabled = true;
-      const importerDoublons = refs.etapeRapport.querySelector('#importer-doublons')?.checked ?? false;
-      // Tant que l'import est en cours, une fermeture de l'onglet demande confirmation.
-      const gardeFermeture = (e) => { e.preventDefault(); };
-      window.addEventListener('beforeunload', gardeFermeture);
-      try {
-        const resultat = await desc.importer({ lignes, importerDoublons });
-        toast(`${resultat.importees} ${accord(resultat.importees)} importé${resultat.importees > 1 ? 's' : ''}.`);
-        refs.etapeRapport.innerHTML = `
-          <h2>Import terminé</h2>
-          <p>${resultat.importees} ${accord(resultat.importees)} ajouté${resultat.importees > 1 ? 's' : ''} au registre.
-          ${resultat.erreurs.length > 0 ? `${resultat.erreurs.length} ligne${resultat.erreurs.length > 1 ? 's' : ''} en erreur ignorée${resultat.erreurs.length > 1 ? 's' : ''}.` : ''}
-          ${resultat.sauvegarde ? 'Une sauvegarde des données précédentes a été créée (voir les paramètres).' : ''}</p>
-          <p><a class="btn btn-secondaire" href="${desc.lien}">${icone(registre, { taille: 16 })}<span>Voir les ${desc.libelle.toLowerCase()}</span></a></p>`;
-      } catch (erreur) {
-        toast(erreur.message, 'erreur');
-        bouton.disabled = false;
-      } finally {
-        window.removeEventListener('beforeunload', gardeFermeture);
-      }
-    });
+    const valeur = (rangee, cle) => (correspondance[cle] === undefined ? '' : (rangee[correspondance[cle]] ?? '').trim());
+    const categorieDefaut = zone.querySelector('#i-categorie-defaut')?.value ?? '';
+    return donneesCsv.lignes.map((rangee) =>
+      desc().construire((cle) => valeur(rangee, cle), { estMixte, categorieDefaut, modes }));
   }
+
+  function brancher() {
+    brancherSegmentes(zone);
+    zone.querySelectorAll('[data-registre]').forEach((bouton) => bouton.addEventListener('click', () => {
+      if (bouton.dataset.registre === registre) return;
+      registre = bouton.dataset.registre;
+      zone.querySelectorAll('[data-registre]').forEach((b) => b.setAttribute('aria-pressed', String(b === bouton)));
+    }));
+    zone.querySelectorAll('[data-etape]').forEach((bouton) => bouton.addEventListener('click', () => {
+      aller(Number(bouton.dataset.etape));
+    }));
+
+    zone.querySelector('#i-reprendre')?.addEventListener('click', () => {
+      devinerColonnes();
+      aller(2);
+    });
+
+    const depot = zone.querySelector('#depot');
+    if (depot) {
+      ['dragenter', 'dragover'].forEach((type) => depot.addEventListener(type, (evenement) => {
+        evenement.preventDefault();
+        depot.classList.add('survol');
+      }));
+      depot.addEventListener('dragleave', (evenement) => {
+        if (!depot.contains(evenement.relatedTarget)) depot.classList.remove('survol');
+      });
+      depot.addEventListener('drop', (evenement) => {
+        evenement.preventDefault();
+        depot.classList.remove('survol');
+        const fichier = evenement.dataTransfer.files?.[0];
+        if (fichier) chargerFichier(fichier);
+      });
+      zone.querySelector('#i-fichier').addEventListener('change', (evenement) => {
+        const fichier = evenement.target.files?.[0];
+        if (fichier) chargerFichier(fichier);
+      });
+    }
+
+    if (etape === 2) {
+      colonnes.forEach((cle, i) => {
+        const select = zone.querySelector(`#i-col-${i}`);
+        select.value = cle;
+        select.addEventListener('change', () => {
+          colonnes[i] = select.value;
+          signaler('');
+        });
+      });
+      zone.querySelector('#i-analyser').addEventListener('click', async (evenement) => {
+        const construites = construireLignes();
+        if (!construites) return;
+        const reprendre = patienter(evenement.currentTarget, 'Analyse…');
+        try {
+          rapport = await desc().importer({ lignes: construites, simulation: true });
+          lignes = construites;
+          aller(3);
+        } catch (erreur) {
+          reprendre();
+          signaler(erreur.message);
+        }
+      });
+    }
+
+    if (etape === 3) {
+      const bouton = zone.querySelector('#i-importer');
+      const caseDoublons = zone.querySelector('#i-doublons');
+      const [un, plusieurs] = desc().nom;
+      caseDoublons?.addEventListener('change', () => {
+        const n = rapport.valides + (caseDoublons.checked ? rapport.doublons.length : 0);
+        bouton.querySelector('span').textContent = `Importer ${accorder(n, un, plusieurs)}`;
+        bouton.disabled = n === 0;
+      });
+      bouton.addEventListener('click', async () => {
+        const importerDoublons = caseDoublons?.checked ?? false;
+        const reprendre = patienter(bouton, 'Import…');
+        // Tant que l'import est en cours, une fermeture de l'onglet demande confirmation.
+        const gardeFermeture = (e) => { e.preventDefault(); };
+        window.addEventListener('beforeunload', gardeFermeture);
+        try {
+          resultat = await desc().importer({ lignes, importerDoublons });
+          aller(4);
+          halo(zone.querySelector('.sceau-reussite'));
+          annoncer(`${accorder(resultat.importees, un, plusieurs)} importé${resultat.importees > 1 ? 's' : ''}`);
+        } catch (erreur) {
+          reprendre();
+          signaler(erreur.message);
+        } finally {
+          window.removeEventListener('beforeunload', gardeFermeture);
+        }
+      });
+    }
+  }
+
+  aller(1);
 }

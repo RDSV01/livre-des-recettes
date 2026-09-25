@@ -99,6 +99,22 @@ test('les options d’interface sont des booléens, activées par défaut', () =
   assert.equal(validerParametres({ jeuDemo: true }).valeurs.jeuDemo, true);
 });
 
+test('le prénom est facultatif, nettoyé et borné', () => {
+  assert.equal(validerParametres({}).valeurs.prenom, '');
+  assert.equal(validerParametres({ prenom: '  Camille  ' }).valeurs.prenom, 'Camille');
+  assert.equal(validerParametres({ prenom: 'camille' }).valeurs.prenom, 'Camille');
+  assert.equal(validerParametres({ prenom: 'Jean-Baptiste' }).erreurs, null);
+  assert.ok(validerParametres({ prenom: 'x'.repeat(41) }).erreurs.prenom);
+});
+
+test('l’état de l’accueil guidé : vide, en cours ou terminé', () => {
+  assert.equal(validerParametres({}).valeurs.accueil, '');
+  for (const accueil of ['en-cours', 'termine']) {
+    assert.equal(validerParametres({ accueil }).valeurs.accueil, accueil);
+  }
+  assert.ok(validerParametres({ accueil: 'peut-etre' }).erreurs.accueil);
+});
+
 // ---- Clé de contrôle SIREN / SIRET ---------------------------------------------
 
 test('cleSirenValide détecte les fautes de frappe (Luhn)', () => {

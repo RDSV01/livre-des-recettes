@@ -4,28 +4,33 @@
  *
  * Cinq colonnes légales, dans l'ordre chronologique des règlements : date du
  * règlement, fournisseur, référence de la facture ou du justificatif, mode de
- * paiement et montant de l'achat.
+ * paiement et montant de l'achat. Le justificatif lui-même peut être joint en
+ * PDF.
  *
- * Le tableau (filtres, tri, sélection, suppression annulable) est celui de
- * `registre.js`, partagé avec les recettes ; cette vue n'apporte que ses
- * colonnes et son formulaire, avec l'auto-complétion des fournisseurs.
+ * Le tableau (filtres, tri, sélection, pièces jointes, suppression annulable)
+ * est celui de `registre.js`, partagé avec les recettes ; cette vue n'apporte
+ * que ses colonnes et son panneau, avec l'autocomplétion des fournisseurs.
  */
 
-import { api } from '../api.js';
+import { api, urlPiece } from '../api.js';
 import { etat } from '../etat.js';
 import {
-  echapperHtml, formaterChampMontant, effacerErreursFormulaire, installerSuggestions,
-  installerApercuDate, installerChampMontant, installerGardeFormulaire, ouvrirModale,
-  enteteTri, optionsCodes
+  echapperHtml, formaterChampMontant, installerChampMontant,
+  optionsCodes, selecteur, accorder, initiales, finDuFondu
 } from '../ui.js';
+import { annoncer } from '../retours.js';
 import { icone } from '../icones.js';
 import { etatFiltres } from '../preferences-vues.js';
-import { installerRegistre, barreFiltres, barreSelection, tableauRegistre } from '../registre.js';
-import { formaterMontant, enCentimes } from '/partage/montants.js';
+import { installerRegistre, cadrePanneau } from '../registre.js';
+import { ouvrirPanneau } from '../panneau.js';
+import { autocompletion, surligner } from '../autocompletion.js';
+import { zoneDepot } from '../pieces.js';
+import { champDate, brancherChampDate } from '../calendrier.js';
+import { formaterMontant, enCentimes, symboleDevise } from '/partage/montants.js';
 import { formaterDate, aujourdHuiIso } from '/partage/dates.js';
 import { MODES_REGLEMENT, libelleMode } from '/partage/constantes.js';
 import { normaliserTexte } from '/partage/texte.js';
-import { filtrerAchats, valeursFrequentes } from '/partage/filtres.js';
+import { filtrerAchats } from '/partage/filtres.js';
 
 /** Les champs d'un achat (pour l'historique Annuler / Rétablir). */
 const champsAchat = (a) => ({
@@ -47,184 +52,195 @@ const CLES_TRI = {
 
 export async function vueAchats(conteneur, params) {
   const { devise, formatDate, modesPersonnalises } = etat.parametres;
-  const modes = optionsCodes(MODES_REGLEMENT.concat(modesPersonnalises));
-  let fournisseurs = []; // fournisseurs existants, pour les suggestions
-  let enEdition = null;  // achat en cours de modification, ou null
+  const modes = MODES_REGLEMENT.concat(modesPersonnalises);
+  let fournisseurs = []; // fournisseurs connus, le plus récent d'abord
 
-  conteneur.innerHTML = gabarit();
+  conteneur.innerHTML = `
+    <div class="page">
+      <header class="entete-page">
+        <div>
+          <h1>Achats</h1>
+          <p class="sous-titre">Le registre chronologique de vos achats, exigible si vous vendez des marchandises.</p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-fantome" id="lien-exporter" href="#/exports?registre=achats">${icone('telecharger', { taille: 16 })}Exporter</a>
+          <button type="button" class="btn btn-principal" id="nouvel-achat" aria-haspopup="dialog">${icone('plus', { taille: 16 })}Nouvel achat</button>
+        </div>
+      </header>
+      <section class="carte" id="registre" aria-label="Registre des achats"></section>
+    </div>`;
 
-  const refs = {
-    suggestions: conteneur.querySelector('#suggestions-fournisseur'),
-    dialogue: conteneur.querySelector('#dialogue-achat'),
-    formulaire: conteneur.querySelector('#formulaire-achat'),
-    titreDialogue: conteneur.querySelector('#titre-dialogue-achat'),
-    enregistrer: conteneur.querySelector('#enregistrer-achat')
-  };
-
-  const registre = installerRegistre(conteneur, {
+  const registre = installerRegistre(conteneur.querySelector('#registre'), {
     id: 'achats',
-    nom: { singulier: 'achat', feminin: false, ce: 'cet', nouveau: 'Nouvel achat', registre: 'registre' },
+    nom: { singulier: 'achat', pluriel: 'achats', feminin: false, nouveau: 'Nouvel achat', cle: 'achat' },
     etat: etatFiltres('achats'),
     cleDate: 'dateReglement',
+    cleTiers: 'fournisseur',
+    colonneRetour: 'fournisseur',
+    quoiPiece: 'le justificatif',
+    placeholder: 'Fournisseur, référence, montant…',
+    titreDupliquer: 'Dupliquer (achat récurrent)',
+    lienExporter: conteneur.querySelector('#lien-exporter'),
     filtrer: filtrerAchats,
     clesTri: CLES_TRI,
+    colonnes: [
+      { cle: 'date', titre: 'Réglé le', cellule: (a) => `<td class="date">${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>` },
+      { cle: 'fournisseur', titre: 'Fournisseur', cellule: (a) => `<td class="client">${echapperHtml(a.fournisseur)}</td>` },
+      { cle: 'reference', titre: 'Justificatif', cellule: (a) => `<td>${a.referenceFacture ? `<span class="ref">${echapperHtml(a.referenceFacture)}</span>` : '<span class="attenue">Sans référence</span>'}</td>` },
+      { cle: 'piece' },
+      { cle: 'mode', titre: 'Paiement', cellule: (a) => `<td class="mode">${echapperHtml(libelleMode(a.modeReglement, modesPersonnalises))}</td>` },
+      { cle: 'montant', titre: 'Montant', classe: 'montant', cellule: (a) => `<td class="montant">${echapperHtml(formaterMontant(a.montant, devise))}</td>` }
+    ],
     lister: async () => (await api.listerAchats()).achats,
     creer: async (champs) => (await api.creerAchat(champs)).achat,
     modifier: async (id, champs) => (await api.modifierAchat(id, champs)).achat,
     supprimer: async (ids) => (await api.supprimerAchats(ids)).achats,
     restaurer: (lignes) => api.restaurerAchats(lignes),
     champs: champsAchat,
-    formulaire: refs,
-    decrire: (a) => `${formaterDate(a.dateReglement, formatDate)}, ${a.fournisseur}, ${formaterMontant(a.montant, devise)}`,
-    titreDupliquer: 'Dupliquer (achat récurrent)',
     ouvrirFormulaire,
-    apresChargement: (achats) => { fournisseurs = valeursFrequentes(achats, 'fournisseur'); },
-    cellules: (a) => `
-      <td class="col-date" data-label="Réglé le">${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>
-      <td data-label="Fournisseur">${echapperHtml(a.fournisseur)}</td>
-      <td data-label="Référence">${a.referenceFacture ? echapperHtml(a.referenceFacture) : '<span class="attenue">-</span>'}</td>
-      <td data-label="Paiement"><span class="badge">${echapperHtml(libelleMode(a.modeReglement, modesPersonnalises))}</span></td>
-      <td class="montant" data-label="Montant">${echapperHtml(formaterMontant(a.montant, devise))}</td>`
-  });
-
-  // ---- Formulaire -------------------------------------------------------------
-  const rafraichirApercuDate = installerApercuDate(refs.formulaire.dateReglement);
-  installerChampMontant(refs.formulaire);
-  const memoriserEtatInitial = installerGardeFormulaire({
-    dialogue: refs.dialogue,
-    boutonAnnuler: conteneur.querySelector('#annuler-achat'),
-    lireEtat: () => {
-      const f = refs.formulaire;
-      return JSON.stringify([
-        f.dateReglement.value, f.fournisseur.value, f.montant.value,
-        f.modeReglement.value, f.referenceFacture.value
-      ]);
+    apresChargement: (achats) => {
+      // Un fournisseur par nom (sans casse ni accents), avec son dernier achat.
+      const parNom = new Map();
+      for (const a of [...achats].sort((x, y) => y.dateReglement.localeCompare(x.dateReglement))) {
+        const cle = normaliserTexte(a.fournisseur);
+        const entree = parNom.get(cle);
+        if (entree) entree.nombre += 1;
+        else parNom.set(cle, { nom: a.fournisseur, nombre: 1, dernier: a });
+      }
+      fournisseurs = [...parNom.values()];
     }
   });
-  const fermerSuggestions = installerSuggestions({
-    champ: refs.formulaire.fournisseur,
-    liste: refs.suggestions,
-    valeurs: () => fournisseurs
-  });
+
   conteneur.querySelector('#nouvel-achat').addEventListener('click', () => ouvrirFormulaire());
 
-  refs.formulaire.addEventListener('submit', (evenement) => {
-    evenement.preventDefault();
-    effacerErreursFormulaire(refs.formulaire);
-    const f = refs.formulaire;
-    registre.enregistrerSaisie(enEdition, {
-      dateReglement: f.dateReglement.value,
-      fournisseur: f.fournisseur.value,
-      referenceFacture: f.referenceFacture.value,
-      montant: f.montant.value,
-      modeReglement: f.modeReglement.value
-    });
-  });
-
   /**
-   * Ouvre le formulaire : vide (ajout), prérempli pour modification, ou
-   * prérempli depuis un `modele` (duplication, avec la date du jour).
+   * Ouvre le panneau : vide (ajout), prérempli pour modification, ou prérempli
+   * depuis un `modele` (duplication, datée d'aujourd'hui, sans référence ni PDF).
    */
   function ouvrirFormulaire(achat = null, modele = null) {
-    enEdition = achat;
-    fermerSuggestions();
-    effacerErreursFormulaire(refs.formulaire);
-    refs.titreDialogue.textContent = achat ? 'Modifier l’achat' : 'Nouvel achat';
-
     const source = achat ?? modele;
-    const f = refs.formulaire;
-    f.dateReglement.value = achat?.dateReglement ?? aujourdHuiIso();
-    rafraichirApercuDate();
+    let piece = achat?.pieceJointe ?? null;
+
+    const corps = `
+      <div class="champ" data-champ="fournisseur" style="--i:0">
+        <label for="f-fournisseur">Fournisseur</label>
+        <input class="champ-texte" id="f-fournisseur" name="fournisseur" autocomplete="off"
+          placeholder="Nom du fournisseur" aria-describedby="f-fournisseur-aide">
+        <p class="aide-champ" id="f-fournisseur-aide"></p>
+        <span class="erreur-champ message-erreur"></span>
+      </div>
+      <div class="champ" data-champ="montant" style="--i:1">
+        <label for="f-montant">Montant payé</label>
+        <div class="champ-montant">
+          <input class="champ-texte" id="f-montant" name="montant" inputmode="decimal" autocomplete="off" placeholder="0,00">
+          <span class="devise" aria-hidden="true">${echapperHtml(symboleDevise(devise))}</span>
+        </div>
+        <span class="erreur-champ message-erreur"></span>
+      </div>
+      <div class="deux-champs" style="--i:2">
+        <div class="champ" data-champ="dateReglement">
+          <label for="f-date">Réglé le</label>
+          ${champDate({ id: 'f-date', nom: 'dateReglement', format: formatDate })}
+          <span class="erreur-champ message-erreur"></span>
+        </div>
+        <div class="champ" data-champ="modeReglement">
+          <label for="f-mode">Paiement</label>
+          ${selecteur({ id: 'f-mode', nom: 'modeReglement', options: optionsCodes(modes) })}
+          <span class="erreur-champ message-erreur"></span>
+        </div>
+      </div>
+      <div class="champ" data-champ="referenceFacture" style="--i:3">
+        <label for="f-reference">Référence du justificatif <span class="facultatif">(facultatif)</span></label>
+        <input class="champ-texte" id="f-reference" name="referenceFacture" autocomplete="off" placeholder="Numéro de la facture ou du ticket">
+        <span class="erreur-champ message-erreur"></span>
+      </div>
+      <div class="champ" style="--i:4">
+        <span class="etiquette">Justificatif en PDF <span class="facultatif">(facultatif)</span></span>
+        <div class="zone-piece" id="f-piece"></div>
+        <p class="aide-champ">Conservez la pièce : elle est exigible pendant 10 ans.</p>
+      </div>`;
+
+    let panneau = null;
+    const lireEtat = () => {
+      const f = panneau?.element.querySelector('form');
+      if (!f) return '';
+      return JSON.stringify([f.fournisseur.value, f.montant.value, f.dateReglement.value,
+        f.modeReglement.value, f.referenceFacture.value, piece?.name ?? piece?.id ?? '']);
+    };
+    panneau = ouvrirPanneau(cadrePanneau({
+      titre: achat ? 'Modifier l’achat' : 'Nouvel achat',
+      sousTitre: modele ? 'Copie d’un achat récurrent, datée d’aujourd’hui.' : 'Un achat payé, avec son justificatif.',
+      corps,
+      libelleBouton: achat ? 'Enregistrer' : 'Ajouter l’achat'
+    }), { idTitre: 'titre-panneau', lireEtat });
+
+    const racine = panneau.element;
+    const f = racine.querySelector('form');
+    const aide = racine.querySelector('#f-fournisseur-aide');
+
     f.fournisseur.value = source?.fournisseur ?? '';
     f.montant.value = source ? formaterChampMontant(source.montant) : '';
+    f.dateReglement.value = achat?.dateReglement ?? aujourdHuiIso();
     f.modeReglement.value = source?.modeReglement ?? 'virement';
     f.referenceFacture.value = achat?.referenceFacture ?? '';
+    brancherChampDate(racine.querySelector('.champ-date'), { format: formatDate });
+    installerChampMontant(f);
 
-    memoriserEtatInitial();
-    ouvrirModale(refs.dialogue);
-    f.dateReglement.focus();
-  }
+    const dire = (html, type = '') => { aide.className = `aide-champ ${type}`.trim(); aide.innerHTML = html; };
+    f.fournisseur.addEventListener('input', (evenement) => { if (evenement.isTrusted) dire(''); });
+    autocompletion(f.fournisseur, {
+      source: () => fournisseurs,
+      texte: (x) => x.nom,
+      rendu: (x, saisie) => `<span class="monogramme petit achat" aria-hidden="true">${echapperHtml(initiales(x.nom))}</span>
+        <span class="sugg-texte"><strong>${surligner(x.nom, saisie)}</strong>
+          <span>${accorder(x.nombre, 'achat')}, le dernier le ${echapperHtml(formaterDate(x.dernier.dateReglement, formatDate))}</span></span>`,
+      extra: (saisie, trouves) => (!saisie.trim() || trouves.some((x) => normaliserTexte(x.nom) === normaliserTexte(saisie)) ? null : {
+        extra: true,
+        rendu: `<span class="tuile petit">${icone('plus', { taille: 15 })}</span><span class="sugg-texte">
+          <strong>Nouveau fournisseur « ${echapperHtml(saisie.trim())} »</strong><span>premier achat chez lui</span></span>`,
+        action: () => {
+          dire(`${icone('plus', { taille: 14 })}<span>Nouveau fournisseur</span>`, 'ok');
+          f.montant.focus();
+        }
+      }),
+      surChoix: (x) => {
+        dire(`${icone('historique', { taille: 14 })}<span>Dernier achat le ${echapperHtml(formaterDate(x.dernier.dateReglement, formatDate))} : ${echapperHtml(formaterMontant(x.dernier.montant, devise))}</span>`);
+        f.montant.focus();
+      }
+    });
 
-  function gabarit() {
-    return `
-      <header class="entete-vue">
-        <div class="titre-registre">
-          <span class="puce-registre registre-achats">${icone('achats', { taille: 20 })}</span>
-          <div>
-            <h1>Achats</h1>
-            <p>Le registre chronologique de vos achats, exigible si vous vendez des marchandises.</p>
-          </div>
-        </div>
-        <div class="actions-vue">
-          <a class="btn btn-tertiaire" id="lien-exporter" href="#/exports?registre=achats">${icone('exports', { taille: 16 })}<span>Exporter</span></a>
-          <button type="button" class="btn btn-primaire" id="nouvel-achat">${icone('plus', { taille: 16 })}<span>Nouvel achat</span></button>
-        </div>
-      </header>
+    zoneDepot(racine.querySelector('#f-piece'), piece, (p) => { piece = p; }, {
+      quoi: 'le justificatif',
+      apercu: () => ({
+        url: urlPiece('achats', achat.id),
+        details: [achat.fournisseur, formaterMontant(achat.montant, devise), formaterDate(achat.dateReglement, formatDate)].join(' · ')
+      })
+    });
 
-      <div class="carte">
-        ${barreFiltres({
-          placeholder: 'Fournisseur, référence, montant…',
-          libelleMode: 'Mode de paiement',
-          optionsModes: modes
-        })}
-        ${barreSelection()}
-        ${tableauRegistre(['13%', '27%', '20%', '14%', '12%'], `
-          ${enteteTri('date', 'Réglé le')}
-          ${enteteTri('fournisseur', 'Fournisseur')}
-          ${enteteTri('reference', 'Référence')}
-          ${enteteTri('mode', 'Paiement')}
-          ${enteteTri('montant', 'Montant', 'montant')}`)}
-      </div>
+    f.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      registre.enregistrerSaisie(achat, {
+        dateReglement: f.dateReglement.value,
+        fournisseur: f.fournisseur.value,
+        referenceFacture: f.referenceFacture.value,
+        montant: f.montant.value,
+        modeReglement: f.modeReglement.value
+      }, { panneau, piece });
+    });
 
-      <dialog id="dialogue-achat" aria-labelledby="titre-dialogue-achat">
-        <form id="formulaire-achat" class="corps-dialogue" novalidate>
-          <h2 id="titre-dialogue-achat">Nouvel achat</h2>
-          <div class="grille-formulaire">
-            <div class="champ" data-champ="dateReglement">
-              <label for="achat-date">Date du règlement *</label>
-              <input type="date" id="achat-date" name="dateReglement" required>
-              <span class="erreur-champ"></span>
-            </div>
-            <div class="champ" data-champ="montant">
-              <label for="achat-montant">Montant de l’achat *</label>
-              <input type="text" id="achat-montant" name="montant" inputmode="decimal"
-                placeholder="0,00" autocomplete="off" required>
-              <span class="erreur-champ"></span>
-            </div>
-            <div class="champ pleine-largeur" data-champ="fournisseur">
-              <label for="achat-fournisseur">Fournisseur *</label>
-              <div class="porte-suggestions">
-                <input type="text" id="achat-fournisseur" name="fournisseur"
-                  autocomplete="off" placeholder="Nom du fournisseur">
-                <div class="liste-suggestions" id="suggestions-fournisseur" hidden></div>
-              </div>
-              <span class="erreur-champ"></span>
-            </div>
-            <div class="champ" data-champ="modeReglement">
-              <label for="achat-mode">Mode de paiement *</label>
-              <select id="achat-mode" name="modeReglement">
-                ${modes}
-              </select>
-              <span class="erreur-champ"></span>
-            </div>
-            <div class="champ" data-champ="referenceFacture">
-              <label for="achat-reference">Référence du justificatif</label>
-              <input type="text" id="achat-reference" name="referenceFacture"
-                placeholder="Numéro de facture ou de ticket (facultatif)">
-              <span class="indication">Conservez la pièce : elle est exigible pendant 10 ans.</span>
-              <span class="erreur-champ"></span>
-            </div>
-          </div>
-          <div class="pied-dialogue">
-            <button type="button" class="btn btn-secondaire" id="annuler-achat">Annuler</button>
-            <button type="submit" class="btn btn-primaire" id="enregistrer-achat"><span>Enregistrer</span></button>
-          </div>
-        </form>
-      </dialog>`;
+    panneau.memoriser();
+    if (achat) {
+      f.montant.focus();
+      f.montant.select();
+    }
+    annoncer(achat ? 'Modification de l’achat' : 'Nouvel achat');
   }
 
   await registre.charger();
 
-  // Arrivée depuis « Nouvel achat » du tableau de bord.
-  if (params?.get('nouveau')) ouvrirFormulaire();
+  // Arrivée depuis « Nouvel achat » du tableau de bord : après le fondu de page.
+  if (params?.get('nouveau')) {
+    const bouton = conteneur.querySelector('#nouvel-achat');
+    finDuFondu().then(() => { if (bouton.isConnected) ouvrirFormulaire(); });
+  }
 }

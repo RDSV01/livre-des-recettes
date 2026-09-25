@@ -13,9 +13,11 @@ import { MODES_REGLEMENT, DEVISES, FORMATS_DATE, CATEGORIES_RECETTE } from './pa
 import { TYPES_ACTIVITE, NATURES_PRESTATIONS } from './partage/seuils.js';
 import { estDateIso } from './partage/dates.js';
 import { analyserMontant } from './partage/montants.js';
-import { normaliserTexte } from './partage/texte.js';
+import { normaliserTexte, majusculeInitiale } from './partage/texte.js';
 
 const LONGUEUR_MAX = 500;
+/** Un prénom, même composé, tient dans quarante caractères. */
+const PRENOM_MAX = 40;
 const MONTANT_MAX = 100_000_000; // garde-fou contre les fautes de frappe
 const MODES_PERSONNALISES_MAX = 20;
 
@@ -123,7 +125,8 @@ function verifierIdentifiant(erreurs, cle, valeur, type) {
  * Une recette porte en plus une catégorie interne (vente / prestation),
  * facultative : elle alimente le suivi des seuils et le bilan URSSAF des
  * activités mixtes (le formulaire la rend alors obligatoire à la saisie),
- * et la ventilation de leurs exports.
+ * et la ventilation de leurs exports. Hors activité mixte, la route des
+ * recettes la pose d'office selon le type d'activité.
  *
  * @param {Array<{code: string}>} [modesPersonnalises] modes ajoutés par
  *   l'utilisateur dans les paramètres, acceptés en plus des modes par défaut.
@@ -304,6 +307,12 @@ export function validerParametres(entree) {
   const e = entree ?? {};
   const erreurs = {};
 
+  // « camille » s'enregistre « Camille » : il s'affiche ainsi partout.
+  const prenom = majusculeInitiale(texte(e.prenom));
+  if (prenom.length > PRENOM_MAX) erreurs.prenom = `Au plus ${PRENOM_MAX} caractères.`;
+  const accueil = texte(e.accueil);
+  if (!['', 'en-cours', 'termine'].includes(accueil)) erreurs.accueil = 'État de l’accueil inconnu.';
+
   const nomEntreprise = texte(e.nomEntreprise);
   const adresse = texte(e.adresse);
   const activite = texte(e.activite);
@@ -325,6 +334,14 @@ export function validerParametres(entree) {
   const naturePrestations = texte(e.naturePrestations) || 'prestations';
   if (!NATURES_PRESTATIONS.some((n) => n.code === naturePrestations)) {
     erreurs.naturePrestations = 'Nature de prestations inconnue.';
+  }
+
+  // Début d'activité : facultatif, il ne sert qu'à borner la période d'ACRE.
+  // L'option cochée sans date n'est pas une erreur : l'estimation attend
+  // simplement la date pour réduire le taux.
+  const debutActivite = texte(e.debutActivite);
+  if (debutActivite && !estDateIso(debutActivite)) {
+    erreurs.debutActivite = 'Date de début d’activité invalide.';
   }
 
   const periodiciteUrssaf = texte(e.periodiciteUrssaf);
@@ -361,9 +378,11 @@ export function validerParametres(entree) {
   }
 
   return resultat(erreurs, {
+    prenom, accueil,
     nomEntreprise, siren, siret, adresse, activite, typeActivite, naturePrestations,
     versementLiberatoire: booleen(e.versementLiberatoire, false),
     activiteArtisanale: booleen(e.activiteArtisanale, false),
+    acre: booleen(e.acre, false), debutActivite,
     devise, formatDate, modesPersonnalises: modes.valeurs,
     periodiciteUrssaf, dernierePeriodeDeclaree,
     alertesNumerotation: booleen(e.alertesNumerotation, true),

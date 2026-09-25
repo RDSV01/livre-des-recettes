@@ -15,6 +15,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { creerStockage } from './stockage.js';
+import { creerPieces } from './pieces.js';
+import { creerZip } from './exports/zip.js';
 import { routesRecettes } from './routes/recettes.js';
 import { routesAchats } from './routes/achats.js';
 import { routesMaj } from './routes/maj.js';
@@ -119,6 +121,16 @@ export function creerApp({
 } = {}) {
   const dossier = dossierDonnees ?? DOSSIER_DONNEES_DEFAUT;
   const stockage = creerStockage(dossier, dossierSauvegardes ? { dossierSauvegardes } : {});
+  const pieces = creerPieces(dossier, stockage.dossierSauvegardes);
+
+  // Ménage des PDF que plus rien ne cite (ni le livre, ni une sauvegarde). Il
+  // n'a lieu que sur un livre sain : un fichier corrompu ou disparu (il peut
+  // reparaître) ne dit pas quelles pièces il citait, et une sauvegarde
+  // illisible fait tout garder.
+  if (!stockage.corruption() && !stockage.donneesAbsentes()) {
+    const citees = stockage.piecesCitees();
+    if (citees) pieces.nettoyer(citees);
+  }
 
   const app = express();
   app.disable('x-powered-by');
@@ -128,11 +140,11 @@ export function creerApp({
   app.use(express.json({ limit: '20mb' }));
 
   // ---- API -----------------------------------------------------------------
-  app.use('/api/recettes', routesRecettes(stockage));
-  app.use('/api/achats', routesAchats(stockage));
+  app.use('/api/recettes', routesRecettes(stockage, pieces));
+  app.use('/api/achats', routesAchats(stockage, pieces));
   app.use('/api/clients', routesClients(stockage));
   app.use('/api/parametres', routesParametres(stockage));
-  app.use('/api/exports', routesExports(stockage));
+  app.use('/api/exports', routesExports(stockage, pieces));
   app.use('/api/urssaf', routesUrssaf(stockage));
   app.use('/api/sauvegardes', routesSauvegardes(stockage));
   app.use('/api/maj', routesMaj(stockage, arreter));
@@ -163,6 +175,8 @@ export function creerApp({
       // Le registre des achats reste visible tant qu'il contient quelque
       // chose, même si l'activité déclarée ne l'exige plus.
       aDesAchats: nombre.achats > 0,
+      // Pièces jointes : combien, quel poids, et où elles sont rangées.
+      pieces: { ...stockage.bilanPieces(), dossier: pieces.dossier },
       // Première utilisation : l'interface dirige alors vers les Paramètres.
       premierLancement: nombre.recettes === 0 && nombre.clients === 0 &&
         !parametres.nomEntreprise && !parametres.typeActivite
@@ -192,21 +206,47 @@ export function creerApp({
     res.json(stockage.exporterDonnees());
   });
 
+  /**
+   * Copie complète téléchargeable : le fichier de données ET les PDF joints,
+   * rangés comme dans le dossier de données. Décompressée dans un dossier
+   * vide, elle forme un dossier de données prêt à servir.
+   */
+  app.get('/api/sauvegarde/complete', (req, res) => {
+    const donnees = stockage.exporterDonnees();
+    const fiches = [...donnees.recettes, ...donnees.achats].map((l) => l.pieceJointe).filter(Boolean);
+    const vus = new Set();
+    const fichiers = [{ nom: 'livre-des-recettes.json', contenu: JSON.stringify(donnees, null, 2) }];
+    for (const { id } of fiches) {
+      if (vus.has(id)) continue;
+      vus.add(id);
+      const chemin = pieces.chemin(id);
+      if (chemin) fichiers.push({ nom: `pieces/${id}.pdf`, contenu: fs.readFileSync(chemin) });
+    }
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="copie-livre-des-recettes-${aujourdHuiIso()}.zip"`);
+    res.send(creerZip(fichiers));
+  });
+
   app.use('/api', (req, res) => {
     res.status(404).json({ erreur: 'Route inconnue.' });
   });
 
   // ---- Fichiers statiques ----------------------------------------------------
+  // « no-cache » : le navigateur redemande toujours si le fichier a changé
+  // (réponse 304 s'il est identique). Sans cela, après une mise à jour, il
+  // pourrait garder d'anciens modules et mêler deux versions de l'interface.
+  const sansCache = (res) => res.setHeader('Cache-Control', 'no-cache');
   if (actifs) {
     app.use((req, res, suite) => {
       if (req.method !== 'GET' && req.method !== 'HEAD') return suite();
       const actif = actifs[req.path === '/' ? '/index.html' : req.path];
       if (!actif) return suite();
+      sansCache(res);
       res.type(actif.type).send(actif.contenu);
     });
   } else {
-    app.use('/partage', express.static(path.join(ICI, 'partage')));
-    app.use(express.static(path.join(RACINE, 'public')));
+    app.use('/partage', express.static(path.join(ICI, 'partage'), { setHeaders: sansCache }));
+    app.use(express.static(path.join(RACINE, 'public'), { setHeaders: sansCache }));
   }
 
   // ---- Gestion d'erreurs -----------------------------------------------------
@@ -214,6 +254,11 @@ export function creerApp({
   app.use((erreur, req, res, next) => {
     if (erreur.type === 'entity.parse.failed') {
       return res.status(400).json({ erreur: 'Corps de requête JSON invalide.' });
+    }
+    if (erreur.type === 'entity.too.large') {
+      return res.status(413).json({
+        erreur: req.is('application/pdf') ? 'Ce PDF dépasse 10 Mo.' : 'Envoi trop volumineux.'
+      });
     }
     if (erreur.code === 'CORROMPU') {
       return res.status(503).json({ erreur: erreur.message });

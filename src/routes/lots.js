@@ -16,6 +16,7 @@
  */
 
 import { validerIdentite } from '../validation.js';
+import { fichePiece } from '../pieces.js';
 
 const LOT_MAX = 10_000;
 
@@ -48,8 +49,16 @@ function validerLot(lignes, validerLigne) {
  * @param {(ids: string[]) => object[]} options.supprimer
  * @param {(lignes: object[]) => object[]} options.restaurer
  * @param {(changements: object[]) => object[]|null} [options.modifier]
+ * @param {object} [options.pieces] pièces jointes : une ligne restaurée retrouve
+ *   la sienne, si son fichier existe encore.
  */
-export function installerRoutesLot(routeur, { cle, valider, supprimer, restaurer, modifier }) {
+export function installerRoutesLot(routeur, { cle, valider, supprimer, restaurer, modifier, pieces }) {
+  /** Fiche de pièce jointe d'une ligne reçue, gardée seulement si le fichier existe. */
+  const pieceDe = (ligne) => {
+    const piece = fichePiece(ligne?.pieceJointe);
+    return piece && pieces?.chemin(piece.id) ? { pieceJointe: piece } : {};
+  };
+
   routeur.post('/lot/supprimer', (req, res) => {
     const ids = liste(req.body?.ids);
     if (!ids || !ids.every((id) => typeof id === 'string')) {
@@ -64,8 +73,8 @@ export function installerRoutesLot(routeur, { cle, valider, supprimer, restaurer
     const { erreur, valides } = validerLot(lignes, valider);
     if (erreur) return res.status(400).json({ erreur });
     try {
-      const restaurees = restaurer(valides.map(({ identite, valeurs }) => ({
-        id: identite.id, ...valeurs, creeLe: identite.creeLe, modifieLe: identite.modifieLe
+      const restaurees = restaurer(valides.map(({ identite, valeurs }, i) => ({
+        id: identite.id, ...valeurs, ...pieceDe(lignes[i]), creeLe: identite.creeLe, modifieLe: identite.modifieLe
       })));
       res.status(201).json({ [cle]: restaurees });
     } catch (e) {

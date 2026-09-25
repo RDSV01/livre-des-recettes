@@ -28,35 +28,53 @@ import { BAREMES } from './bareme-seuils.js';
  *  - `regime` : catégorie de bénéfices déclarée à l'impôt sur le revenu.
  *    `null` pour une activité mixte, qui n'en a pas une seule : ses ventes
  *    relèvent des BIC, ses prestations des BIC ou des BNC selon leur nature ;
- *  - `revente` : le registre des achats n'est exigible que dans ce cas.
+ *  - `revente` : le registre des achats n'est exigible que dans ce cas ;
+ *  - `categorie` : catégorie de toutes ses recettes (vente ou prestation).
+ *    Absente pour une activité mixte, où chaque recette dit la sienne ;
+ *  - `caseUrssaf` : intitulé exact de la case où la déclaration URSSAF fait
+ *    saisir ce chiffre d'affaires. Les libellés en reprennent les mots, pour
+ *    qu'on s'y retrouve d'un écran à l'autre ;
+ *  - `enMixte` : la même activité, nommée dans une phrase sur l'activité
+ *    mixte ; seules les prestations en ont une, ce sont les natures possibles
+ *    de la part « prestations ».
  */
 const ACTIVITES = {
   ventes: {
-    libelle: 'Achat / revente de marchandises (BIC)',
+    libelle: 'Ventes de marchandises (BIC)',
+    caseUrssaf: 'Chiffre d’affaires des ventes de marchandises',
     seuils: 'marchandises',
     regime: 'BIC',
-    revente: true
+    revente: true,
+    categorie: 'ventes'
   },
   prestations: {
     libelle: 'Prestations de services commerciales ou artisanales (BIC)',
-    nature: 'Prestations commerciales ou artisanales (BIC)',
+    enMixte: 'prestations de services commerciales ou artisanales (BIC)',
+    caseUrssaf: 'Chiffre d’affaires des prestations de services commerciales ou artisanales',
     seuils: 'services',
     regime: 'BIC',
-    revente: false
+    revente: false,
+    categorie: 'prestations'
   },
+  // « Libérale » reste dans le libellé : c'est ainsi qu'on se désigne, et
+  // « autres prestations de services », seul, ne parle à personne.
   liberal: {
-    libelle: 'Activité libérale non réglementée (BNC)',
-    nature: 'Prestations libérales non réglementées (BNC)',
+    libelle: 'Autres prestations de services : activité libérale (BNC)',
+    enMixte: 'autres prestations de services (BNC)',
+    caseUrssaf: 'Chiffre d’affaires des autres prestations de services',
     seuils: 'services',
     regime: 'BNC',
-    revente: false
+    revente: false,
+    categorie: 'prestations'
   },
   liberalCipav: {
-    libelle: 'Profession libérale affiliée à la CIPAV (BNC)',
-    nature: 'Prestations libérales affiliées à la CIPAV (BNC)',
+    libelle: 'Profession libérale relevant de la Cipav (BNC)',
+    enMixte: 'profession libérale relevant de la Cipav (BNC)',
+    caseUrssaf: 'Recettes pour profession libérale relevant de la Cipav',
     seuils: 'services',
     regime: 'BNC',
-    revente: false
+    revente: false,
+    categorie: 'prestations'
   },
   mixte: {
     libelle: 'Activité mixte : ventes et prestations de services',
@@ -73,12 +91,12 @@ const ACTIVITES = {
  * laquelle elle exerce.
  */
 export const NATURES_PRESTATIONS = Object.entries(ACTIVITES)
-  .filter(([, a]) => a.nature)
-  .map(([code, a]) => ({ code, libelle: a.nature }));
+  .filter(([, a]) => a.enMixte)
+  .map(([code, a]) => ({ code, libelle: a.libelle }));
 
 /** Nature retenue pour la part prestations, avec repli sur le cas courant. */
 export function natureDesPrestations(naturePrestations) {
-  return ACTIVITES[naturePrestations]?.nature ? naturePrestations : 'prestations';
+  return ACTIVITES[naturePrestations]?.enMixte ? naturePrestations : 'prestations';
 }
 
 /**
@@ -90,8 +108,16 @@ export function libelleActivite({ typeActivite, naturePrestations } = {}) {
   const activite = ACTIVITES[typeActivite];
   if (!activite) return null;
   if (typeActivite !== 'mixte') return activite.libelle;
-  const nature = ACTIVITES[natureDesPrestations(naturePrestations)].nature;
-  return `Activité mixte : ventes (BIC) et ${nature.charAt(0).toLowerCase()}${nature.slice(1)}`;
+  return `Activité mixte : ventes de marchandises (BIC) et ${ACTIVITES[natureDesPrestations(naturePrestations)].enMixte}`;
+}
+
+/**
+ * Case de la déclaration URSSAF où saisir le chiffre d'affaires d'une
+ * activité à nature unique (`ventes`, `prestations`, `liberal`,
+ * `liberalCipav`), mot pour mot ; `null` sinon.
+ */
+export function caseUrssaf(code) {
+  return ACTIVITES[code]?.caseUrssaf ?? null;
 }
 
 /** Types d'activité proposés dans les paramètres. */
@@ -191,6 +217,16 @@ export function activiteAvecRevente(typeActivite) {
   return ACTIVITES[typeActivite]?.revente ?? true;
 }
 
+/**
+ * Catégorie qu'une activité à nature unique impose à toutes ses recettes :
+ * « prestations » pour une activité libérale, « ventes » pour l'achat /
+ * revente. `null` pour une activité mixte (chaque recette est classée à la
+ * saisie) ou non renseignée.
+ */
+export function categorieImposee(typeActivite) {
+  return ACTIVITES[typeActivite]?.categorie ?? null;
+}
+
 /** Progression d'un chiffre d'affaires vers un seuil (calcul en centimes). */
 function progression(chiffreAffaires, seuil) {
   const ca = enCentimes(chiffreAffaires);
@@ -226,6 +262,8 @@ export function bilanSeuils(
   const bilan = {
     typeActivite,
     annee,
+    // Règle de l'année mesurée : `jour` ou `mois` (voir le barème).
+    finFranchiseMajore: baremePour(annee).finFranchiseMajore,
     plafondMicro: progression(chiffreAffaires, seuils.plafondMicro),
     franchiseTva: {
       ...progression(chiffreAffaires, seuils.franchiseTva),

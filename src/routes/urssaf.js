@@ -8,6 +8,7 @@
 
 import express from 'express';
 import { bilanPeriode, selectionPeriode } from '../totaux.js';
+import { idPeriode } from '../partage/dates.js';
 import { cotisationsUrssaf } from '../cotisations.js';
 import { lireAnnee } from './requetes.js';
 
@@ -39,6 +40,35 @@ export function routesUrssaf(stockage) {
     res.json({
       ...bilanPeriode(recettes, periode),
       cotisations: cotisationsUrssaf(selection, stockage.obtenirParametres())
+    });
+  });
+
+  /**
+   * Toutes les périodes d'une année d'un coup, pour les onglets de l'écran
+   * URSSAF : le montant à déclarer et le nombre d'encaissements de chacune.
+   * GET /api/urssaf/periodes?annee=2026&type=mois (ou trimestre)
+   */
+  routeur.get('/periodes', (req, res) => {
+    const annee = lireAnnee(req, res);
+    if (annee === null) return;
+    const type = req.query.type;
+    if (!['mois', 'trimestre'].includes(type)) {
+      return res.status(400).json({ erreur: 'Paramètre « type » invalide (mois ou trimestre).' });
+    }
+    const recettes = stockage.listerRecettes();
+    const nombre = type === 'mois' ? 12 : 4;
+    res.json({
+      periodes: Array.from({ length: nombre }, (_, i) => {
+        const bilan = bilanPeriode(recettes, { annee, type, valeur: i + 1 });
+        return {
+          id: idPeriode(annee, type, i + 1),
+          valeur: i + 1,
+          libellePeriode: bilan.libellePeriode,
+          chiffreAffaires: bilan.chiffreAffaires,
+          aDeclarer: bilan.aDeclarer,
+          nombreEncaissements: bilan.nombreEncaissements
+        };
+      })
     });
   });
 

@@ -50,7 +50,11 @@ test('statistiquesTableauDeBord calcule le mois et l’année en cours', () => {
   assert.equal(stats.caAnnee, 600.40);
   // La moyenne porte la trace du nombre d'encaissements : 600,40 / 5.
   assert.equal(stats.moyenneEncaissement, 120.08);
-  assert.equal(stats.dernieresRecettes.length, 5);
+  assert.equal(stats.dernieresRecettes.length, 5); // les 5 de 2026, sous le plafond de 12
+  assert.equal(stats.nombreAnnee, 5);
+  assert.equal(stats.nombreMois, 2);
+  assert.equal(stats.nombreParMois.length, 12);
+  assert.equal(stats.nombreParMois[0], 2);
   // Triées par date décroissante.
   assert.equal(stats.dernieresRecettes[0].dateEncaissement, '2026-07-02');
   // Le graphique couvre l'année affichée, de janvier à décembre.
@@ -63,15 +67,19 @@ test('statistiquesTableauDeBord additionne les achats de la période', () => {
   const achats = [
     { dateReglement: '2026-07-05', fournisseur: 'F', referenceFacture: '', montant: 200, modeReglement: 'carte' },
     { dateReglement: '2026-03-02', fournisseur: 'F', referenceFacture: '', montant: 50, modeReglement: 'carte' },
+    { dateReglement: '2026-10-01', fournisseur: 'F', referenceFacture: '', montant: 30, modeReglement: 'carte' },
     { dateReglement: '2025-11-01', fournisseur: 'F', referenceFacture: '', montant: 999, modeReglement: 'carte' }
   ];
   const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16), achats });
-  assert.equal(stats.achatsAnnee, 250, 'les deux achats de 2026, pas celui de 2025');
+  assert.equal(stats.achatsAnnee, 280, 'les trois achats de 2026, pas celui de 2025');
+  assert.equal(stats.achatsMois, 200, 'celui de juillet, le mois affiché');
+  assert.equal(stats.achatsAvantMois, 50, 'celui de mars, de janvier à juin');
 });
 
 test('statistiquesTableauDeBord met les achats à zéro quand il n’y en a pas', () => {
   const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16) });
   assert.equal(stats.achatsAnnee, 0);
+  assert.equal(stats.achatsMois, 0);
 });
 
 test('statistiquesTableauDeBord sait revenir sur une année passée', () => {

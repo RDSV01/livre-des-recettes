@@ -79,9 +79,10 @@ export function routesClients(stockage) {
     if (clientExistant(autres, valeurs)) {
       return res.status(409).json({ erreur: 'Un autre client porte déjà ce nom ou ce SIRET.' });
     }
-    const client = stockage.modifierClient(req.params.id, valeurs);
-    if (!client) return res.status(404).json({ erreur: 'Client introuvable.' });
-    res.json({ client });
+    // Un nouveau nom se reporte aussi sur les recettes du client.
+    const resultat = stockage.modifierClient(req.params.id, valeurs);
+    if (!resultat) return res.status(404).json({ erreur: 'Client introuvable.' });
+    res.json(resultat);
   });
 
   routeur.delete('/:id', (req, res) => {

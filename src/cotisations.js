@@ -7,7 +7,7 @@
  * sera prélevée évite la mauvaise surprise au moment de déclarer.
  *
  * Trois prélèvements partent ensemble, sur la même base déclarée :
- *  - les cotisations sociales ;
+ *  - les cotisations sociales, à taux réduit pendant l'ACRE ;
  *  - la contribution à la formation professionnelle (CFP), toujours due ;
  *  - le versement libératoire de l'impôt sur le revenu, pour qui l'a choisi.
  *
@@ -24,6 +24,7 @@
 import { enCentimes, enEuros, arrondiDeclaration } from './partage/montants.js';
 import { PALIERS_COTISATIONS } from './partage/bareme-seuils.js';
 import { regimeFiscal, natureDesPrestations } from './partage/seuils.js';
+import { periodeAcre, sousAcre, tauxAcre } from './partage/acre.js';
 
 /**
  * Palier de taux en vigueur à une date donnée (`AAAA-MM-JJ`), ou `null` si
@@ -77,7 +78,7 @@ function appliquerTaux(base, taux) {
 function contribution(groupes, tauxDe) {
   const lignes = groupes.map((g) => {
     const taux = tauxDe(g);
-    return { libelle: g.libelle, base: g.base, taux, montant: appliquerTaux(g.base, taux), duJour: g.duJour };
+    return { libelle: g.libelle, base: g.base, taux, montant: appliquerTaux(g.base, taux), duJour: g.duJour, acre: g.acre };
   });
   return { lignes, total: lignes.reduce((acc, l) => acc + l.montant, 0) };
 }
@@ -85,10 +86,10 @@ function contribution(groupes, tauxDe) {
 /**
  * Prélèvements estimés sur une liste d'encaissements.
  *
- * Les recettes sont regroupées par nature d'activité ET par palier de taux :
- * une même nature apparaît donc plusieurs fois si le taux a changé pendant la
- * période. La base de chaque groupe est arrondie à l'euro, comme le veut la
- * déclaration.
+ * Les recettes sont regroupées par nature d'activité, par palier de taux et
+ * selon qu'elles tombent ou non dans la période d'ACRE : une même nature
+ * apparaît donc plusieurs fois si le taux a changé pendant la période. La base
+ * de chaque groupe est arrondie à l'euro, comme le veut la déclaration.
  *
  * Chaque prélèvement (cotisations sociales dans `lignes` et `total`, CFP,
  * versement libératoire) est arrondi à l'euro ligne par ligne, et son total
@@ -103,7 +104,7 @@ function contribution(groupes, tauxDe) {
  *
  * @param {object[]} recettes encaissements de la période déclarée.
  * @param {object} parametres `{ typeActivite, naturePrestations,
- *   versementLiberatoire, activiteArtisanale }`.
+ *   versementLiberatoire, activiteArtisanale, acre, debutActivite }`.
  * @returns {{
  *   lignes: object[], total: number,
  *   formationPro: { lignes: object[], total: number },
@@ -112,10 +113,12 @@ function contribution(groupes, tauxDe) {
  * }|null} `null` si le type d'activité n'est pas renseigné.
  */
 export function cotisationsUrssaf(recettes, {
-  typeActivite, naturePrestations, versementLiberatoire = false, activiteArtisanale = false
+  typeActivite, naturePrestations, versementLiberatoire = false, activiteArtisanale = false,
+  acre = false, debutActivite = ''
 } = {}) {
   if (!regimeFiscal(typeActivite)) return null;
 
+  const periode = periodeAcre({ acre, debutActivite });
   const groupes = new Map();
   let horsEstimationCentimes = 0;
   let encaisseCentimes = 0;
@@ -130,8 +133,9 @@ export function cotisationsUrssaf(recettes, {
       horsEstimationCentimes += enCentimes(recette.montant);
       continue;
     }
-    const cle = `${nature}|${palier.duJour}`;
-    const groupe = groupes.get(cle) ?? { nature, palier, duJour: palier.duJour, centimes: 0 };
+    const reduit = sousAcre(recette.dateEncaissement, periode);
+    const cle = `${nature}|${palier.duJour}|${reduit}`;
+    const groupe = groupes.get(cle) ?? { nature, palier, duJour: palier.duJour, acre: reduit, centimes: 0 };
     groupe.centimes += enCentimes(recette.montant);
     groupes.set(cle, groupe);
   }
@@ -143,18 +147,33 @@ export function cotisationsUrssaf(recettes, {
   // déclaration fait saisir, et non sur les centimes encaissés : sur
   // 1 111,49 € au taux de 25,6 %, les centimes donneraient 285 € là où
   // l'URSSAF en réclame 284.
-  const tries = [...groupes.values()]
+  const baser = (liste) => [...liste]
     .sort((a, b) => b.duJour.localeCompare(a.duJour) || b.centimes - a.centimes)
     .map((g) => ({
       ...g,
-      libelle: regimeFiscal(g.nature).libelle,
+      libelle: `${regimeFiscal(g.nature).libelle}${g.acre ? ', taux ACRE' : ''}`,
       base: arrondiDeclaration(g.centimes)
     }));
 
-  const { lignes, total } = contribution(tries, (g) => g.palier[g.nature]);
-  const formationPro = contribution(tries, (g) => tauxFormationPro(g.palier, g.nature, activiteArtisanale));
+  // Seules les cotisations sociales distinguent la période d'ACRE : la
+  // formation professionnelle et le versement libératoire se calculent sur
+  // une base par activité et par palier, ACRE ou non.
+  const sansAcre = new Map();
+  for (const g of groupes.values()) {
+    const cle = `${g.nature}|${g.duJour}`;
+    const fusion = sansAcre.get(cle) ?? { ...g, acre: false, centimes: 0 };
+    fusion.centimes += g.centimes;
+    sansAcre.set(cle, fusion);
+  }
+  const sociales = baser(groupes.values());
+  const autres = baser(sansAcre.values());
+
+  const { lignes, total } = contribution(sociales, (g) => (g.acre
+    ? tauxAcre(g.palier[g.nature], periode.fraction, g.palier.plancherAcre?.[g.nature])
+    : g.palier[g.nature]));
+  const formationPro = contribution(autres, (g) => tauxFormationPro(g.palier, g.nature, activiteArtisanale));
   const liberatoire = versementLiberatoire
-    ? contribution(tries, (g) => g.palier.versementLiberatoire[g.nature])
+    ? contribution(autres, (g) => g.palier.versementLiberatoire[g.nature])
     : null;
 
   // Tous les prélèvements sont des euros entiers ; seul l'encaissé garde ses

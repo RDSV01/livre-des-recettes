@@ -7,6 +7,7 @@
 
 import { enCentimes, enEuros, arrondiDeclaration } from './partage/montants.js';
 import { anneeDe, moisDe, nomMois, trimestreDe } from './partage/dates.js';
+import { normaliserTexte } from './partage/texte.js';
 
 /** Total d'une liste de lignes (recettes ou achats), en centimes entiers. */
 export function totalCentimes(lignes) {
@@ -151,11 +152,23 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
     nombreAnneePrestations: deCategorie(recettesAnnee, 'prestations').length,
     nombreNonCategorisees: recettesAnnee.filter((r) => !r.categorie).length,
     moyenneEncaissement: nombreAnnee === 0 ? 0 : enEuros(Math.round(caAnneeCentimes / nombreAnnee)),
+    nombreAnnee,
+    nombreMois: recettesMois.length,
+    // Clients distincts de l'année, rapprochés comme le carnet (sans casse ni accents).
+    nombreClientsAnnee: new Set(recettesAnnee.map((r) => normaliserTexte(r.client))).size,
     caParMois: parMois(recettes),
+    // Nombre d'encaissements de chaque mois de l'année, de janvier à décembre.
+    nombreParMois: Array.from({ length: 12 }, (_, i) => recettesAnnee.filter((r) => moisDe(r.dateEncaissement) === i + 1).length),
     caParMoisVentes: parMois(deCategorie(recettes, 'ventes')),
     caParMoisPrestations: parMois(deCategorie(recettes, 'prestations')),
-    dernieresRecettes: recettesAnnee.sort(parDateDesc('dateEncaissement')).slice(0, 5),
-    achatsAnnee: totalMontants(achatsAnnee)
+    // Assez de lignes pour remplir la carte, qui n'en montre que ce qui tient.
+    dernieresRecettes: recettesAnnee.sort(parDateDesc('dateEncaissement')).slice(0, 12),
+    achatsAnnee: totalMontants(achatsAnnee),
+    // Ceux du mois affiché, puis ceux des mois d'avant : la carte des achats
+    // les distingue (le reste, daté plus tard dans l'année, se déduit du total).
+    achatsMois: totalMontants(filtrerParPeriode(achatsAnnee, { mois }, 'dateReglement')),
+    achatsAvantMois: totalMontants(achatsAnnee.filter((a) => moisDe(a.dateReglement) < mois)),
+    nombreAchatsAnnee: achatsAnnee.length
   };
 }
 

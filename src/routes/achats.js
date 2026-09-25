@@ -11,8 +11,9 @@ import { estDoublonAchat } from '../partage/doublons.js';
 import { parDateDesc, anneesPresentes } from '../totaux.js';
 import { traiterImport } from '../import-registre.js';
 import { installerRoutesLot } from './lots.js';
+import { installerRoutesPiece } from './pieces.js';
 
-export function routesAchats(stockage) {
+export function routesAchats(stockage, pieces) {
   const routeur = express.Router();
 
   /** Modes personnalisés courants, à passer à la validation. */
@@ -58,8 +59,12 @@ export function routesAchats(stockage) {
     cle: 'achats',
     valider: (ligne) => validerAchat(ligne, modesPersonnalises()),
     supprimer: (ids) => stockage.supprimerAchats(ids),
-    restaurer: (lignes) => stockage.restaurerAchats(lignes)
+    restaurer: (lignes) => stockage.restaurerAchats(lignes),
+    pieces
   });
+
+  // Justificatif PDF joint (voir `pieces.js`).
+  installerRoutesPiece(routeur, { collection: 'achats', cle: 'achat', stockage, pieces });
 
   routeur.put('/:id', (req, res) => {
     const { erreurs, valeurs } = validerAchat(req.body, modesPersonnalises());

@@ -9,15 +9,27 @@
 import express from 'express';
 import { validerRecette } from '../validation.js';
 import { estDoublon } from '../partage/doublons.js';
+import { categorieImposee } from '../partage/seuils.js';
 import { parDateDesc, anneesPresentes } from '../totaux.js';
 import { traiterImport } from '../import-registre.js';
 import { installerRoutesLot } from './lots.js';
+import { installerRoutesPiece } from './pieces.js';
 
-export function routesRecettes(stockage) {
+export function routesRecettes(stockage, pieces) {
   const routeur = express.Router();
 
-  /** Modes personnalisés courants, à passer à la validation. */
-  const modesPersonnalises = () => stockage.obtenirParametres().modesPersonnalises;
+  /**
+   * Valide une recette selon les paramètres courants. Une activité à nature
+   * unique (tout sauf mixte) impose sa catégorie : le formulaire ne la demande
+   * pas, et le livre reste classé si l'activité devient mixte un jour.
+   */
+  const valider = (entree) => {
+    const { modesPersonnalises, typeActivite } = stockage.obtenirParametres();
+    const resultat = validerRecette(entree, modesPersonnalises);
+    const imposee = categorieImposee(typeActivite);
+    if (resultat.valeurs && imposee) resultat.valeurs.categorie = imposee;
+    return resultat;
+  };
 
   // Liste complète, triée par date décroissante. Le filtrage et la recherche
   // se font côté navigateur (`partage/filtres.js`) : une seule requête suffit.
@@ -31,7 +43,7 @@ export function routesRecettes(stockage) {
   });
 
   routeur.post('/', (req, res) => {
-    const { erreurs, valeurs } = validerRecette(req.body, modesPersonnalises());
+    const { erreurs, valeurs } = valider(req.body);
     if (erreurs) return res.status(400).json({ erreurs });
     res.status(201).json({ recette: stockage.ajouterRecette(valeurs) });
   });
@@ -45,7 +57,7 @@ export function routesRecettes(stockage) {
    */
   routeur.post('/import', (req, res) => {
     const { erreur, rapport } = traiterImport(stockage, req.body, {
-      valider: (entree) => validerRecette(entree, modesPersonnalises()),
+      valider,
       estDoublon,
       lister: () => stockage.listerRecettes(),
       ajouterLot: (lot) => stockage.ajouterRecettes(lot),
@@ -58,14 +70,18 @@ export function routesRecettes(stockage) {
   // Suppression, restauration et reclassement groupés (voir `lots.js`).
   installerRoutesLot(routeur, {
     cle: 'recettes',
-    valider: (ligne) => validerRecette(ligne, modesPersonnalises()),
+    valider,
     supprimer: (ids) => stockage.supprimerRecettes(ids),
     restaurer: (lignes) => stockage.restaurerRecettes(lignes),
-    modifier: (changements) => stockage.modifierRecettes(changements)
+    modifier: (changements) => stockage.modifierRecettes(changements),
+    pieces
   });
 
+  // Facture PDF jointe (voir `pieces.js`).
+  installerRoutesPiece(routeur, { collection: 'recettes', cle: 'recette', stockage, pieces });
+
   routeur.put('/:id', (req, res) => {
-    const { erreurs, valeurs } = validerRecette(req.body, modesPersonnalises());
+    const { erreurs, valeurs } = valider(req.body);
     if (erreurs) return res.status(400).json({ erreurs });
     const recette = stockage.modifierRecette(req.params.id, valeurs);
     if (!recette) return res.status(404).json({ erreur: 'Recette introuvable.' });

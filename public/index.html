@@ -7,23 +7,36 @@
   <meta name="description" content="Livre des recettes pour micro-entrepreneurs : simple, rapide, 100 % local.">
   <!-- Le cadre du navigateur suit le thème de l'application, au lieu de rester
        clair autour d'une page sombre. -->
-  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z'/%3E%3Cpath d='M14 8H8'/%3E%3Cpath d='M16 12H8'/%3E%3Cpath d='M13 16H8'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121314" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7v14'/%3E%3Cpath d='M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'/%3E%3C/svg%3E">
+  <link rel="preload" href="/polices/commissioner-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/style.css">
+  <script>
+    // Thème posé avant le premier rendu : aucun éclair clair au démarrage en
+    // sombre. Sans choix retenu, l'application suit le système.
+    (function () {
+      var choix = null;
+      try { choix = localStorage.getItem('ldr-theme'); } catch (e) { /* stockage indisponible */ }
+      var sombre = choix ? choix === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = sombre ? 'dark' : 'light';
+    })();
+  </script>
 </head>
 <body>
-  <div class="disposition">
-    <nav class="barre-laterale" id="navigation" aria-label="Navigation principale"></nav>
-    <main class="contenu" id="contenu" tabindex="-1">
+  <a class="hors-ecran lien-evitement" href="#contenu">Aller au contenu</a>
+  <div class="coque">
+    <nav class="rail" id="navigation" aria-label="Navigation principale"></nav>
+    <main class="scene" id="contenu" tabindex="-1">
       <!-- Les bandeaux globaux (mise à jour, démonstration) vivent hors de la
-           vue : insérés dans son contenu, ils s'empilaient au-dessus du titre
-           de page et repoussaient l'action principale hors de l'écran. -->
+           vue : un seul à la fois, au-dessus du titre de la page. -->
       <div id="bandeaux"></div>
       <div id="vue"></div>
     </main>
   </div>
-  <div id="toasts" aria-live="polite"></div>
+  <div class="barre-selection" id="barre-selection" role="region" aria-label="Sélection" hidden></div>
+  <div class="toasts" id="toasts" popover="manual" aria-live="polite"></div>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

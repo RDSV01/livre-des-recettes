@@ -1,0 +1,357 @@
+/*
+ * Livre des recettes : socle visuel.
+ *
+ * L'identité de la v1, reprise et affinée : rail bleu nuit et bleu d'action,
+ * seuls à être bleus, sur un papier ivoire à l'encre chaude (en sombre, un
+ * charbon neutre, rail compris). Quatre encres à rôle fixe marquent les
+ * domaines, par petites touches : sarcelle pour les encaissements, violet
+ * pour les achats, framboise pour les clients, or pour l'analyse. Les
+ * couleurs d'état (vert, orange, rouge) ne servent qu'aux états, toujours
+ * avec icône et libellé ; vert et bleu restent ceux des prestations et des
+ * ventes dans le graphique.
+ *
+ * Palette du graphique validée (daltonisme et contraste) : ventes et
+ * prestations se distinguent aussi bien en clair qu'en sombre.
+ */
+
+@font-face {
+  font-family: 'Commissioner';
+  src: url('../polices/commissioner-latin.woff2') format('woff2');
+  font-weight: 300 800;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --fond: #f6f4ef;
+  --carte: #ffffff;
+  --carte-2: #faf8f3;
+  --champ: #ffffff;
+  --bordure: #e6e1d6;
+  --bordure-douce: #efebe3;
+  --bordure-controle: #cdc5b6;
+  --survol: rgba(60, 50, 30, 0.045);
+
+  /* Encre */
+  --texte: #1c1a17;
+  --texte-2: #524d45;
+  --texte-3: #6f685d;
+
+  /* Rail (bleu nuit de la v1, plus profond) : l'identité, seule à être bleue */
+  --rail: #1a2f75;
+  --rail-haut: #1e3683;
+  --rail-texte: #c7d2fe;
+  --rail-texte-fort: #ffffff;
+  --rail-survol: rgba(255, 255, 255, 0.07);
+  --rail-actif: rgba(255, 255, 255, 0.13);
+  --rail-filet: rgba(255, 255, 255, 0.1);
+  --rail-icone-active: #93c5fd;
+  --rail-alerte-fond: rgba(251, 146, 60, 0.22);
+  --rail-alerte-texte: #fed7aa;
+  --rail-retard-fond: rgba(248, 113, 113, 0.2);
+  --rail-retard-texte: #fecaca;
+  --logo-haut: #3b82f6;
+  --logo-bas: #2563eb;
+
+  /* Agir */
+  --accent: #2563eb;
+  --accent-fort: #1d4ed8;
+  --accent-survol: #1d4ed8;
+  --accent-doux: #eef3ff;
+  --accent-texte: #1d4ed8;
+  --sur-accent: #ffffff;
+  /* Texte et coches posés sur un aplat de couleur (succès, danger, accent). */
+  --sur-plein: #ffffff;
+  --anneau: rgba(37, 99, 235, 0.22);
+
+  /* Activités */
+  --vente: #2563eb;
+  --vente-doux: #eef3ff;
+  --vente-texte: #1d4ed8;
+  --prestation: #16a34a;
+  --prestation-doux: #e8f7ee;
+  --prestation-texte: #15803d;
+  --neutre: #a8a196;
+  --achat: #7c3aed;
+  --achat-doux: #f3eefe;
+  --achat-texte: #6d28d9;
+
+  /* Encres de domaine (le violet des achats en est une). La variante « rail »
+     se pose sur le bleu nuit du menu. */
+  --sarcelle: #0f766e;
+  --sarcelle-doux: #e2f2ef;
+  --sarcelle-texte: #0d5f58;
+  --sarcelle-rail: #5eead4;
+  --framboise: #be185d;
+  --framboise-doux: #fbe8f0;
+  --framboise-texte: #9d174d;
+  --framboise-rail: #f9a8d4;
+  --or: #a16207;
+  --or-doux: #f8efd4;
+  --or-texte: #854d0e;
+  --violet-rail: #c4b5fd;
+
+  /* États */
+  --succes: #16a34a;
+  --succes-doux: #e8f7ee;
+  --succes-texte: #15803d;
+  --alerte: #ea580c;
+  --alerte-doux: #fff1e6;
+  --alerte-texte: #9a3412;
+  --danger: #dc2626;
+  --danger-doux: #fdecec;
+  --danger-texte: #b91c1c;
+  --danger-fort: #b91c1c;
+
+  /* Barre de sélection flottante : sombre dans les deux thèmes. */
+  --barre: #1c1a17;
+  --barre-bordure: transparent;
+  --barre-texte: #f1f5f9;
+  --barre-texte-2: #cbd5e1;
+  --barre-danger: #dc2626;
+  --barre-resultat: #16a34a;
+  --barre-resultat-bordure: transparent;
+
+  /* Aperçu d'un document imprimé : du papier, quel que soit le thème. */
+  --papier: #ffffff;
+  --papier-trait: #e2e8f0;
+  --papier-titre: #1e3a8a;
+  --papier-accent: #93c5fd;
+  --papier-vente: #2563eb;
+  --papier-prestation: #16a34a;
+
+  /* Matière */
+  --ombre-carte: 0 1px 2px rgba(41, 32, 15, 0.06), 0 1px 1px rgba(41, 32, 15, 0.04);
+  --ombre-haute: 0 1px 3px rgba(41, 32, 15, 0.08), 0 12px 32px -8px rgba(41, 32, 15, 0.18);
+  --ombre-panneau: -24px 0 60px -20px rgba(15, 23, 42, 0.35);
+  --voile: rgba(28, 26, 23, 0.32);
+  /* Arrondis, du plus petit au plus grand. Un élément posé dans un groupe à
+     3 px de marge (segment, flèche d'année) garde un arrondi concentrique :
+     --rayon-groupe = --rayon-petit + 3 px. */
+  --rayon-petit: 8px;   /* dans un groupe : segment, entrée de menu, bouton-icône */
+  --rayon: 10px;        /* bouton, champ, lien du menu */
+  --rayon-groupe: 11px; /* groupe de boutons, pastille d'icône */
+  --rayon-moyen: 12px;  /* bulle, menu, avis, zone de dépôt */
+  --rayon-carte: 14px;  /* carte, panneau flottant */
+
+  /* Rythme (base 4) */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 16px;
+  --e5: 24px;
+  --e6: 32px;
+  --e7: 48px;
+  --e8: 64px;
+
+  /* Mouvement : sortie exponentielle, sorties plus brèves que les entrées */
+  --sortie: cubic-bezier(0.16, 1, 0.3, 1);
+  --rapide: 150ms;
+  --moyen: 260ms;
+
+  --police: 'Commissioner', 'Segoe UI', system-ui, sans-serif;
+  --largeur-rail: 248px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Charbon neutre, sans le bleu de l'ardoise */
+  --fond: #121314;
+  --carte: #1b1c1f;
+  --carte-2: #17181b;
+  --champ: #161719;
+  --bordure: #2c2d32;
+  --bordure-douce: #232428;
+  --bordure-controle: #44464d;
+  --survol: rgba(255, 255, 255, 0.05);
+
+  --texte: #ecebe8;
+  --texte-2: #b5b2ab;
+  --texte-3: #969289;
+
+  /* Le rail suit le charbon, un cran plus sombre : un bleu nuit à côté d'un
+     noir neutre faisait deux applications collées. Le bleu y reste pour la
+     page ouverte. */
+  --rail: #0c0d0f;
+  --rail-haut: #101114;
+  --rail-texte: #b8b5ae;
+  --rail-survol: rgba(255, 255, 255, 0.05);
+  --rail-actif: rgba(96, 165, 250, 0.14);
+  --rail-filet: rgba(255, 255, 255, 0.07);
+
+  --accent: #3b82f6;
+  --accent-fort: #60a5fa;
+  --accent-survol: #2563eb;
+  --accent-doux: rgba(59, 130, 246, 0.14);
+  --accent-texte: #93c5fd;
+  --sur-accent: #ffffff;
+  --anneau: rgba(59, 130, 246, 0.35);
+
+  --vente: #3b82f6;
+  --vente-doux: rgba(59, 130, 246, 0.15);
+  --vente-texte: #93c5fd;
+  --prestation: #1faa55;
+  --prestation-doux: rgba(34, 197, 94, 0.14);
+  --prestation-texte: #86efac;
+  --neutre: #6b6760;
+  --achat: #a78bfa;
+  --achat-doux: rgba(167, 139, 250, 0.15);
+  --achat-texte: #c4b5fd;
+
+  --sarcelle: #2dd4bf;
+  --sarcelle-doux: rgba(45, 212, 191, 0.13);
+  --sarcelle-texte: #5eead4;
+  --framboise: #f472b6;
+  --framboise-doux: rgba(244, 114, 182, 0.14);
+  --framboise-texte: #f9a8d4;
+  --or: #eab308;
+  --or-doux: rgba(234, 179, 8, 0.14);
+  --or-texte: #fcd34d;
+
+  --succes: #22c55e;
+  --succes-doux: rgba(34, 197, 94, 0.14);
+  --succes-texte: #86efac;
+  --alerte: #f97316;
+  --alerte-doux: rgba(249, 115, 22, 0.14);
+  --alerte-texte: #fdba74;
+  --danger: #ef4444;
+  --danger-doux: rgba(239, 68, 68, 0.14);
+  --danger-texte: #fca5a5;
+
+  --barre: #26272b;
+  --barre-bordure: #334155;
+  --barre-resultat: #15803d;
+  --barre-resultat-bordure: #16a34a;
+
+  --ombre-carte: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ombre-haute: 0 2px 6px rgba(0, 0, 0, 0.4), 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+  --ombre-panneau: -24px 0 60px -20px rgba(0, 0, 0, 0.7);
+  --voile: rgba(0, 0, 0, 0.6);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 15px;
+  -webkit-text-size-adjust: 100%;
+  scrollbar-color: var(--bordure-controle) transparent;
+  scrollbar-width: thin;
+}
+
+body {
+  margin: 0;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--police);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* L'attribut `hidden` l'emporte toujours, même sur un `display: flex`. */
+[hidden] {
+  display: none !important;
+}
+
+/* Ce que le navigateur dessine seul porte aussi la marque. */
+::selection {
+  background: var(--anneau);
+  color: var(--texte);
+}
+input,
+textarea {
+  caret-color: var(--accent);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bordure-controle);
+  border: 3px solid var(--fond);
+  border-radius: 999px;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+
+/* Les liens gardent la couleur d'accent, visités compris (jamais le violet natif) :
+   une règle d'auteur sur `a` l'emporte déjà sur la couleur « visité » du
+   navigateur. Pas de sélecteur `:visited` : plus spécifique que `:hover`, il
+   effaçait le survol des liens déjà visités une fois sa transition finie. */
+a {
+  color: var(--accent-texte);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+
+/* Chiffres alignés en colonne ; les grands montants gardent leurs chiffres proportionnels. */
+td,
+th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lu par les lecteurs d'écran, invisible à l'œil. Ancré en haut à gauche : à
+   sa place naturelle, en fin de page (région des annonces), il ajoutait un
+   pixel sous le contenu, et une barre de défilement à une page qui tenait
+   pile dans l'écran. */
+.hors-ecran {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.icone {
+  flex-shrink: 0;
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

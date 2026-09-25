@@ -331,6 +331,24 @@ test('un dossier de sauvegardes inaccessible se signale sans bloquer', (t) => {
   assert.equal(stockage.listerRecettes().length, 1, 'la saisie a bien été enregistrée');
 });
 
+test('renommer un client renomme ses recettes, en une seule écriture', (t) => {
+  const { ouvrir } = environnement(t);
+  const stockage = ouvrir();
+  const cafe = stockage.ajouterClient({ nom: 'Cafe des arts', siret: '' });
+  stockage.ajouterRecette({ ...CHAMPS, client: 'Cafe des arts' });
+  stockage.ajouterRecette({ ...CHAMPS, client: 'CAFÉ DES ARTS' }); // même client, autre graphie
+  stockage.ajouterRecette({ ...CHAMPS, client: 'Boulangerie' });
+
+  const { client, recettesRenommees } = stockage.modifierClient(cafe.id, { nom: 'Café des Arts', siret: '' });
+  assert.equal(client.nom, 'Café des Arts');
+  assert.equal(recettesRenommees, 2);
+  const noms = stockage.listerRecettes().map((r) => r.client).sort();
+  assert.deepEqual(noms, ['Boulangerie', 'Café des Arts', 'Café des Arts']);
+
+  // Écrit sur le disque : relu tel quel.
+  assert.deepEqual(ouvrir().listerRecettes().map((r) => r.client).sort(), noms);
+});
+
 test('cycle complet des clients, triés par nom et persistés', (t) => {
   const { ouvrir } = environnement(t);
 
@@ -345,7 +363,8 @@ test('cycle complet des clients, triés par nom et persistés', (t) => {
   assert.deepEqual(stockage.listerClients().map((c) => c.nom), ['Atelier Alpha', 'Zoé Studio']);
 
   const modifie = stockage.modifierClient(zoe.id, { nom: 'Zoé Studio', siret: '99999999900019' });
-  assert.equal(modifie.siret, '99999999900019');
+  assert.equal(modifie.client.siret, '99999999900019');
+  assert.equal(modifie.recettesRenommees, 0);
 
   assert.equal(stockage.modifierClient('inconnu', { nom: 'X' }), null);
   assert.equal(stockage.supprimerClient(zoe.id), true);

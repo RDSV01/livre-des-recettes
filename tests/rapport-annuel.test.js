@@ -216,6 +216,27 @@ test('le rapport tait les natures d’activité qui ne concernent pas l’entrep
   assert.ok(!nu.includes('Répartition par activité'), 'pas de section sans rien à répartir');
 });
 
+test('une activité à nature unique n’a aucune recette « non catégorisée »', async () => {
+  // Livre libéral réel : d'anciennes recettes classées en prestation, des
+  // récentes saisies sans catégorie (le formulaire ne la demande pas).
+  const recettes = [
+    recette('2026-03-05', 1000, { categorie: 'prestations' }),
+    recette('2026-04-05', 2000),
+    recette('2026-05-05', 500, { categorie: 'ventes' })
+  ];
+  const parametres = { ...PARAMETRES, typeActivite: 'liberal' };
+  const { synthese, detail } = rapportAnnuel({ recettes, achats: [], parametres }, 2026);
+
+  assert.deepEqual(synthese.prestations, { montant: 3500, nombre: 3, part: 100 });
+  assert.equal(synthese.nonCategorise.nombre, 0);
+  assert.equal(synthese.ventes.nombre, 0, 'une catégorie restée d’une autre activité ne compte plus');
+  assert.ok(detail.every((r) => r.categorie === 'prestations'));
+
+  const texte = await texteDuRapport(recettes, 'liberal');
+  assert.ok(!texte.includes('Non catégorisé'));
+  assert.ok(!texte.includes('Répartition par activité'), 'une seule nature : rien à répartir');
+});
+
 test('les classements impriment bien leurs libellés', async () => {
   // Les entrées classées ne portent pas leur libellé sous la même clé : un
   // client a un `nom`, un mode de règlement un `libelle`. Le tableau doit lire

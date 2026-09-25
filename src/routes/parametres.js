@@ -17,20 +17,27 @@ export function routesParametres(stockage) {
     const { erreurs, valeurs } = validerParametres(req.body);
     if (erreurs) return res.status(400).json({ erreurs });
 
-    // Un mode personnalisé utilisé par des recettes ne peut pas être supprimé :
-    // les recettes stockent son code, elles deviendraient illisibles.
+    // Un mode personnalisé utilisé par une recette ou un achat ne peut pas être
+    // supprimé : les lignes stockent son code, elles deviendraient illisibles.
     const conserves = new Set(valeurs.modesPersonnalises.map((m) => m.code));
     const supprimes = (stockage.obtenirParametres().modesPersonnalises ?? [])
       .filter((m) => !conserves.has(m.code));
     if (supprimes.length > 0) {
       const recettes = stockage.listerRecettes();
+      const achats = stockage.listerAchats();
+      const compter = (lignes, code) => lignes.filter((l) => l.modeReglement === code).length;
       for (const mode of supprimes) {
-        const utilisations = recettes.filter((r) => r.modeReglement === mode.code).length;
-        if (utilisations > 0) {
+        const parRecettes = compter(recettes, mode.code);
+        const parAchats = compter(achats, mode.code);
+        if (parRecettes + parAchats > 0) {
+          const usages = [
+            parRecettes ? `${parRecettes} recette${parRecettes > 1 ? 's' : ''}` : '',
+            parAchats ? `${parAchats} achat${parAchats > 1 ? 's' : ''}` : ''
+          ].filter(Boolean).join(' et ');
           return res.status(400).json({
             erreurs: {
               modesPersonnalises:
-                `Le mode « ${mode.libelle} » est utilisé par ${utilisations} recette${utilisations > 1 ? 's' : ''} ` +
+                `Le mode « ${mode.libelle} » est utilisé par ${usages} ` +
                 'et ne peut pas être supprimé. Vous pouvez le renommer.'
             }
           });

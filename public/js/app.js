@@ -1,18 +1,25 @@
 /**
- * Point d'entrée du navigateur : routage par ancre (`#/recettes`, …),
- * construction de la navigation, gestion du thème, raccourcis
- * Annuler / Rétablir et chargement de l'état global, sans aucun framework
- * ni étape de build.
+ * Point d'entrée du navigateur : le menu (rail), le routage par ancre
+ * (`#/recettes`, …), les bandeaux globaux, la mise à jour de l'application,
+ * les raccourcis Annuler / Rétablir et le chargement de l'état global, sans
+ * aucun framework ni étape de build.
+ *
+ * Le rail est construit une fois ; d'une page à l'autre, seul l'indicateur
+ * de la page courante glisse jusqu'au bon lien.
  */
 
 import { api } from './api.js';
 import { chargerEtat, etat, registreAchatsUtile } from './etat.js';
 import {
-  echapperHtml, toast, confirmer, dialogueAttente, chargeur, installerInfobulles
+  echapperHtml, toast, confirmer, dialogueAttente, chargeur, installerInfobulles, mouvementReduit, enFondu
 } from './ui.js';
 import { icone } from './icones.js';
 import { annuler, retablir } from './historique.js';
 import { listeSauvegardes, brancherRestauration } from './sauvegardes.js';
+import { basculerTheme, themeCourant } from './theme.js';
+import { fermerPanneauOuvert } from './panneau.js';
+import { lancerAccueil } from './accueil.js';
+import { alerteUrssaf } from '/partage/declarations.js';
 import { vueTableauDeBord } from './vues/tableau-de-bord.js';
 import { vueRecettes } from './vues/recettes.js';
 import { vueAchats } from './vues/achats.js';
@@ -23,93 +30,101 @@ import { vueExports } from './vues/exports.js';
 import { vueParametres } from './vues/parametres.js';
 
 /**
- * Définition unique des onglets : sert à la fois à la navigation et au
- * routage. Un onglet peut porter une condition d'affichage (`utile`).
+ * Définition unique des pages : sert à la fois au menu et au routage, dans
+ * l'ordre et les groupes du menu (le suivi, les documents, les réglages). Une
+ * page peut porter une condition d'affichage (`utile`).
  */
 const ROUTES = [
-  { chemin: '', label: 'Tableau de bord', icone: 'tableau-de-bord', vue: vueTableauDeBord, forme: 'tableau-de-bord' },
-  { chemin: 'recettes', label: 'Recettes', icone: 'recettes', vue: vueRecettes, forme: 'liste' },
-  { chemin: 'achats', label: 'Achats', icone: 'achats', vue: vueAchats, utile: registreAchatsUtile, forme: 'liste' },
-  { chemin: 'urssaf', label: 'URSSAF', icone: 'urssaf', vue: vueUrssaf, forme: 'simple' },
-  { chemin: 'clients', label: 'Clients', icone: 'clients', vue: vueClients, forme: 'liste' },
-  { chemin: 'import', label: 'Import CSV', icone: 'import', vue: vueImport, forme: 'simple' },
-  { chemin: 'exports', label: 'Exports', icone: 'exports', vue: vueExports, forme: 'simple' },
-  { chemin: 'parametres', label: 'Paramètres', icone: 'parametres', vue: vueParametres, forme: 'simple' }
+  { chemin: '', label: 'Tableau de bord', icone: 'tableau-de-bord', vue: vueTableauDeBord, forme: 'tableau-de-bord', groupe: 1 },
+  { chemin: 'recettes', label: 'Recettes', icone: 'recettes', vue: vueRecettes, forme: 'liste', groupe: 1 },
+  { chemin: 'achats', label: 'Achats', icone: 'achats', vue: vueAchats, utile: registreAchatsUtile, forme: 'liste', groupe: 1 },
+  { chemin: 'urssaf', label: 'URSSAF', icone: 'urssaf', vue: vueUrssaf, forme: 'simple', groupe: 1, alerte: true },
+  { chemin: 'clients', label: 'Clients', icone: 'clients', vue: vueClients, forme: 'liste', groupe: 1 },
+  { chemin: 'import', label: 'Import CSV', icone: 'import', vue: vueImport, forme: 'simple', groupe: 2 },
+  { chemin: 'exports', label: 'Exports', icone: 'telecharger', vue: vueExports, forme: 'simple', groupe: 2 },
+  { chemin: 'parametres', label: 'Paramètres', icone: 'parametres', vue: vueParametres, forme: 'simple', groupe: 3 }
 ];
-
-const CLE_THEME = 'ldr-theme';
 
 /** Vrai tant que les données sont corrompues : la navigation est suspendue. */
 let modeRestauration = false;
 
-// ---- Thème -----------------------------------------------------------------
+/** Premier affichage : l'indicateur du menu se pose sans glisser. */
+let premierAffichage = true;
 
-/**
- * Applique le thème et, sauf mention contraire, mémorise le choix.
- *
- * `memoriser: false` sert au thème hérité du système au premier lancement :
- * l'enregistrer figerait un choix que l'utilisateur n'a jamais fait.
- */
-function appliquerTheme(theme, { memoriser = true } = {}) {
-  const valide = theme === 'dark' ? 'dark' : 'light';
-  document.documentElement.dataset.theme = valide;
-  if (memoriser) {
-    try { localStorage.setItem(CLE_THEME, valide); } catch { /* stockage indisponible : sans gravité */ }
-  }
-  const bouton = document.getElementById('bouton-theme');
-  if (bouton) {
-    const versClair = valide === 'dark';
-    bouton.innerHTML = icone(versClair ? 'soleil' : 'lune') +
-      `<span>Thème ${versClair ? 'clair' : 'sombre'}</span>`;
-    bouton.setAttribute('aria-label', `Passer au thème ${versClair ? 'clair' : 'sombre'}`);
-  }
-}
+// ---- Menu (rail) ----------------------------------------------------------------
 
-function themeInitial() {
-  try {
-    const enregistre = localStorage.getItem(CLE_THEME);
-    if (enregistre === 'light' || enregistre === 'dark') return enregistre;
-  } catch { /* ignore */ }
-  // Aucun choix mémorisé : on suit la préférence du système plutôt que
-  // d'imposer le thème clair à qui a réglé sa machine en sombre.
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function basculerTheme() {
-  const actuel = document.documentElement.dataset.theme;
-  appliquerTheme(actuel === 'light' ? 'dark' : 'light');
-}
-
-// ---- Navigation ------------------------------------------------------------
-
-/** Onglets à afficher, selon les paramètres de l'utilisateur. */
+/** Pages à afficher, selon les paramètres de l'utilisateur. */
 const routesVisibles = () => ROUTES.filter((r) => !r.utile || r.utile());
 
-function construireNavigation() {
+function construireRail() {
   const nav = document.getElementById('navigation');
-  const version = document.getElementById('version-app')?.textContent ?? '';
+  const lien = (r) => `<a class="lien-nav" href="#/${r.chemin}" data-route="${r.chemin}">
+      ${icone(r.icone, { taille: 18 })}<span>${echapperHtml(r.label)}</span>${r.alerte ? '<span class="alerte-nav" hidden></span>' : ''}
+    </a>`;
+  const liens = (n) => routesVisibles().filter((r) => r.groupe === n).map(lien).join('');
+  const groupe = (n) => `<div class="groupe-nav">${liens(n)}</div>`;
   nav.innerHTML = `
-    <div class="marque">${icone('recettes', { taille: 22 })}<span>Livre des recettes</span></div>
-    <div class="liens-nav">
-      ${routesVisibles().map((r) => `
-        <a href="#/${r.chemin}" data-route="${r.chemin}">
-          ${icone(r.icone)}<span>${echapperHtml(r.label)}</span>
-        </a>`).join('')}
-    </div>
-    <div class="pied-nav">
-      <button type="button" class="bouton-theme" id="bouton-theme"></button>
-      <div class="infos-nav">
-        <span id="version-app">${echapperHtml(version)}</span>
-        <span>100 % local, vos données restent chez vous</span>
-      </div>
+    <a class="marque" href="#/" aria-label="Livre des recettes, tableau de bord">
+      <span class="marque-logo">${icone('livre', { taille: 18 })}</span>
+      <span class="marque-nom">Livre des recettes<small id="nom-entreprise"></small></span>
+    </a>
+    <span class="indicateur-nav" aria-hidden="true"></span>
+    <div class="nav-principale">${groupe(1)}${groupe(2)}</div>
+    <div class="pied-rail">
+      <button type="button" class="bascule-theme" id="bouton-theme"></button>
+      ${liens(3)}
+      <p class="mention-locale"><span id="version-app">${etat.systeme ? `Version ${echapperHtml(etat.systeme.version)}` : ''}</span>100 % local, vos données restent chez vous</p>
     </div>`;
-  document.getElementById('bouton-theme').addEventListener('click', basculerTheme);
-  // Remplit le bouton sans rien réécrire : le thème courant est déjà posé.
-  appliquerTheme(document.documentElement.dataset.theme, { memoriser: false });
+  nav.querySelector('#bouton-theme').addEventListener('click', (evenement) => basculerTheme(evenement.currentTarget));
+  majRail({ anime: false });
 }
 
-// Changer de type d'activité fait apparaître ou disparaître l'onglet Achats.
-window.addEventListener('parametres-modifies', construireNavigation);
+/** Met le menu à jour sans le reconstruire : page courante, pastille URSSAF, thème, nom. */
+function majRail({ anime = true } = {}) {
+  const nav = document.getElementById('navigation');
+  const { chemin } = decouperHash();
+  const route = routeDe(chemin);
+  let courant = null;
+  nav.querySelectorAll('.lien-nav').forEach((a) => {
+    const actif = !modeRestauration && a.dataset.route === route.chemin;
+    // La page courante ne peut pas se signaler par la seule couleur du lien.
+    if (actif) { a.setAttribute('aria-current', 'page'); courant = a; } else a.removeAttribute('aria-current');
+  });
+  const indicateur = nav.querySelector('.indicateur-nav');
+  if (courant) {
+    indicateur.style.transition = anime && !mouvementReduit() ? '' : 'none';
+    indicateur.style.transform = `translateY(${courant.offsetTop}px)`;
+    indicateur.style.height = `${courant.offsetHeight}px`;
+    indicateur.style.opacity = '1';
+  } else {
+    indicateur.style.opacity = '0';
+  }
+
+  const alerte = nav.querySelector('.alerte-nav');
+  const texte = etat.parametres && !modeRestauration ? alerteUrssaf(etat.parametres) : '';
+  if (alerte) {
+    alerte.hidden = !texte;
+    alerte.textContent = texte;
+    alerte.classList.toggle('retard', texte === 'En retard');
+  }
+  nav.querySelector('#nom-entreprise').textContent = etat.parametres?.nomEntreprise ?? '';
+
+  const bouton = nav.querySelector('#bouton-theme');
+  const sombre = themeCourant() === 'dark';
+  bouton.innerHTML = `${icone(sombre ? 'soleil' : 'lune', { taille: 17 })}<span>Thème ${sombre ? 'clair' : 'sombre'}</span>`;
+  bouton.setAttribute('aria-label', `Passer au thème ${sombre ? 'clair' : 'sombre'}`);
+}
+
+// Changer de type d'activité fait apparaître ou disparaître la page Achats ;
+// déclarer une période éteint la pastille URSSAF.
+window.addEventListener('parametres-modifies', () => {
+  const liens = [...document.querySelectorAll('#navigation .lien-nav')].map((a) => a.dataset.route).join();
+  if (liens !== routesVisibles().map((r) => r.chemin).join()) construireRail();
+  else majRail();
+});
+window.addEventListener('theme-modifie', () => majRail({ anime: false }));
+
+// ---- Routage ---------------------------------------------------------------------
 
 /** Découpe `#/recettes?nouvelle=1` en `{ chemin: 'recettes', params }`. */
 function decouperHash() {
@@ -118,68 +133,90 @@ function decouperHash() {
   return { chemin: chemin ?? '', params: new URLSearchParams(chaine ?? '') };
 }
 
+const routeDe = (chemin) => routesVisibles().find((r) => r.chemin === chemin) ?? ROUTES[0];
+
 async function afficherVue() {
   if (modeRestauration) return;
   const { chemin, params } = decouperHash();
-  const route = routesVisibles().find((r) => r.chemin === chemin) ?? ROUTES[0];
+  const route = routeDe(chemin);
+  const premiere = premierAffichage;
 
-  document.querySelectorAll('#navigation a[data-route]').forEach((lien) => {
-    const actif = lien.dataset.route === route.chemin;
-    lien.classList.toggle('actif', actif);
-    // La page courante ne peut pas se signaler par la seule couleur du lien.
-    if (actif) lien.setAttribute('aria-current', 'page');
-    else lien.removeAttribute('aria-current');
-  });
+  // Le menu change aussitôt : l'indicateur glisse pendant que la page arrive.
+  majRail({ anime: !premiere });
+  premierAffichage = false;
+
+  // Ce qui appartient à la page précédente s'en va avec elle.
+  fermerPanneauOuvert();
+  document.querySelector('.menu-contextuel')?.remove();
+  const barre = document.getElementById('barre-selection');
+  barre.hidden = true;
+  barre.classList.remove('resultat');
+  barre.onclick = null;
 
   const conteneur = document.getElementById('vue');
-  // La zone de contenu est masquée le temps de préparer la vue, puis révélée en
-  // fondu une fois le contenu (ou le placeholder, si le chargement traîne)
-  // prêt. Rien ne bouge : seule l'opacité de cette zone change, jamais le menu.
-  const contenuPrecedent = conteneur.innerHTML;
-  conteneur.classList.add('vue-cachee');
 
-  // Squelette différé : en local une vue s'affiche en quelques millisecondes ;
-  // le placeholder n'apparaît donc qu'au-delà d'un court délai, en fondu lui
-  // aussi, et seulement si la vue n'a encore rien dessiné.
-  const minuteurSquelette = setTimeout(() => {
-    if (conteneur.innerHTML === contenuPrecedent) {
-      conteneur.innerHTML = chargeur(route.forme);
-      revelerEnFondu(conteneur);
+  /** Dessine la nouvelle page à la place de l'ancienne. */
+  async function dessiner() {
+    const contenuPrecedent = conteneur.innerHTML;
+    // Squelette différé : en local une vue s'affiche en quelques millisecondes ;
+    // le squelette n'apparaît qu'au-delà d'un court délai, si rien n'est encore dessiné.
+    const minuteurSquelette = setTimeout(() => {
+      if (conteneur.innerHTML === contenuPrecedent) conteneur.innerHTML = chargeur(route.forme);
+    }, 180);
+    try {
+      await route.vue(conteneur, params);
+      document.title = route.chemin ? `${route.label} · Livre des recettes` : 'Livre des recettes';
+      rendreBandeaux();
+    } catch (erreur) {
+      console.error(erreur);
+      conteneur.innerHTML = `
+        <div class="page"><section class="carte erreur-page">
+          <div class="carte-corps">
+            <h2>Cette page n’a pas pu s’afficher</h2>
+            <p>${echapperHtml(erreur.message)}</p>
+            <p>Vos données ne sont pas en cause : elles sont enregistrées dans leur fichier.</p>
+            <button type="button" class="btn btn-principal" id="recharger-page">${icone('restaurer', { taille: 16 })}Recharger la page</button>
+          </div>
+        </section></div>`;
+      // Dire « rechargez » sans donner de quoi le faire laisse l'utilisateur
+      // chercher le raccourci de son navigateur.
+      conteneur.querySelector('#recharger-page').addEventListener('click', () => window.location.reload());
+    } finally {
+      clearTimeout(minuteurSquelette);
     }
-  }, 180);
-  try {
-    await route.vue(conteneur, params);
-    rendreBandeaux();
-    revelerEnFondu(conteneur);
-    document.getElementById('contenu').focus();
-  } catch (erreur) {
-    console.error(erreur);
-    conteneur.innerHTML = `
-      <div class="carte">
-        <h2>Cette page n’a pas pu s’afficher</h2>
-        <p>${echapperHtml(erreur.message)}</p>
-        <p>Vos données ne sont pas en cause : elles sont enregistrées dans leur fichier.</p>
-        <button type="button" class="btn btn-primaire" id="recharger-page">
-          ${icone('reinitialiser', { taille: 16 })}<span>Recharger la page</span>
-        </button>
-      </div>`;
-    // Dire « rechargez » sans donner de quoi le faire laisse l'utilisateur
-    // chercher le raccourci de son navigateur.
-    conteneur.querySelector('#recharger-page').addEventListener('click', () => window.location.reload());
-    revelerEnFondu(conteneur);
-  } finally {
-    clearTimeout(minuteurSquelette);
+    window.scrollTo(0, 0);
   }
+
+  // Fondu enchaîné : l'ancienne page s'efface pendant que la nouvelle
+  // apparaît. Le navigateur fige l'écran le temps du dessin (quelques
+  // millisecondes en local), puis mêle les deux images ; le menu reste net.
+  if (premiere) {
+    await dessiner();
+    reveler(conteneur);
+  } else {
+    await enFondu(dessiner);
+  }
+  document.getElementById('contenu').focus({ preventScroll: true });
 }
 
-/** Révèle la zone de contenu en rejouant le fondu (retrait du masque, reflow). */
-function revelerEnFondu(conteneur) {
-  conteneur.classList.remove('vue-cachee', 'vue-entre');
+/**
+ * Premier affichage : la page apparaît en fondu. La classe tombe une fois le
+ * fondu joué : sinon, une page redessinée sur place (changement d'année)
+ * rejouerait son apparition depuis le blanc.
+ */
+function reveler(conteneur) {
+  conteneur.classList.remove('vue-entre');
   void conteneur.offsetWidth;
   conteneur.classList.add('vue-entre');
+  const fin = (evenement) => {
+    if (evenement.target.parentElement !== conteneur) return;
+    conteneur.classList.remove('vue-entre');
+    conteneur.removeEventListener('animationend', fin);
+  };
+  conteneur.addEventListener('animationend', fin);
 }
 
-// ---- Bandeaux globaux --------------------------------------------------------
+// ---- Bandeaux globaux ---------------------------------------------------------------
 
 /**
  * Bandeau rappelant que le livre affiché est le jeu de démonstration, avec un
@@ -188,23 +225,43 @@ function revelerEnFondu(conteneur) {
 function bandeauDemo() {
   if (!etat.parametres?.jeuDemo) return '';
   return `
-    <div class="bandeau-rappel bandeau-demo">
+    <div class="bandeau-global">
       ${icone('info', { taille: 18 })}
       <span>Vous explorez un <strong>jeu de démonstration</strong>. Effacez-le quand vous voulez commencer votre vrai livre des recettes.</span>
-      <button type="button" class="btn btn-tertiaire" id="effacer-demo">${icone('corbeille', { taille: 16 })}<span>Tout effacer</span></button>
+      <button type="button" class="btn btn-petit" id="effacer-demo">${icone('corbeille', { taille: 15 })}Tout effacer</button>
+    </div>`;
+}
+
+/** Dernière réponse de `/api/maj`, ou `null` tant que rien n'est connu. */
+let miseAJour = null;
+
+/**
+ * Bandeau annonçant une nouvelle version, affiché en tête de page quelle que
+ * soit la page. L'exécutable sait se remplacer lui-même ; une installation
+ * depuis les sources renvoie vers la page des versions.
+ */
+function bandeauMaj() {
+  if (!miseAJour?.disponible) return '';
+  const action = miseAJour.remplacable
+    ? `<a class="lien-bouton" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Nouveautés</a>
+       <button type="button" class="btn btn-petit btn-principal" id="lancer-maj">${icone('telecharger', { taille: 15 })}Mettre à jour</button>`
+    : `<a class="btn btn-petit" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Voir la nouvelle version</a>`;
+  return `
+    <div class="bandeau-global">
+      ${icone('etincelle', { taille: 18 })}
+      <span>Version ${echapperHtml(miseAJour.version)} disponible (vous utilisez la ${echapperHtml(etat.systeme.version)}).</span>
+      ${action}
     </div>`;
 }
 
 /**
- * Rend le bandeau global de la page : un seul à la fois, la mise à jour
- * passant devant la démonstration. Empilés, ils repoussaient le titre de la
- * vue et son action principale sous la ligne de flottaison.
+ * Rend le bandeau global : un seul à la fois, la mise à jour passant devant
+ * la démonstration. Empilés, ils repoussaient le titre de la page et son
+ * action principale.
  */
 function rendreBandeaux() {
   const zone = document.getElementById('bandeaux');
-  // Données à restaurer : rien d'autre ne doit détourner l'attention.
   zone.innerHTML = modeRestauration ? '' : (bandeauMaj() || bandeauDemo());
-
   document.getElementById('lancer-maj')?.addEventListener('click', appliquerMiseAJour);
   document.getElementById('effacer-demo')?.addEventListener('click', async (evenement) => {
     const bouton = evenement.currentTarget;
@@ -217,6 +274,8 @@ function rendreBandeaux() {
     bouton.disabled = true;
     try {
       await api.repartirDeZero();
+      // Livre vide : l'accueil guidé reprend au rechargement.
+      window.location.hash = '#/';
       window.location.reload();
     } catch (erreur) {
       bouton.disabled = false;
@@ -225,45 +284,18 @@ function rendreBandeaux() {
   });
 }
 
-// ---- Mise à jour de l'application ---------------------------------------------
-
-/** Dernière réponse de `/api/maj`, ou `null` tant que rien n'est connu. */
-let miseAJour = null;
-
-/**
- * Bandeau annonçant une nouvelle version, affiché en tête de page quel que
- * soit l'onglet. L'exécutable sait se remplacer lui-même ; une installation
- * depuis les sources renvoie vers la page des versions.
- */
-function bandeauMaj() {
-  if (!miseAJour?.disponible) return '';
-  // Un exécutable se met à jour tout seul, mais on propose toujours de lire
-  // ce que la version apporte avant de l'installer.
-  const action = miseAJour.remplacable
-    ? `<a class="lien-attenue" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Nouveautés</a>
-       <button type="button" class="btn btn-tertiaire" id="lancer-maj">Mettre à jour</button>`
-    : `<a class="btn btn-tertiaire" href="${echapperHtml(miseAJour.page)}" target="_blank" rel="noopener">Voir la nouvelle version</a>`;
-
-  return `
-    <div class="bandeau-rappel">
-      ${icone('exports', { taille: 18 })}
-      <span>Version ${echapperHtml(miseAJour.version)} disponible
-      (vous utilisez la ${echapperHtml(etat.systeme.version)}).</span>
-      ${action}
-    </div>`;
-}
+// ---- Mise à jour de l'application -----------------------------------------------------
 
 async function appliquerMiseAJour(evenement) {
   // `currentTarget` est remis à null dès la fin de l'événement : le bouton
   // doit être retenu AVANT la moindre attente.
   const bouton = evenement.currentTarget;
-
   const accord = await confirmer({
     titre: `Installer la version ${miseAJour.version} ?`,
-    message: 'L’application va se mettre à jour puis redémarrer.',
+    message: 'L’application va se mettre à jour puis redémarrer. Vos données ne sont pas touchées.',
     boutonOk: 'Mettre à jour',
     danger: false,
-    iconeOk: 'exports'
+    iconeOk: 'telecharger'
   });
   if (!accord) return;
 
@@ -296,7 +328,7 @@ async function attendreRedemarrage() {
   throw new Error('L’application n’a pas redémarré. Relancez-la à la main.');
 }
 
-// ---- Erreurs inattendues -----------------------------------------------------
+// ---- Erreurs inattendues ----------------------------------------------------------------
 
 // Une erreur de programmation ne doit jamais rester invisible : sans cela,
 // un bouton peut sembler ne rien faire, sans que l'utilisateur comprenne.
@@ -307,7 +339,22 @@ function signalerErreurInattendue(erreur) {
 window.addEventListener('error', (evenement) => signalerErreurInattendue(evenement.error ?? evenement.message));
 window.addEventListener('unhandledrejection', (evenement) => signalerErreurInattendue(evenement.reason));
 
-// ---- Annuler / Rétablir (Ctrl+Z / Ctrl+Y) ------------------------------------
+// Un fichier lâché à côté de sa cible ne doit pas remplacer l'application
+// par le PDF : le navigateur l'ouvrirait à la place de la page.
+for (const type of ['dragover', 'drop']) {
+  window.addEventListener(type, (evenement) => {
+    if ([...(evenement.dataTransfer?.types ?? [])].includes('Files')) evenement.preventDefault();
+  });
+}
+
+// Lien d'évitement : il mène au contenu sans toucher à l'adresse (le routeur
+// y lirait une page).
+document.querySelector('.lien-evitement')?.addEventListener('click', (evenement) => {
+  evenement.preventDefault();
+  document.getElementById('contenu').focus();
+});
+
+// ---- Annuler / Rétablir (Ctrl+Z / Ctrl+Y) ---------------------------------------------
 
 window.addEventListener('keydown', async (evenement) => {
   if (!(evenement.ctrlKey || evenement.metaKey) || evenement.altKey) return;
@@ -316,8 +363,8 @@ window.addEventListener('keydown', async (evenement) => {
   const veutRetablir = touche === 'y' || (touche === 'z' && evenement.shiftKey);
   if (!veutAnnuler && !veutRetablir) return;
 
-  // Dans un champ de saisie ou une boîte de dialogue, on laisse le
-  // comportement natif du navigateur (annulation de texte).
+  // Dans un champ de saisie, un panneau ou une boîte de dialogue, on laisse
+  // le comportement natif du navigateur (annulation de texte).
   const cible = evenement.target;
   if (cible instanceof Element && cible.closest('input, textarea, select')) return;
   if (document.querySelector('dialog[open]')) return;
@@ -334,7 +381,7 @@ window.addEventListener('keydown', async (evenement) => {
   }
 });
 
-// ---- Récupération des données (fichier illisible ou disparu) ------------------
+// ---- Récupération des données (fichier illisible ou disparu) ---------------------------------
 
 /**
  * Écran affiché au démarrage quand le fichier de données est illisible, ou
@@ -347,30 +394,30 @@ window.addEventListener('keydown', async (evenement) => {
  */
 async function afficherEcranRestauration({ titre, introduction, message, disparition = false }) {
   modeRestauration = true;
+  majRail({ anime: false });
   const conteneur = document.getElementById('vue');
   const { sauvegardes } = await api.listerSauvegardes().catch(() => ({ sauvegardes: [] }));
 
   conteneur.innerHTML = `
-    <header class="entete-vue">
-      <div>
-        <h1>${echapperHtml(titre)}</h1>
-        <p>${echapperHtml(introduction)}</p>
-      </div>
-    </header>
-    <div class="carte">
-      <p>${echapperHtml(message)}</p>
-      <p>Choisissez une sauvegarde à restaurer (la plus récente d’abord). Le fichier
-      actuel sera conservé de côté : rien n’est effacé.</p>
-      ${sauvegardes.length === 0
-        ? '<p class="attenue">Aucune sauvegarde disponible. Vous pouvez remplacer manuellement le fichier de données par une copie personnelle, puis relancer l’application.</p>'
-        : listeSauvegardes(sauvegardes)}
-      ${disparition ? `
-        <p class="note-legale">
-          ${icone('info', { taille: 16 })}
-          <span>Vous aviez supprimé ces données volontairement ? Repartez d’un livre vide :
-          les sauvegardes ci-dessus resteront disponibles.</span>
-        </p>
-        <button type="button" class="btn btn-tertiaire" id="repartir-de-zero">Repartir d’un livre vide</button>` : ''}
+    <div class="page">
+      <header class="entete-page">
+        <div>
+          <h1>${echapperHtml(titre)}</h1>
+          <p class="sous-titre">${echapperHtml(introduction)}</p>
+        </div>
+      </header>
+      <p class="avis">${icone('cercle-alerte', { taille: 17 })}<span>${echapperHtml(message)}</span></p>
+      <section class="carte">
+        <div class="carte-corps restauration">
+          <p>Choisissez une sauvegarde à restaurer (la plus récente d’abord). Le fichier actuel sera d’abord mis de côté : rien n’est effacé.</p>
+          <div id="liste-restauration">${sauvegardes.length === 0
+            ? '<p class="attenue">Aucune sauvegarde disponible. Vous pouvez remplacer manuellement le fichier de données par une copie personnelle, puis relancer l’application.</p>'
+            : listeSauvegardes(sauvegardes)}</div>
+          ${disparition ? `
+            <p class="notes">Vous aviez supprimé ces données volontairement ? Repartez d’un livre vide : les sauvegardes ci-dessus resteront disponibles.</p>
+            <button type="button" class="btn" id="repartir-de-zero">${icone('plus', { taille: 16 })}Repartir d’un livre vide</button>` : ''}
+        </div>
+      </section>
     </div>`;
 
   conteneur.querySelector('#repartir-de-zero')?.addEventListener('click', async () => {
@@ -391,45 +438,63 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
     }
   });
 
-  brancherRestauration(conteneur);
+  brancherRestauration(conteneur.querySelector('#liste-restauration'));
+  reveler(conteneur);
 }
 
-// ---- Démarrage -------------------------------------------------------------
+// ---- Démarrage ---------------------------------------------------------------------------
 
-// Le thème hérité du système n'est pas mémorisé : tant que l'utilisateur n'a
-// pas touché au bouton, l'application suit sa machine.
-appliquerTheme(themeInitial(), { memoriser: false });
-construireNavigation();
+construireRail();
+// ---- Accueil guidé ----------------------------------------------------------------------
+
+/** Premier lancement (rien de configuré, accueil jamais fait), ou accueil interrompu. */
+const accueilAttendu = () => etat.parametres.accueil === 'en-cours' ||
+  (etat.systeme.premierLancement && etat.parametres.accueil !== 'termine');
+
+function ouvrirAccueil() {
+  lancerAccueil({
+    // L'accueil se referme sur une page : l'état est relu (paramètres, jeu de
+    // démonstration éventuel), le menu refait, puis la page dessinée derrière lui.
+    fermer: async (route) => {
+      await chargerEtat();
+      construireRail();
+      history.replaceState(null, '', `#/${route}`);
+      await afficherVue();
+    }
+  });
+}
+// Les Paramètres proposent de reprendre l'accueil tant que rien n'est configuré.
+window.addEventListener('ouvrir-accueil', ouvrirAccueil);
+
 // Écouteurs délégués : posés une fois, ils valent pour toutes les vues, qui
 // se redessinent entièrement à chaque navigation.
 installerInfobulles();
-
 window.addEventListener('hashchange', afficherVue);
+// Les polices chargées peuvent décaler les liens : l'indicateur se recale une fois.
+document.fonts?.ready.then(() => majRail({ anime: false }));
+// Paramètres est en bas du menu : sa place suit la hauteur de la fenêtre.
+window.addEventListener('resize', () => majRail({ anime: false }));
 
 chargerEtat()
   .then(() => {
-    // Les onglets dépendent des paramètres : la navigation est refaite une
-    // fois ceux-ci connus.
-    construireNavigation();
-    document.getElementById('version-app').textContent = `Version ${etat.systeme.version}`;
+    // Les pages dépendent des paramètres : le menu est refait une fois ceux-ci connus.
+    construireRail();
     if (etat.systeme.corruption) {
       afficherEcranRestauration({
         titre: 'Données à restaurer',
-        introduction: 'Le fichier de données n’a pas pu être lu. Vos sauvegardes automatiques sont là pour ça.',
+        introduction: 'Le fichier de données n’a pas pu être lu. Restaurez l’une de vos sauvegardes automatiques pour reprendre.',
         message: etat.systeme.corruption
       });
     } else if (etat.systeme.donneesAbsentes) {
       afficherEcranRestauration({
-        titre: 'Vos données ont disparu',
-        introduction: 'Le fichier de données est introuvable, mais vos sauvegardes, elles, sont intactes.',
+        titre: 'Fichier de données introuvable',
+        introduction: 'Vos sauvegardes automatiques, elles, sont toujours là : restaurez-en une pour reprendre.',
         message: `Aucun fichier « ${etat.systeme.fichierDonnees} ». Il a pu être supprimé, ` +
           'déplacé, ou perdu par un dossier synchronisé.',
         disparition: true
       });
-    } else if (etat.systeme.premierLancement && !window.location.hash) {
-      // Première utilisation : direction les Paramètres pour bien démarrer
-      // (le changement d'ancre déclenche l'affichage de la vue).
-      window.location.hash = '#/parametres';
+    } else if (accueilAttendu()) {
+      ouvrirAccueil();
     } else {
       afficherVue();
     }
@@ -445,8 +510,8 @@ chargerEtat()
   .catch((erreur) => {
     console.error(erreur);
     document.getElementById('vue').innerHTML = `
-      <div class="carte">
+      <div class="page"><section class="carte erreur-page"><div class="carte-corps">
         <h2>Connexion impossible</h2>
         <p>Le serveur local ne répond pas : ${echapperHtml(erreur.message)}</p>
-      </div>`;
+      </div></section></div>`;
   });

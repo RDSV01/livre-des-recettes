@@ -42,7 +42,9 @@ const TYPES_MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8'
 };
 
 /** Liste récursive des fichiers d'un dossier, chemins relatifs en URL. */

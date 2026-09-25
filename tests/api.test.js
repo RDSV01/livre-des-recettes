@@ -285,6 +285,22 @@ test('CRUD des clients et refus des doublons', async () => {
   assert.equal((await appeler(`/api/clients/${client.id}`, { methode: 'DELETE' })).status, 404);
 });
 
+test('PUT /api/clients renomme aussi les recettes du client', async () => {
+  const { client } = await (await appeler('/api/clients', { methode: 'POST', corps: { nom: 'Atelier Renommé' } })).json();
+  const { recette } = await (await appeler('/api/recettes', {
+    methode: 'POST', corps: { ...RECETTE, client: 'Atelier Renommé', numeroFacture: 'REN-1' }
+  })).json();
+  const maj = await (await appeler(`/api/clients/${client.id}`, {
+    methode: 'PUT', corps: { nom: 'Atelier Nouveau Nom', siret: '' }
+  })).json();
+  assert.equal(maj.recettesRenommees, 1);
+  const { recettes } = await (await appeler('/api/recettes')).json();
+  assert.equal(recettes.find((r) => r.id === recette.id).client, 'Atelier Nouveau Nom');
+  // Le carnet la rattache toujours à son client.
+  const { clients } = await (await appeler('/api/clients')).json();
+  assert.equal(clients.find((c) => c.id === client.id).nombreRecettes, 1);
+});
+
 test('la recherche SIRET valide le format avant tout appel externe', async () => {
   assert.equal((await appeler('/api/clients/recherche-siret?siret=12')).status, 400);
   assert.equal((await appeler('/api/clients/recherche-siret')).status, 400);
@@ -304,6 +320,19 @@ test('GET /api/urssaf calcule un bilan de trimestre', async () => {
   assert.equal(bilan.libellePeriode, '3e trimestre 2026');
   assert.ok(bilan.chiffreAffaires > 0);
   assert.ok(bilan.nombreEncaissements > 0);
+});
+
+test('GET /api/urssaf/periodes donne toutes les périodes de l’année', async () => {
+  const { periodes } = await (await appeler('/api/urssaf/periodes?annee=2026&type=trimestre')).json();
+  assert.equal(periodes.length, 4);
+  assert.equal(periodes[2].id, '2026-T3');
+  const detail = await (await appeler('/api/urssaf?annee=2026&type=trimestre&valeur=3')).json();
+  // Chaque onglet dit le même montant que le bilan détaillé de sa période.
+  assert.equal(periodes[2].aDeclarer, detail.aDeclarer);
+  assert.equal(periodes[2].nombreEncaissements, detail.nombreEncaissements);
+  const { periodes: mois } = await (await appeler('/api/urssaf/periodes?annee=2026&type=mois')).json();
+  assert.equal(mois.length, 12);
+  assert.equal((await appeler('/api/urssaf/periodes?annee=2026&type=annee')).status, 400);
 });
 
 test('GET /api/urssaf exige des paramètres valides', async () => {
@@ -505,6 +534,26 @@ test('un mode personnalisé se crée, sert dans une recette, et ne peut plus êt
   assert.equal(renommage.status, 200);
 });
 
+test('un mode personnalisé utilisé par un seul achat ne peut pas non plus être supprimé', async () => {
+  const { parametres } = await (await appeler('/api/parametres')).json();
+  const creation = await (await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { ...parametres, modesPersonnalises: [...parametres.modesPersonnalises, { libelle: 'Chèque cadeau' }] }
+  })).json();
+  const mode = creation.parametres.modesPersonnalises.find((m) => m.libelle === 'Chèque cadeau');
+  const achat = await appeler('/api/achats', {
+    methode: 'POST',
+    corps: { dateReglement: '2026-07-01', fournisseur: 'Grossiste', referenceFacture: 'G-1', montant: '10', modeReglement: mode.code }
+  });
+  assert.equal(achat.status, 201);
+  const suppression = await appeler('/api/parametres', {
+    methode: 'PUT',
+    corps: { ...creation.parametres, modesPersonnalises: creation.parametres.modesPersonnalises.filter((m) => m.code !== mode.code) }
+  });
+  assert.equal(suppression.status, 400);
+  assert.match((await suppression.json()).erreurs.modesPersonnalises, /1 achat/);
+});
+
 test('activité mixte : bilan URSSAF ventilé et exports avec catégorie', async () => {
   const { parametres } = await (await appeler('/api/parametres')).json();
   const bascule = await appeler('/api/parametres', {
@@ -551,6 +600,35 @@ test('activité mixte : bilan URSSAF ventilé et exports avec catégorie', async
   );
   assert.doesNotMatch(csvSimple, /Catégorie/);
   assert.doesNotMatch(csvSimple, /dont ventes/);
+});
+
+test('hors activité mixte, la recette prend d’office la catégorie de l’activité', async () => {
+  const { parametres: avant } = await (await appeler('/api/parametres')).json();
+  const regler = (typeActivite) => appeler('/api/parametres', { methode: 'PUT', corps: { ...avant, typeActivite } });
+  const ajouter = async (numeroFacture, extra = {}) => (await (await appeler('/api/recettes', {
+    methode: 'POST', corps: { ...RECETTE, client: 'Client catégorie', numeroFacture, montant: 90, ...extra }
+  })).json()).recette;
+
+  await regler('liberal');
+  const liberale = await ajouter('CAT-1');
+  assert.equal(liberale.categorie, 'prestations', 'une activité libérale est de la prestation de services');
+  // Une catégorie envoyée à tort ne l'emporte pas sur l'activité.
+  const modifiee = (await (await appeler(`/api/recettes/${liberale.id}`, {
+    methode: 'PUT', corps: { ...RECETTE, client: 'Client catégorie', numeroFacture: 'CAT-1', montant: 90, categorie: 'ventes' }
+  })).json()).recette;
+  assert.equal(modifiee.categorie, 'prestations');
+
+  await regler('ventes');
+  const vente = await ajouter('CAT-2');
+  assert.equal(vente.categorie, 'ventes');
+
+  // En activité mixte, la catégorie reste celle de la saisie.
+  await regler('mixte');
+  const mixte = await ajouter('CAT-3');
+  assert.equal(mixte.categorie, '');
+
+  for (const { id } of [liberale, vente, mixte]) await appeler(`/api/recettes/${id}`, { methode: 'DELETE' });
+  await regler(avant.typeActivite);
 });
 
 test('la recherche SIRET refuse une clé de contrôle invalide sans appel réseau', async () => {
@@ -740,6 +818,10 @@ test('suppression groupée puis restauration à l’identique des recettes', asy
 });
 
 test('un lot de modifications invalide est refusé en entier', async () => {
+  // Le reclassement groupé n'existe qu'en activité mixte : ailleurs, la
+  // catégorie suit l'activité.
+  const { parametres } = await (await appeler('/api/parametres')).json();
+  await appeler('/api/parametres', { methode: 'PUT', corps: { ...parametres, typeActivite: 'mixte' } });
   const { recette } = await (await appeler('/api/recettes', {
     methode: 'POST', corps: { ...RECETTE, client: 'Lot C', numeroFacture: '' }
   })).json();
@@ -765,6 +847,7 @@ test('un lot de modifications invalide est refusé en entier', async () => {
   assert.equal(valide.status, 200);
   assert.equal((await valide.json()).recettes[0].categorie, 'ventes');
   await appeler(`/api/recettes/${recette.id}`, { methode: 'DELETE' });
+  await appeler('/api/parametres', { methode: 'PUT', corps: parametres });
 });
 
 test('les achats se suppriment et se restaurent aussi par lot', async () => {

@@ -1,73 +1,51 @@
 /**
- * Composants d'interface communs aux vues : échappement HTML, toasts,
- * modales, formulaires, listes de suggestions et tableaux de registre.
+ * Composants d'interface communs aux vues : échappement HTML, listes
+ * déroulantes habillées, notifications, boîtes de dialogue, champs de
+ * formulaire, bulles d'aide et compteurs animés.
  *
- * Les registres (recettes, achats) partagent ces briques : une correction
- * profite ainsi aux deux d'un coup.
+ * Les retours posés sur place (bouton qui confirme, ligne « Annuler »,
+ * onde de réussite) vivent dans `retours.js`.
  */
 
 import { icone } from './icones.js';
 import { analyserMontant, formaterMontant } from '/partage/montants.js';
-import { dateEnFrancaisLong, NOMS_MOIS } from '/partage/dates.js';
-import { normaliserTexte, majusculeInitiale } from '/partage/texte.js';
-
-/** Nombre de suggestions proposées sous un champ de saisie. */
-const SUGGESTIONS_MAX = 6;
+import { NOMS_MOIS } from '/partage/dates.js';
+import { majusculeInitiale, normaliserTexte } from '/partage/texte.js';
 
 /** L'utilisateur préfère-t-il moins de mouvement ? */
 export const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Options d'un sélecteur d'années, dans l'ordre reçu. */
-export const optionsAnnees = (annees) => annees.map((a) => `<option value="${a}">${a}</option>`).join('');
-
-/** Options des douze mois, de valeur 1 à 12. */
-export const OPTIONS_MOIS = NOMS_MOIS.map((nom, i) => `<option value="${i + 1}">${nom}</option>`).join('');
-
-/** Options d'un sélecteur de codes (`{ code, libelle }` : modes, catégories). */
-export const optionsCodes = (entrees) => entrees
-  .map((e) => `<option value="${echapperHtml(e.code)}">${echapperHtml(e.libelle)}</option>`)
-  .join('');
+let finDuFonduEnCours = Promise.resolve();
 
 /**
- * Résultat d'une recherche d'entreprise par SIRET, sous le champ saisi :
- * recherche en cours (ni nom ni erreur), nom trouvé, ou message d'échec.
+ * Fondu enchaîné de tout l'écran autour d'une mise à jour (changement de
+ * page, période déclarée) : l'image d'avant s'efface pendant que celle d'après
+ * apparaît, sans rien déplacer. Les deux images s'additionnent, donc ce qui ne
+ * change pas (le menu) reste net. Sans prise en charge par le navigateur, ou
+ * en mouvement réduit, la mise à jour se fait simplement.
  *
- * @param {HTMLElement} zone
- * @param {{ nom?: string, erreur?: string }} resultat
+ * @param {() => unknown} miseAJour
+ * @returns {Promise<void>} une fois la mise à jour faite ; le fondu, lui, continue.
  */
-export function resultatSiret(zone, { nom, erreur } = {}) {
-  zone.hidden = false;
-  if (erreur) {
-    zone.innerHTML = `${icone('cercle-alerte', { taille: 18 })}<span>${echapperHtml(erreur)}</span>`;
-  } else if (nom) {
-    zone.innerHTML = `${icone('cercle-valide', { taille: 18 })}<span class="nom-trouve">${echapperHtml(nom)}</span>`;
-  } else {
-    zone.innerHTML = '<span class="attenue">Recherche du nom…</span>';
+export async function enFondu(miseAJour) {
+  if (!document.startViewTransition || mouvementReduit()) {
+    await miseAJour();
+    return;
   }
+  const racine = document.documentElement;
+  racine.classList.add('fondu-en-cours');
+  const transition = document.startViewTransition(miseAJour);
+  // Un fondu interrompu par le suivant (clics rapides) : sans gravité.
+  transition.ready.catch(() => {});
+  const fin = transition.finished.catch(() => {}).then(() => {
+    if (finDuFonduEnCours === fin) racine.classList.remove('fondu-en-cours');
+  });
+  finDuFonduEnCours = fin;
+  await transition.updateCallbackDone;
 }
 
-/**
- * Copie un texte dans le presse-papiers et le dit. En cas d'échec (droit
- * refusé par le navigateur), invite à le sélectionner à la main.
- *
- * @param {string} texte
- * @param {string} quoi ce qui est copié, au masculin (« montant », « chemin »).
- */
-export async function copierDansPressePapiers(texte, quoi) {
-  try {
-    await navigator.clipboard.writeText(texte);
-    toast(`${majusculeInitiale(quoi)} copié dans le presse-papiers.`);
-  } catch {
-    toast(`Copie impossible : sélectionnez le ${quoi} à la main.`, 'erreur');
-  }
-}
-
-/**
- * Identifiants uniques pour relier deux éléments entre eux (`aria-labelledby`,
- * `aria-describedby`) quand le balisage est produit à la volée.
- */
-let compteurIdentifiants = 0;
-const identifiantUnique = (prefixe) => `${prefixe}-${(compteurIdentifiants += 1)}`;
+/** Fin du fondu en cours : ce qui doit s'ouvrir après (un panneau) l'attend. */
+export const finDuFondu = () => finDuFonduEnCours;
 
 /** Échappe un texte pour l'insérer sans risque dans du HTML. */
 export function echapperHtml(texte) {
@@ -80,78 +58,174 @@ export function echapperHtml(texte) {
 }
 
 /**
- * Squelette de chargement : des blocs gris à la forme de la page qui arrive, le
- * temps qu'une vue récupère ses données. La forme épouse celle du contenu réel
- * (un tableau plein pour une liste, des tuiles pour le tableau de bord) et
- * occupe tout l'écran : le passage au contenu ne provoque donc pas de saut.
- * Le miroitement se coupe sous `prefers-reduced-motion`.
- *
- * @param {'liste' | 'tableau-de-bord' | 'simple'} [forme] gabarit à imiter.
+ * Identifiants uniques pour relier deux éléments entre eux (`aria-labelledby`,
+ * `aria-describedby`) quand le balisage est produit à la volée.
  */
-export function chargeur(forme = 'liste') {
-  const contenu = {
-    'tableau-de-bord': `
-      <div class="sq-grille">${'<div class="sq-carte"></div>'.repeat(4)}</div>
-      <div class="sq-bloc"></div>`,
-    liste: `
-      <div class="sq-barre"></div>
-      <div class="sq-tableau">${'<div class="sq-ligne"></div>'.repeat(12)}</div>`,
-    simple: '<div class="sq-bloc"></div>'
-  }[forme] ?? '<div class="sq-bloc"></div>';
+let compteurIdentifiants = 0;
+export const identifiantUnique = (prefixe) => `${prefixe}-${(compteurIdentifiants += 1)}`;
 
-  return `
-    <div class="squelette" role="status" aria-label="Chargement…">
-      <div class="sq-titre"></div>
-      ${contenu}
-    </div>`;
+/** « 3 recettes » : le nombre et le mot accordé. */
+export const accorder = (n, mot, pluriel = `${mot}s`) => `${n} ${n > 1 ? pluriel : mot}`;
+
+/** Monogramme d'un client : les initiales de ses deux premiers mots utiles. */
+export const initiales = (nom) => String(nom ?? '').replace(/^(Mme|M\.|SARL|SAS|SASU|EURL|SCI)\s+/i, '')
+  .split(/\s+/).filter((m) => m.length > 2 || /^\p{Lu}/u.test(m)).slice(0, 2)
+  .map((m) => m[0].toUpperCase()).join('') || '?';
+
+/**
+ * Teinte stable d'un nom (0 à 3), la même à chaque affichage : les initiales
+ * d'un client gardent leur couleur d'un écran à l'autre (voir `.monogramme`).
+ */
+export const teinteDe = (nom) => [...String(nom ?? '').toLowerCase()]
+  .reduce((somme, c) => (somme * 31 + c.codePointAt(0)) % 9973, 7) % 4;
+
+/** SIRET groupé comme sur un avis de situation : 123 456 782 00010. */
+export const siretLisible = (s) => (s ? String(s).replace(/^(\d{3})(\d{3})(\d{3})(\d*)$/, '$1 $2 $3 $4').trim() : '');
+
+/** « 184 ko », « 1,2 Mo » : le poids d'un fichier. */
+export const poidsLisible = (octets) => (octets < 1024 * 1024
+  ? `${Math.max(1, Math.round(octets / 1024))} ko`
+  : `${(octets / 1024 / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`);
+
+// ---- Listes déroulantes --------------------------------------------------------
+
+/** Options d'un sélecteur d'années, dans l'ordre reçu. */
+export const optionsAnnees = (annees, choisie = null) => annees
+  .map((a) => `<option value="${a}"${String(a) === String(choisie) ? ' selected' : ''}>${a}</option>`).join('');
+
+/** Interrupteur marche / arrêt ; la vue qui l'emploie bascule `aria-checked` au clic. */
+export const interrupteur = (id, actif, libelle) =>
+  `<button type="button" class="interrupteur" role="switch" id="${id}" aria-checked="${Boolean(actif)}" aria-label="${echapperHtml(libelle)}"></button>`;
+
+// ---- Choix de l'année --------------------------------------------------------
+
+/**
+ * Choix de l'année par flèches, « ‹ 2026 › », dans le style des groupes à
+ * bascule qui l'entourent : pas de liste déroulante du système, qui détonne
+ * avec le thème. Le contenu vient au branchement (`brancherChoixAnnee`), qui
+ * accepte aussi une valeur hors année (« Toutes », dans les registres) avec
+ * `libelle` et `nom`.
+ */
+export const choixAnnee = ({ id, etiquette = 'Année' }) => `<div class="choix-annee" role="group" id="${id}" aria-label="${echapperHtml(etiquette)}">
+    <button type="button" data-pas="-1">${icone('chevron-gauche', { taille: 16 })}</button>
+    <span class="annee-choisie" aria-live="polite"></span>
+    <button type="button" data-pas="1">${icone('chevron-droite', { taille: 16 })}</button>
+  </div>`;
+
+/**
+ * Branche le choix de l'année. Les flèches mènent à l'année voisine de la
+ * liste (qui peut sauter une année vide) et s'éteignent aux bornes, sans
+ * perdre le focus du clavier.
+ *
+ * @param {HTMLElement} groupe
+ * @param {object} options
+ * @param {number[]} options.annees de la plus récente à la plus ancienne.
+ * @param {number} options.choisie
+ * @param {(annee: number, pas: string) => void} options.surChoix
+ */
+export function brancherChoixAnnee(groupe, { annees, choisie, surChoix, libelle = String, nom = String }) {
+  let annee = choisie;
+  const majAffichage = () => {
+    const i = annees.indexOf(annee);
+    groupe.querySelector('.annee-choisie').textContent = libelle(annee);
+    for (const [pas, cible] of [['-1', annees[i + 1]], ['1', annees[i - 1]]]) {
+      const bouton = groupe.querySelector(`[data-pas="${pas}"]`);
+      bouton.setAttribute('aria-disabled', String(cible === undefined));
+      bouton.setAttribute('aria-label', cible === undefined
+        ? `Aucune année ${pas === '-1' ? 'plus ancienne' : 'plus récente'}`
+        : `Afficher ${nom(cible)}`);
+    }
+  };
+  majAffichage();
+  groupe.addEventListener('click', (evenement) => {
+    const bouton = evenement.target.closest('[data-pas]');
+    if (!bouton || bouton.getAttribute('aria-disabled') === 'true') return;
+    annee = annees[annees.indexOf(annee) - Number(bouton.dataset.pas)];
+    majAffichage();
+    surChoix(annee, bouton.dataset.pas);
+  });
+  /** Pour changer l'année de l'extérieur (filtres effacés), sans rappeler `surChoix`. */
+  return { definir: (nouvelle) => { annee = nouvelle; majAffichage(); } };
+}
+
+/** Options des douze mois, de valeur 1 à 12, avec une majuscule. */
+export const OPTIONS_MOIS = NOMS_MOIS
+  .map((nom, i) => `<option value="${i + 1}">${majusculeInitiale(nom)}</option>`).join('');
+
+/** Options d'un sélecteur de codes (`{ code, libelle }` : modes, catégories). */
+export const optionsCodes = (entrees, choisi = null) => entrees
+  .map((e) => `<option value="${echapperHtml(e.code)}"${e.code === choisi ? ' selected' : ''}>${echapperHtml(e.libelle)}</option>`)
+  .join('');
+
+/**
+ * Liste déroulante habillée : la flèche est dessinée, la liste reste celle du
+ * système (clavier et lecteurs d'écran compris).
+ *
+ * @param {object} options
+ * @param {string} options.id
+ * @param {string} options.options balisage des `<option>`.
+ * @param {string} [options.etiquette] nom lu par les lecteurs d'écran, quand
+ *   aucun `<label>` visible ne le porte (filtres d'une barre d'outils).
+ * @param {string} [options.nom] attribut `name`, dans un formulaire.
+ * @param {string} [options.classe]
+ */
+export function selecteur({ id, options, etiquette = '', nom = '', classe = '' }) {
+  const liste = `<select id="${id}"${nom ? ` name="${nom}"` : ''}>${options}</select>${icone('chevron-bas', { taille: 16 })}`;
+  return etiquette
+    ? `<label class="selecteur ${classe}"><span class="hors-ecran">${echapperHtml(etiquette)}</span>${liste}</label>`
+    : `<div class="selecteur ${classe}">${liste}</div>`;
 }
 
 /**
- * Affiche une notification éphémère en bas à droite.
+ * Pose la marque « filtre actif » sur une liste déroulante habillée : un
+ * filtre qui restreint la liste se voit d'un coup d'œil.
+ */
+export const marquerFiltre = (select) => select.closest('.selecteur')?.classList.toggle('actif', select.value !== '');
+
+// ---- Notifications ------------------------------------------------------------------
+
+/**
+ * Notification éphémère en bas à droite, pour ce qui n'a pas de place où
+ * s'afficher : une erreur imprévue, une annulation au clavier. Les gestes
+ * ordinaires répondent sur place (voir `retours.js`).
  *
- * Une action facultative (« Annuler la suppression ») s'affiche dans le toast.
- * Sans elle, la réparation promise par le message ne serait joignable qu'au
- * clavier, par un raccourci que rien ne montre. Sa présence allonge le délai
- * d'effacement, le temps de la lire puis de la viser.
+ * La zone passe au premier plan (`popover`) : sans cela, une erreur survenue
+ * pendant une saisie restait cachée derrière le panneau ouvert.
  *
  * @param {string} message
  * @param {'succes' | 'erreur'} [type]
- * @param {{ action?: { libelle: string, executer: () => unknown } }} [options]
  */
-export function toast(message, type = 'succes', { action } = {}) {
+export function toast(message, type = 'succes') {
   const conteneur = document.getElementById('toasts');
   const element = document.createElement('div');
   const estErreur = type === 'erreur';
   element.className = `toast ${estErreur ? 'erreur' : 'succes'}`;
   // Une erreur interrompt l'annonce en cours du lecteur d'écran ; une réussite
-  // attend son tour. Le conteneur seul, en `polite`, faisait passer les deux
-  // pour de simples informations.
+  // attend son tour.
   element.setAttribute('role', estErreur ? 'alert' : 'status');
-  element.innerHTML = icone(estErreur ? 'cercle-alerte' : 'cercle-valide') +
+  element.innerHTML = icone(estErreur ? 'cercle-alerte' : 'cercle-valide', { taille: 18 }) +
     `<span>${echapperHtml(message)}</span>`;
 
-  if (action) {
-    const bouton = document.createElement('button');
-    bouton.type = 'button';
-    bouton.className = 'btn btn-tertiaire action-toast';
-    bouton.textContent = action.libelle;
-    bouton.addEventListener('click', () => {
-      element.remove();
-      action.executer();
-    });
-    element.appendChild(bouton);
+  conteneur.appendChild(element);
+  if (conteneur.showPopover) {
+    // Ré-ouverte à chaque ajout : elle repasse ainsi devant une boîte ouverte après elle.
+    if (conteneur.matches(':popover-open')) conteneur.hidePopover();
+    conteneur.showPopover();
   }
 
-  conteneur.appendChild(element);
-
-  // Le survol suspend le compte à rebours : un toast qui porte une action ne
-  // doit pas s'effacer sous le curseur qui la vise.
-  let minuteur = setTimeout(() => element.remove(), action ? 9000 : 4000);
+  // Le survol suspend le compte à rebours : le temps de lire jusqu'au bout.
+  const retirer = () => {
+    element.remove();
+    if (conteneur.childElementCount === 0 && conteneur.hidePopover && conteneur.matches(':popover-open')) {
+      conteneur.hidePopover();
+    }
+  };
+  let minuteur = setTimeout(retirer, 4000);
   element.addEventListener('pointerenter', () => clearTimeout(minuteur));
-  element.addEventListener('pointerleave', () => {
-    minuteur = setTimeout(() => element.remove(), 2000);
-  });
+  element.addEventListener('pointerleave', () => { minuteur = setTimeout(retirer, 2000); });
 }
+
+// ---- Boîtes de dialogue -------------------------------------------------------------
 
 /**
  * Boîte de dialogue créée pour une seule question, puis retirée : elle
@@ -163,13 +237,13 @@ export function toast(message, type = 'succes', { action } = {}) {
  *
  * @param {(idTitre: string) => string} contenu balisage de la boîte ; son
  *   titre doit porter l'identifiant reçu, qui la nomme pour les lecteurs
- *   d'écran (sans lui, ils annoncent « dialogue » et rien d'autre).
+ *   d'écran.
  * @param {string} [classe] classe de la boîte.
  * @returns {{ dialogue: HTMLDialogElement, reponse: Promise<boolean> }}
  */
-export function dialogueTemporaire(contenu, classe = '') {
+function dialogueTemporaire(contenu, classe = '') {
   const dialogue = document.createElement('dialog');
-  if (classe) dialogue.className = classe;
+  dialogue.className = `boite ${classe}`.trim();
   const idTitre = identifiantUnique('titre-dialogue');
   dialogue.setAttribute('aria-labelledby', idTitre);
   dialogue.innerHTML = contenu(idTitre);
@@ -208,12 +282,12 @@ export function confirmer({
   danger = true, iconeOk = 'corbeille'
 }) {
   return dialogueTemporaire((idTitre) => `
-    <form method="dialog" class="corps-dialogue">
+    <form method="dialog" class="boite-corps">
       <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
       <p>${echapperHtml(message)}</p>
-      <div class="pied-dialogue">
-        <button type="button" class="btn btn-secondaire" data-role="annuler">Annuler</button>
-        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primaire'}" data-role="ok">
+      <div class="boite-pied">
+        <button type="button" class="btn btn-fantome" data-role="annuler">Annuler</button>
+        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-principal'}" data-role="ok">
           ${icone(iconeOk, { taille: 16 })}<span>${echapperHtml(boutonOk)}</span>
         </button>
       </div>
@@ -229,11 +303,11 @@ export function confirmer({
  */
 export function dialogueAttente({ titre, message }) {
   const dialogue = document.createElement('dialog');
-  dialogue.className = 'dialogue-attente';
+  dialogue.className = 'boite boite-attente';
   const idTitre = identifiantUnique('titre-attente');
   dialogue.setAttribute('aria-labelledby', idTitre);
   dialogue.innerHTML = `
-    <div class="corps-dialogue">
+    <div class="boite-corps">
       <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
       <p class="etat-attente" aria-live="polite">${echapperHtml(message)}</p>
       <div class="barre-attente"><span></span></div>
@@ -254,27 +328,44 @@ export function dialogueAttente({ titre, message }) {
   };
 }
 
+// ---- Chargement ----------------------------------------------------------------------
+
 /**
- * Ouvre une boîte de dialogue déjà présente dans la page, et rend le focus à
- * son déclencheur quand elle se referme.
+ * Squelette de chargement : des blocs à la forme de la page qui arrive, le
+ * temps qu'une vue récupère ses données. N'apparaît qu'au-delà d'un court
+ * délai (voir `app.js`) : en local, une vue s'affiche presque toujours avant.
  *
- * `showModal()` seul déplace bien le focus dans la boîte, mais ne le ramène
- * nulle part ensuite : après une annulation, le clavier repartait du haut du
- * document, loin de la ligne sur laquelle on travaillait.
+ * @param {'liste' | 'tableau-de-bord' | 'simple'} [forme] gabarit à imiter.
  */
-export function ouvrirModale(dialogue) {
-  const origine = document.activeElement;
-  dialogue.addEventListener('close', () => {
-    if (origine instanceof HTMLElement && origine.isConnected) origine.focus();
-  }, { once: true });
-  dialogue.showModal();
+export function chargeur(forme = 'liste') {
+  const contenu = {
+    'tableau-de-bord': `
+      <div class="sq-grille">${'<div class="sq-carte"></div>'.repeat(4)}</div>
+      <div class="sq-bloc"></div>`,
+    liste: `<div class="sq-tableau">${'<div class="sq-ligne"></div>'.repeat(10)}</div>`,
+    simple: '<div class="sq-bloc"></div>'
+  }[forme] ?? '<div class="sq-bloc"></div>';
+
+  return `
+    <div class="page squelette" role="status" aria-label="Chargement…">
+      <div class="sq-titre"></div>
+      ${contenu}
+    </div>`;
+}
+
+// ---- Formulaires ------------------------------------------------------------------------
+
+/** Le champ refusé secoue la tête : l'œil va droit à lui. */
+function secouer(element) {
+  element.classList.remove('secoue');
+  void element.offsetWidth;
+  element.classList.add('secoue');
 }
 
 /**
  * Applique les erreurs de validation `{ champ: message }` à un formulaire,
  * puis amène le premier champ fautif sous les yeux de l'utilisateur : un
- * message d'erreur hors de l'écran, dans un long formulaire, donne
- * l'impression que rien ne s'est passé.
+ * message d'erreur hors de l'écran donne l'impression que rien ne s'est passé.
  */
 export function afficherErreursFormulaire(formulaire, erreurs) {
   effacerErreursFormulaire(formulaire);
@@ -282,21 +373,25 @@ export function afficherErreursFormulaire(formulaire, erreurs) {
     const conteneur = formulaire.querySelector(`[data-champ="${champ}"]`);
     if (!conteneur) continue;
     conteneur.classList.add('invalide');
+    conteneur.querySelectorAll('input, select, textarea').forEach((c) => c.setAttribute('aria-invalid', 'true'));
     const zone = conteneur.querySelector('.erreur-champ');
-    if (zone) zone.textContent = message;
+    if (zone) zone.innerHTML = `${icone('cercle-alerte', { taille: 14 })}<span>${echapperHtml(message)}</span>`;
   }
 
   // Le premier dans l'ordre de la page, pas dans celui des erreurs reçues.
   const premier = formulaire.querySelector('.champ.invalide');
   if (!premier) return;
   premier.scrollIntoView({ behavior: mouvementReduit() ? 'auto' : 'smooth', block: 'center' });
+  const saisie = premier.querySelector('input, select, textarea, button');
   // Le défilement est déjà fait : le focus ne doit pas en déclencher un autre.
-  premier.querySelector('input, select, textarea')?.focus({ preventScroll: true });
+  saisie?.focus({ preventScroll: true });
+  if (saisie) secouer(saisie);
 }
 
 /** Efface toutes les erreurs affichées dans un formulaire. */
 export function effacerErreursFormulaire(formulaire) {
   formulaire.querySelectorAll('.champ.invalide').forEach((c) => c.classList.remove('invalide'));
+  formulaire.querySelectorAll('[aria-invalid="true"]').forEach((c) => c.removeAttribute('aria-invalid'));
   formulaire.querySelectorAll('.erreur-champ').forEach((z) => { z.textContent = ''; });
 }
 
@@ -321,14 +416,18 @@ export function installerChampMontant(formulaire) {
   const conteneur = formulaire.querySelector('[data-champ="montant"]');
   const signaler = (message) => {
     conteneur.classList.toggle('invalide', Boolean(message));
-    conteneur.querySelector('.erreur-champ').textContent = message;
+    if (message) champ.setAttribute('aria-invalid', 'true');
+    else champ.removeAttribute('aria-invalid');
+    conteneur.querySelector('.erreur-champ').innerHTML = message
+      ? `${icone('cercle-alerte', { taille: 14 })}<span>${echapperHtml(message)}</span>`
+      : '';
   };
   champ.addEventListener('input', () => signaler(''));
   champ.addEventListener('blur', () => {
     const brut = champ.value.trim();
     if (!brut) return;
     if (analyserMontant(brut) === null) {
-      signaler('Montant illisible. Attendu : 1234,56 (virgule ou point décimal).');
+      signaler('Montant non reconnu. Format attendu : 1234,56 (virgule ou point décimal).');
       return;
     }
     champ.value = formaterChampMontant(brut);
@@ -336,161 +435,35 @@ export function installerChampMontant(formulaire) {
 }
 
 /**
- * Garde-fou d'une boîte de saisie : l'abandonner après l'avoir modifiée
- * (bouton Annuler ou touche Échap) demande confirmation.
+ * Résultat d'une recherche d'entreprise par SIRET, sous le champ saisi :
+ * recherche en cours (ni nom ni erreur), nom trouvé, ou message d'échec.
  *
- * @param {object} options
- * @param {HTMLDialogElement} options.dialogue
- * @param {HTMLElement} options.boutonAnnuler
- * @param {() => string} options.lireEtat instantané des champs, comparable.
- * @returns {() => void} mémorise l'état de référence (à l'ouverture).
+ * @param {HTMLElement} zone
+ * @param {{ nom?: string, erreur?: string, texte?: string }} [resultat]
  */
-export function installerGardeFormulaire({ dialogue, boutonAnnuler, lireEtat }) {
-  let etatInitial = '';
-  const fermer = async () => {
-    if (lireEtat() !== etatInitial) {
-      const accord = await confirmer({
-        titre: 'Abandonner cette saisie ?',
-        message: 'Les informations du formulaire seront perdues.',
-        boutonOk: 'Abandonner'
-      });
-      if (!accord) return;
-    }
-    dialogue.close();
-  };
-  boutonAnnuler.addEventListener('click', fermer);
-  dialogue.addEventListener('cancel', (evenement) => {
-    evenement.preventDefault();
-    fermer();
-  });
-  return () => { etatInitial = lireEtat(); };
+export function resultatSiret(zone, { nom, erreur, texte } = {}) {
+  zone.hidden = false;
+  zone.className = `aide-champ${erreur ? ' erreur' : nom ? ' ok' : ''}`;
+  if (erreur) {
+    zone.innerHTML = `${icone('cercle-alerte', { taille: 14 })}<span>${echapperHtml(erreur)}</span>`;
+  } else if (nom) {
+    zone.innerHTML = `${icone('cercle-valide', { taille: 14 })}<span>${echapperHtml(texte ?? `Trouvé : ${nom}`)}</span>`;
+  } else {
+    zone.innerHTML = `${icone('chargement', { taille: 14, classe: 'tourne' })}<span>Recherche dans l’annuaire des entreprises…</span>`;
+  }
 }
 
-/**
- * Liste de suggestions sous un champ de saisie, reprenant les valeurs déjà
- * enregistrées (libellés d'une recette, fournisseurs d'un achat).
- *
- * Composant maison plutôt qu'un `datalist` du navigateur : celui-ci s'affiche
- * différemment d'un navigateur à l'autre et ne se laisse pas mettre au style
- * du reste de l'application.
- *
- * @param {object} options
- * @param {HTMLInputElement} options.champ champ de saisie surveillé.
- * @param {HTMLElement} options.liste conteneur des suggestions.
- * @param {() => string[]} options.valeurs valeurs connues, relues à chaque
- *   frappe (la liste se recharge après chaque enregistrement).
- * @returns {() => void} ferme la liste (à appeler en ouvrant un formulaire).
- */
-export function installerSuggestions({ champ, liste, valeurs }) {
-  let visibles = [];
-  let indexActif = -1;
-
-  // Le champ et sa liste forment un `combobox` en bonne et due forme : sans ces
-  // rôles, les flèches ne déplaçaient qu'une classe CSS, que rien n'annonçait.
-  if (!liste.id) liste.id = identifiantUnique('liste-suggestions');
-  liste.setAttribute('role', 'listbox');
-  champ.setAttribute('role', 'combobox');
-  champ.setAttribute('aria-autocomplete', 'list');
-  champ.setAttribute('aria-controls', liste.id);
-  champ.setAttribute('aria-expanded', 'false');
-
-  const marquerActif = () => {
-    [...liste.children].forEach((option, i) => option.classList.toggle('actif', i === indexActif));
-    const actif = liste.children[indexActif];
-    if (actif) champ.setAttribute('aria-activedescendant', actif.id);
-    else champ.removeAttribute('aria-activedescendant');
-  };
-
-  const fermer = () => {
-    liste.hidden = true;
-    liste.innerHTML = '';
-    visibles = [];
-    indexActif = -1;
-    champ.setAttribute('aria-expanded', 'false');
-    champ.removeAttribute('aria-activedescendant');
-  };
-
-  const ouvrir = () => {
-    const saisie = normaliserTexte(champ.value);
-    visibles = saisie === '' ? [] : valeurs()
-      .filter((v) => normaliserTexte(v).includes(saisie) && normaliserTexte(v) !== saisie)
-      .slice(0, SUGGESTIONS_MAX);
-    if (visibles.length === 0) return fermer();
-    indexActif = -1;
-    liste.innerHTML = visibles
-      .map((v, i) => `<div role="option" id="${liste.id}-${i}" aria-selected="false" data-index="${i}">${echapperHtml(v)}</div>`)
-      .join('');
-    liste.hidden = false;
-    champ.setAttribute('aria-expanded', 'true');
-    champ.removeAttribute('aria-activedescendant');
-  };
-
-  champ.addEventListener('input', ouvrir);
-  champ.addEventListener('keydown', (evenement) => {
-    if (liste.hidden) return;
-    if (evenement.key === 'ArrowDown' || evenement.key === 'ArrowUp') {
-      evenement.preventDefault();
-      const pas = evenement.key === 'ArrowDown' ? 1 : -1;
-      indexActif = (indexActif + pas + visibles.length) % visibles.length;
-      [...liste.children].forEach((option, i) => option.setAttribute('aria-selected', String(i === indexActif)));
-      marquerActif();
-    } else if (evenement.key === 'Enter') {
-      // Une suggestion surlignée est choisie ; sinon Enter garde son rôle.
-      if (indexActif >= 0) {
-        evenement.preventDefault();
-        champ.value = visibles[indexActif];
-      }
-      fermer();
-    } else if (evenement.key === 'Escape') {
-      // Ne ferme que la liste, pas la boîte de dialogue.
-      evenement.preventDefault();
-      fermer();
-    }
-  });
-  // `pointerdown` précède le `blur` du champ : le clic choisit la suggestion.
-  liste.addEventListener('pointerdown', (evenement) => {
-    const option = evenement.target.closest('[role="option"]');
-    if (!option) return;
-    evenement.preventDefault();
-    champ.value = visibles[Number(option.dataset.index)];
-    fermer();
-  });
-  champ.addEventListener('blur', () => setTimeout(fermer, 120));
-  return fermer;
-}
-
-/**
- * Affiche sous un champ de type date la date saisie en toutes lettres
- * (« 28 mai 2026 »), sans changer la façon de la renseigner. L'aperçu est
- * ajouté après le champ et se met à jour à chaque changement.
- *
- * @returns {() => void} rafraîchit l'aperçu (à appeler après un remplissage
- *   programmatique, qui ne déclenche pas d'événement).
- */
-export function installerApercuDate(champ) {
-  const apercu = document.createElement('small');
-  apercu.className = 'apercu-date';
-  champ.insertAdjacentElement('afterend', apercu);
-  const rafraichir = () => { apercu.textContent = dateEnFrancaisLong(champ.value); };
-  champ.addEventListener('input', rafraichir);
-  champ.addEventListener('change', rafraichir);
-  rafraichir();
-  return rafraichir;
-}
+// ---- Bulles d'aide ----------------------------------------------------------------------
 
 /**
  * Bulle d'aide : un « i » posé à côté d'un titre, dont le texte apparaît au
  * survol, au focus clavier ou au clic.
  *
  * Le déclencheur porte `aria-describedby` vers la bulle : c'est ce lien qui
- * fait lire l'explication par un lecteur d'écran. Sans lui, le seul nom
- * annoncé était « En savoir plus sur… », et le contenu, souvent une précision
- * légale, restait inaudible.
+ * fait lire l'explication par un lecteur d'écran.
  *
  * Réservée à ce qui éclaire sans rien demander. Un avertissement qui appelle
- * une action de l'utilisateur (des recettes à catégoriser, une sauvegarde qui
- * a échoué) doit rester visible : le cacher derrière un survol reviendrait à
- * ne pas le dire.
+ * une action de l'utilisateur doit rester visible.
  *
  * @param {string} texte contenu de la bulle.
  * @param {string} [pour] ce que la bulle explique, pour les lecteurs d'écran.
@@ -502,18 +475,14 @@ export function infobulle(texte, pour = 'ce réglage') {
         aria-expanded="false" aria-label="En savoir plus sur ${echapperHtml(pour)}">
         ${icone('info', { taille: 15 })}
       </button>
-      <span class="bulle" role="tooltip" id="${idBulle}">${echapperHtml(texte)}</span>
+      <span class="bulle-aide" role="tooltip" id="${idBulle}">${echapperHtml(texte)}</span>
     </span>`;
 }
 
 /**
  * Fait apparaître les bulles d'aide au survol et au focus clavier, en les
- * plaçant elles-mêmes dans la fenêtre.
- *
- * Le placement ne peut pas être laissé au CSS seul : une bulle ancrée sous
- * son icône déborde dès que celle-ci est près du bord droit, et la carte qui
- * la contient la rogne. On la positionne donc en coordonnées de fenêtre, puis
- * on la ramène à l'intérieur si elle dépasse.
+ * plaçant elles-mêmes dans la fenêtre : une bulle ancrée sous son icône
+ * déborde dès que celle-ci est près du bord droit.
  *
  * Écouteurs délégués posés une fois pour toutes : les vues se redessinent
  * entièrement à chaque navigation, des écouteurs par élément seraient perdus.
@@ -525,14 +494,11 @@ export function installerInfobulles() {
 
   const montrer = (declencheur) => {
     const bulle = declencheur.nextElementSibling;
-    if (!bulle?.classList.contains('bulle')) return;
+    if (!bulle?.classList.contains('bulle-aide')) return;
     // Mesurable même cachée : `visibility` conserve la mise en page.
     const ancre = declencheur.getBoundingClientRect();
     const taille = bulle.getBoundingClientRect();
-    const gauche = Math.max(
-      MARGE,
-      Math.min(ancre.left, window.innerWidth - taille.width - MARGE)
-    );
+    const gauche = Math.max(MARGE, Math.min(ancre.left, window.innerWidth - taille.width - MARGE));
     bulle.style.left = `${gauche}px`;
     bulle.style.top = `${ancre.bottom + MARGE}px`;
     bulle.classList.add('visible');
@@ -579,8 +545,7 @@ export function installerInfobulles() {
   });
 
   // Une bulle placée en coordonnées de fenêtre suivrait mal un défilement :
-  // autant la refermer. Le travail est reporté à la prochaine image, pour ne
-  // pas interroger le document à chaque événement de défilement.
+  // autant la refermer, à l'image suivante.
   let defilementPrevu = false;
   window.addEventListener('scroll', () => {
     if (defilementPrevu) return;
@@ -588,7 +553,7 @@ export function installerInfobulles() {
     requestAnimationFrame(() => {
       defilementPrevu = false;
       epinglee = null;
-      document.querySelectorAll('.bulle.visible').forEach((b) => {
+      document.querySelectorAll('.bulle-aide.visible').forEach((b) => {
         b.classList.remove('visible');
         b.previousElementSibling?.setAttribute('aria-expanded', 'false');
       });
@@ -596,28 +561,7 @@ export function installerInfobulles() {
   }, true);
 }
 
-/**
- * En-tête de colonne triable.
- *
- * Le libellé est un vrai bouton : posé sur le `th` seul, le tri d'un registre
- * de plusieurs centaines de lignes n'existait qu'à la souris.
- */
-export function enteteTri(cleTri, libelle, classe = '') {
-  return `<th class="triable ${classe}" data-tri="${cleTri}" aria-sort="none">
-      <button type="button" class="entete-tri">${libelle}<span class="indicateur-tri"></span></button>
-    </th>`;
-}
-
-/** Place la flèche de tri sur la colonne active du tableau, et l'annonce. */
-export function majIndicateursTri(entetes, tri) {
-  entetes.querySelectorAll('th.triable').forEach((th) => {
-    const actif = th.dataset.tri === tri.colonne;
-    th.setAttribute('aria-sort', actif ? (tri.sens === 'asc' ? 'ascending' : 'descending') : 'none');
-    th.querySelector('.indicateur-tri').innerHTML = actif
-      ? icone(tri.sens === 'asc' ? 'chevron-haut' : 'chevron-bas', { taille: 13 })
-      : '';
-  });
-}
+// ---- Divers --------------------------------------------------------------------------------
 
 /**
  * Adresse du bouton « Exporter » d'un registre : la page Exports, sur la carte
@@ -635,78 +579,178 @@ export function lienExport(registre, { annee, mois } = {}) {
 }
 
 /**
- * Puces des filtres actifs, chacune retirable d'un clic.
- *
- * Les filtres survivent au changement de vue : sans ce rappel, un sous-total
- * filtré se présentait comme le livre entier, juste avant l'export ou la
- * recopie d'un montant dans une déclaration.
- *
- * @param {{ cle: string, libelle: string }[]} actifs
- */
-export function pucesFiltres(actifs) {
-  return actifs.map((f) => `
-    <button type="button" class="puce-filtre" data-filtre="${echapperHtml(f.cle)}"
-      aria-label="Retirer le filtre ${echapperHtml(f.libelle)}">
-      <span>${echapperHtml(f.libelle)}</span>${icone('croix', { taille: 13 })}
-    </button>`).join('');
-}
-
-/**
- * Met à jour la barre d'actions groupées : elle n'apparaît que si quelque
- * chose est coché, et la case d'en-tête ne l'est que si toutes les lignes
- * affichées le sont.
- *
- * @param {(nombre: number) => string} libelle décompte à afficher, accordé
- *   selon le registre (« 3 recettes sélectionnées », « 3 achats… »).
- */
-export function majBarreSelection({ barre, compte, toutSelectionner }, selection, idsVisibles, libelle) {
-  barre.hidden = selection.size === 0;
-  compte.textContent = libelle(selection.size);
-  toutSelectionner.checked = idsVisibles.length > 0 && idsVisibles.every((id) => selection.has(id));
-}
-
-/**
  * Fait défiler les valeurs chiffrées jusqu'à leur montant : chaque élément
- * `[data-compteur]` monte de zéro à sa cible en une demi-seconde. Le texte
- * final déjà présent reste la référence exacte (aucune divergence de format).
- * Ne fait rien si l'utilisateur préfère moins de mouvement.
+ * `[data-compteur]` monte de zéro à sa cible. Le texte final déjà présent
+ * reste la référence exacte (aucune divergence de format). Ne fait rien si
+ * l'utilisateur préfère moins de mouvement.
  *
  * @param {HTMLElement} racine conteneur où chercher les compteurs.
  * @param {string} devise code de devise, pour les compteurs de montant.
  */
-export function animerCompteurs(racine, devise) {
+export function animerCompteurs(racine, devise, depuis = null) {
   if (mouvementReduit()) return;
-  const DUREE = 550;
+  const DUREE = depuis ? 700 : 900;
   for (const element of racine.querySelectorAll('[data-compteur]')) {
     const cible = Number(element.dataset.compteur);
-    if (!Number.isFinite(cible) || cible === 0) continue;
-    const texteFinal = element.textContent;
-    const formater = element.dataset.format === 'entier'
-      ? (v) => String(Math.round(v))
-      : (v) => formaterMontant(v, devise);
+    // Au changement d'année, chaque compteur part de sa valeur précédente.
+    const origine = depuis ? Number(depuis[element.dataset.cle] ?? 0) : 0;
+    if (!Number.isFinite(cible) || !Number.isFinite(origine) || cible === origine) continue;
+    const final = element.innerHTML;
     const debut = performance.now();
     const avancer = (maintenant) => {
       const t = Math.min(1, (maintenant - debut) / DUREE);
-      const progression = 1 - (1 - t) ** 3; // départ vif, fin douce
-      element.textContent = t < 1 ? formater(cible * progression) : texteFinal;
+      const progression = 1 - (1 - t) ** 4; // départ vif, fin douce
+      element.innerHTML = t < 1 ? montantDetaille(origine + (cible - origine) * progression, devise) : final;
       if (t < 1) requestAnimationFrame(avancer);
     };
     requestAnimationFrame(avancer);
   }
 }
 
+/** Valeurs des compteurs affichés, par clé (`data-cle`) : le point de départ du prochain défilement. */
+export const valeursCompteurs = (racine) => Object.fromEntries(
+  [...racine.querySelectorAll('[data-compteur][data-cle]')].map((e) => [e.dataset.cle, Number(e.dataset.compteur)])
+);
+
 /**
- * Fait disparaître des lignes de tableau (fondu vers la gauche) avant leur
- * retrait réel, pour que la suppression se voie. Résout quand l'animation est
- * finie, ou immédiatement si l'utilisateur préfère moins de mouvement.
- *
- * @param {Iterable<HTMLElement>} lignes lignes `<tr>` à faire partir.
+ * Montant en HTML pour les grands chiffres : « 2 705 » se lit d'abord,
+ * « ,00 € » suit en retrait, plus petit. Un format sans décimales reste tel
+ * quel.
  */
-export function animerDepartLignes(lignes) {
-  const cibles = [...lignes].filter(Boolean);
-  if (cibles.length === 0 || mouvementReduit()) return Promise.resolve();
-  for (const tr of cibles) tr.classList.add('ligne-part');
-  return new Promise((resoudre) => setTimeout(resoudre, 240));
+export function montantDetaille(valeur, devise) {
+  const texte = formaterMontant(valeur, devise);
+  const morceaux = /^(.*\d)(,\d+)(.*)$/.exec(texte);
+  if (!morceaux) return echapperHtml(texte);
+  return `<span class="montant-detaille">${echapperHtml(morceaux[1])}<span class="centimes">${echapperHtml(morceaux[2] + morceaux[3])}</span></span>`;
+}
+
+/**
+ * Réordonnancement animé (technique « FLIP ») : la place de chaque élément est
+ * relevée avant la mise à jour, puis chacun glisse de l'ancienne à la
+ * nouvelle ; les nouveaux venus apparaissent en fondu. Seuls les éléments à
+ * l'écran bougent. Sans effet en mouvement réduit.
+ *
+ * @param {HTMLElement} racine
+ * @param {string} selecteur éléments suivis.
+ * @param {(e: HTMLElement) => string} cle identité d'un élément d'un rendu à l'autre.
+ * @returns {() => void} à appeler une fois le contenu remplacé.
+ */
+export function preparerFlip(racine, selecteur, cle) {
+  if (mouvementReduit()) return () => {};
+  const avant = new Map([...racine.querySelectorAll(selecteur)].map((e) => [cle(e), e.getBoundingClientRect().top]));
+  return () => {
+    const visible = (y) => y > -120 && y < innerHeight + 120;
+    for (const element of racine.querySelectorAll(selecteur)) {
+      const haut = avant.get(cle(element));
+      const apres = element.getBoundingClientRect().top;
+      if (!visible(apres) && (haut === undefined || !visible(haut))) continue;
+      if (haut === undefined) {
+        element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+      } else if (Math.abs(haut - apres) >= 1) {
+        element.animate([{ transform: `translateY(${haut - apres}px)` }, { transform: 'none' }],
+          { duration: 340, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+      }
+    }
+  };
+}
+
+/** Hauteur occupée par un élément, marges comprises : l'état déplié. */
+function encombrement(element) {
+  const style = getComputedStyle(element);
+  return {
+    height: `${element.offsetHeight}px`,
+    paddingTop: style.paddingTop,
+    paddingBottom: style.paddingBottom,
+    marginTop: style.marginTop,
+    marginBottom: style.marginBottom,
+    opacity: 1
+  };
+}
+
+const REPLIE = { height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', opacity: 0 };
+
+/**
+ * Même durée et même courbe pour déplier et replier : quand un élément en
+ * remplace un autre (un avis écarté, son retour à la place), la hauteur totale
+ * varie toujours dans le même sens, sans rebond.
+ */
+const PLIAGE = { duration: 320, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' };
+
+/**
+ * Un élément qui vient d'apparaître se déplie depuis une hauteur nulle, puis
+ * son contenu se montre en fondu : ce qui est dessous descend en douceur au
+ * lieu de sauter. Sans effet en mouvement réduit.
+ */
+export function deplierHauteur(element) {
+  if (mouvementReduit() || !element?.isConnected) return;
+  const plein = encombrement(element);
+  const debordement = element.style.overflow;
+  element.style.overflow = 'hidden';
+  element.animate([REPLIE, { opacity: 0, offset: 0.35 }, plein], PLIAGE)
+    .finished.catch(() => {}).then(() => { element.style.overflow = debordement; });
+}
+
+/**
+ * L'inverse : le contenu s'efface, puis l'élément se replie jusqu'à une
+ * hauteur nulle avant d'être retiré ; ce qui est dessous remonte en douceur.
+ * La promesse est tenue une fois l'élément retiré.
+ */
+export function replierPuisRetirer(element) {
+  if (!element?.isConnected) return Promise.resolve();
+  if (mouvementReduit()) { element.remove(); return Promise.resolve(); }
+  const plein = encombrement(element);
+  element.style.overflow = 'hidden';
+  element.style.pointerEvents = 'none';
+  return element.animate([plein, { opacity: 0, offset: 0.45 }, REPLIE], { ...PLIAGE, fill: 'forwards' })
+    .finished.catch(() => {}).then(() => element.remove());
+}
+
+/**
+ * Surligne, dans les cellules visées, les passages qui répondent à la
+ * recherche, sans tenir compte de la casse ni des accents, comme la recherche
+ * elle-même (« dupre » trouve et surligne « Dupré »).
+ */
+export function surlignerRecherche(racine, selecteur, recherche) {
+  const aiguille = normaliserTexte(recherche);
+  if (!aiguille) return;
+  for (const cellule of racine.querySelectorAll(selecteur)) {
+    const marcheur = document.createTreeWalker(cellule, NodeFilter.SHOW_TEXT);
+    const noeuds = [];
+    while (marcheur.nextNode()) {
+      // Ni le retour posé sur la ligne, ni les mentions « Sans libellé ».
+      if (!marcheur.currentNode.parentElement.closest('.cadre-retour, .attenue')) noeuds.push(marcheur.currentNode);
+    }
+    noeuds.forEach((noeud) => surlignerNoeud(noeud, aiguille));
+  }
+}
+
+/** Remplace un nœud de texte par ses morceaux, les passages trouvés dans des `<mark>`. */
+function surlignerNoeud(noeud, aiguille) {
+  const texte = noeud.nodeValue;
+  // Le texte mis à plat comme la recherche, avec la position d'origine de chaque caractère.
+  let plat = '';
+  const origine = [];
+  for (let i = 0; i < texte.length; i += 1) {
+    const c = /\s/.test(texte[i]) ? ' ' : texte[i].normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    if (c === ' ' && plat.endsWith(' ')) continue;
+    for (const lettre of c) { plat += lettre; origine.push(i); }
+  }
+  let position = plat.indexOf(aiguille);
+  if (position < 0) return;
+  const fragment = document.createDocumentFragment();
+  let dernier = 0;
+  while (position >= 0) {
+    const debut = origine[position];
+    const fin = origine[position + aiguille.length - 1] + 1;
+    fragment.append(texte.slice(dernier, debut));
+    const marque = document.createElement('mark');
+    marque.textContent = texte.slice(debut, fin);
+    fragment.append(marque);
+    dernier = fin;
+    position = plat.indexOf(aiguille, position + aiguille.length);
+  }
+  fragment.append(texte.slice(dernier));
+  noeud.replaceWith(fragment);
 }
 
 /** Retarde l'appel d'une fonction (recherche au clavier). */

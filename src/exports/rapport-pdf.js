@@ -9,7 +9,7 @@
  * polices standard du PDF ignorent les espaces insécables des montants.
  */
 
-import { formaterDate, aujourdHuiIso } from '../partage/dates.js';
+import { formaterDate, aujourdHuiIso, MOIS_ABREGES } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
 import { libelleCategorieCourt } from '../partage/constantes.js';
 import { libelleActivite } from '../partage/seuils.js';
@@ -165,10 +165,11 @@ export function genererRapportPdf(rapport, parametres, flux) {
       if (hauteur > 0) {
         doc.roundedRect(x + 5, base - hauteur, largeurBarre, hauteur, 2).fill(COULEURS.accent);
       }
-      // Initiale du mois sous chaque barre : douze libellés entiers ne
-      // tiendraient pas sur la largeur d'une page portrait.
+      // Nom abrégé sous chaque barre : douze libellés entiers ne tiendraient
+      // pas sur la largeur d'une page portrait. Couper à trois lettres
+      // donnerait deux « jui » (juin, juillet).
       doc.font('Helvetica').fontSize(7.5).fillColor(COULEURS.secondaire)
-        .text(texteSur(m.nom.slice(0, 3)), x, base + 5, {
+        .text(texteSur(MOIS_ABREGES[m.mois - 1]), x, base + 5, {
           width: largeurColonne, align: 'center', lineBreak: false
         });
     });

@@ -1,630 +1,409 @@
-/*
- * Feuille de style unique de l'application.
- * Vanilla CSS, aucun framework.
- *
- * Thèmes : le clair est appliqué par défaut (`:root`), le sombre via
- * `:root[data-theme="dark"]`. Toutes les couleurs passent par des variables,
- * si bien que les composants ne connaissent jamais le thème courant.
- */
+/* ==========================================================================
+   Livre des recettes : composants.
+   Les jetons (couleurs, rythme, mouvement) vivent dans theme.css.
+   ========================================================================== */
 
-:root {
-  color-scheme: light;
-  /* ---- Thème clair (par défaut) ---- */
-  --fond: #f8fafc;
-  --carte: #ffffff;
-  --champ-fond: #ffffff;
-  --nav-fond: #1e3a8a;
-  --nav-texte: #c7d2fe;
-  --texte: #0f172a;
-  --texte-secondaire: #64748b;
-  --accent: #2563eb;
-  --accent-fort: #1d4ed8;
-  --accent-contraste: #ffffff;
-  --accent-doux: #eef2ff;
-  --bordure: #e2e8f0;
-  --bordure-douce: #eef1f6;
-  /* Bordure des contrôles de saisie : plus soutenue que celle des cartes, qui
-     n'est que décorative. Un champ dont le pourtour se distingue à peine du
-     fond ne se voit pas comme un champ. */
-  --bordure-controle: #7c8b9e;
-  --survol: rgba(15, 23, 42, 0.04);
-  --succes: #16a34a;
-  --succes-doux: #dcfce7;
-  --alerte: #ea580c;
-  --alerte-doux: #ffedd5;
-  --danger: #dc2626;
-  --danger-doux: #fee2e2;
-  --neutre-doux: #eef1f6;
-  /*
-   * Deux jeux par teinte, et c'est volontaire : les valeurs vives (`--succes`,
-   * `--alerte`, `--danger`, `--accent`) remplissent les jauges, les segments de
-   * graphique et les pastilles, où seule la forme compte ; les variantes
-   * `-texte` servent partout où la couleur porte des mots. Sur un fond doux,
-   * l'orange vif d'une alerte tombait à 3,1:1 : l'avertissement le plus
-   * important de l'application était le plus difficile à lire.
-   */
-  --accent-texte: #1d4ed8;
-  --succes-texte: #15803d;
-  --alerte-texte: #9a3412;
-  --danger-texte: #b91c1c;
-  /* Fond des boutons pleins : assez sombre pour porter un libellé blanc. */
-  --danger-fond: #dc2626;
-  /* Langage de couleur des activités : le bleu désigne toujours une vente, le
-     vert une prestation. Repris à l'identique par les badges, les graphiques,
-     la jauge « part prestations » et le rapport annuel, pour qu'une même
-     couleur veuille dire la même chose partout. */
-  --vente: var(--accent);
-  --vente-doux: var(--accent-doux);
-  --vente-texte: var(--accent-texte);
-  --prestation: var(--succes);
-  --prestation-doux: var(--succes-doux);
-  --prestation-texte: var(--succes-texte);
-  /* Chaque registre a sa teinte, pour se repérer d'un coup d'œil : les recettes
-     empruntent l'accent (bleu), les achats un violet distinct. */
-  --recettes: var(--accent);
-  --recettes-doux: var(--accent-doux);
-  --achats: #7c3aed;
-  --achats-doux: #ede9fe;
-  --ombre: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.06);
-  --rayon: 12px;
-  --rayon-petit: 8px;
-  /*
-   * Échelle d'espacement, par pas de 4 px. Les valeurs de mise en page
-   * (marges, marges intérieures, `gap`) s'y tiennent ; restent hors échelle les
-   * valeurs optiques qui ne relèvent pas du rythme : filets de 1 px, anneaux de
-   * focus, rayons, hauteurs de jauge, tailles de pastille.
-   *
-   * Le contraste entre serré et généreux fait la cadence : 4 et 8 rassemblent,
-   * 24 et 32 séparent. Les paliers intermédiaires ne servent qu'à l'intérieur
-   * d'un même groupe.
-   */
-  --espace-1: 4px;
-  --espace-2: 8px;
-  --espace-3: 12px;
-  --espace-4: 16px;
-  --espace-5: 24px;
-  --espace-6: 32px;
-  --espace-7: 48px;
-}
+/* ---- Coque ----------------------------------------------------------------- */
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --fond: #0f172a;
-  --carte: #1e293b;
-  --champ-fond: #111c30;
-  --nav-fond: #0b1120;
-  --nav-texte: #cbd5e1;
-  --texte: #e2e8f0;
-  --texte-secondaire: #94a3b8;
-  --accent: #3b82f6;
-  /* En thème sombre, le survol éclaircit au lieu d'assombrir : l'encre du
-     bouton primaire est sombre, un bleu plus profond la ferait disparaître. */
-  --accent-fort: #60a5fa;
-  /* Encre sombre sur bleu vif : le libellé blanc d'un bouton primaire ne
-     tenait que 3,7:1 sur ce bleu, et c'est le couple le plus fréquenté de
-     l'application. */
-  --accent-contraste: #0b1120;
-  --accent-doux: rgba(59, 130, 246, 0.16);
-  --bordure: #334155;
-  --bordure-douce: #263248;
-  --bordure-controle: #64748b;
-  --survol: rgba(148, 163, 184, 0.1);
-  --succes: #22c55e;
-  --succes-doux: rgba(34, 197, 94, 0.16);
-  --alerte: #f97316;
-  --alerte-doux: rgba(249, 115, 22, 0.16);
-  --danger: #ef4444;
-  --danger-doux: rgba(239, 68, 68, 0.16);
-  --neutre-doux: rgba(148, 163, 184, 0.16);
-  /* Sur fond sombre, le texte coloré s'éclaircit au lieu de s'assombrir. */
-  --accent-texte: #93c5fd;
-  --succes-texte: #86efac;
-  --alerte-texte: #fdba74;
-  --danger-texte: #fca5a5;
-  --danger-fond: #b91c1c;
-  --vente: var(--accent);
-  --vente-doux: var(--accent-doux);
-  --vente-texte: var(--accent-texte);
-  --prestation: var(--succes);
-  --prestation-doux: var(--succes-doux);
-  --prestation-texte: var(--succes-texte);
-  --recettes: var(--accent);
-  --recettes-doux: var(--accent-doux);
-  --achats: #a78bfa;
-  --achats-doux: rgba(167, 139, 250, 0.16);
-  --ombre: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-/* L'attribut `hidden` doit toujours l'emporter, même sur un `display: flex`. */
-[hidden] {
-  display: none !important;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--fond);
-  color: var(--texte);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-/* Les liens gardent la couleur d'accent, visités compris (jamais le violet natif). */
-a {
-  color: var(--accent-texte);
-}
-
-/* Libellé réservé aux lecteurs d'écran (en-tête d'une colonne d'actions). */
-.hors-ecran {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-/* ---- Icônes -------------------------------------------------------------- */
-
-.icone {
-  display: inline-block;
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-
-/* ---- Disposition générale ------------------------------------------------ */
-
-.disposition {
-  display: flex;
+.coque {
+  display: grid;
+  grid-template-columns: var(--largeur-rail) minmax(0, 1fr);
   min-height: 100vh;
 }
 
-.barre-laterale {
-  width: 236px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--nav-fond);
-  color: var(--nav-texte);
-  padding: var(--espace-4) var(--espace-3);
+.lien-evitement:focus {
+  z-index: 100;
+  top: 8px;
+  left: 8px;
+  width: auto;
+  height: auto;
+  padding: 8px 12px;
+  clip-path: none;
+  border-radius: var(--rayon);
+  background: var(--carte);
+  color: var(--accent-texte);
+}
+
+/* ---- Rail ------------------------------------------------------------------ */
+
+.rail {
   position: sticky;
   top: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--e5) var(--e3) var(--e4);
+  background: linear-gradient(180deg, var(--rail-haut), var(--rail) 60%);
+  color: var(--rail-texte);
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
 .marque {
   display: flex;
   align-items: center;
-  gap: var(--espace-2);
+  gap: var(--e3);
+  padding: 0 var(--e2) var(--e5);
+  color: var(--rail-texte-fort);
+  text-decoration: none;
+}
+.marque-logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--rayon-groupe);
+  background: linear-gradient(145deg, var(--logo-haut), var(--logo-bas));
+  color: var(--sur-plein);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
+}
+.marque-nom {
+  min-width: 0;
+  font-size: 15.5px;
   font-weight: 700;
-  font-size: 16px;
-  color: #ffffff;
-  padding: var(--espace-2) var(--espace-3) var(--espace-4);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.marque-nom small {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--rail-texte);
+  text-overflow: ellipsis;
   white-space: nowrap;
+  opacity: 0.85;
 }
 
-.marque .icone {
-  color: var(--accent);
+/* L'indicateur de la page courante glisse d'un lien à l'autre, jusqu'à
+   Paramètres en bas du menu : il est placé par rapport au menu entier. */
+.indicateur-nav {
+  position: absolute;
+  left: var(--e3);
+  right: var(--e3);
+  top: 0;
+  z-index: 0;
+  border-radius: var(--rayon);
+  background: var(--rail-actif);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 420ms var(--sortie), opacity 200ms, background-color 420ms var(--sortie);
 }
-
-.liens-nav {
+/* La page ouverte prend l'encre de son domaine : surbrillance et icône. */
+.rail:has(.lien-nav[data-route='recettes'][aria-current='page']) .indicateur-nav {
+  background: color-mix(in srgb, var(--sarcelle-rail) 20%, transparent);
+}
+.rail:has(.lien-nav[data-route='achats'][aria-current='page']) .indicateur-nav {
+  background: color-mix(in srgb, var(--violet-rail) 20%, transparent);
+}
+.rail:has(.lien-nav[data-route='clients'][aria-current='page']) .indicateur-nav {
+  background: color-mix(in srgb, var(--framboise-rail) 20%, transparent);
+}
+.groupe-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: var(--e2) 0;
+}
+.groupe-nav + .groupe-nav {
+  border-top: 1px solid var(--rail-filet);
+}
+.groupe-nav:empty {
+  display: none;
 }
 
-.barre-laterale a {
+.lien-nav {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: var(--espace-3);
-  padding: var(--espace-2) var(--espace-3);
-  border-radius: var(--rayon-petit);
-  color: inherit;
+  gap: var(--e3);
+  height: 38px;
+  padding: 0 var(--e3);
+  border-radius: var(--rayon);
+  color: var(--rail-texte);
+  font-size: 14.5px;
+  font-weight: 520;
   text-decoration: none;
-  font-size: 14px;
+  transition: background var(--rapide), color var(--rapide);
+}
+.lien-nav:hover {
+  background: var(--rail-survol);
+  color: var(--rail-texte-fort);
+}
+.lien-nav[aria-current='page'] {
+  color: var(--rail-texte-fort);
+  font-weight: 620;
+}
+.lien-nav .icone {
+  transition: color var(--rapide), scale var(--moyen) var(--sortie);
+}
+.lien-nav[aria-current='page'] .icone {
+  color: var(--rail-icone-active);
+  scale: 1.08;
+}
+.lien-nav[data-route='recettes'][aria-current='page'] .icone {
+  color: var(--sarcelle-rail);
+}
+.lien-nav[data-route='achats'][aria-current='page'] .icone {
+  color: var(--violet-rail);
+}
+.lien-nav[data-route='clients'][aria-current='page'] .icone {
+  color: var(--framboise-rail);
+}
+.lien-nav span {
+  flex: 1;
+}
+.lien-nav:focus-visible,
+.bascule-theme:focus-visible,
+.marque:focus-visible {
+  outline-color: var(--rail-icone-active);
+}
+.alerte-nav {
+  flex: none !important;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--rail-alerte-fond);
+  color: var(--rail-alerte-texte);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.alerte-nav.retard {
+  background: var(--rail-retard-fond);
+  color: var(--rail-retard-texte);
 }
 
-.barre-laterale a:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.barre-laterale a.actif {
-  background: var(--accent);
-  color: var(--accent-contraste);
-  font-weight: 600;
-}
-
-.pied-nav {
+.pied-rail {
   margin-top: auto;
-  padding: var(--espace-3) var(--espace-2) var(--espace-1);
   display: flex;
   flex-direction: column;
-  gap: var(--espace-3);
+  gap: var(--e3);
+  padding-top: var(--e4);
 }
-
-.bouton-theme {
+.bascule-theme {
   display: flex;
   align-items: center;
-  gap: var(--espace-2);
-  width: 100%;
-  padding: var(--espace-2) var(--espace-3);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--rayon-petit);
-  background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
-  font: inherit;
-  font-size: 13.5px;
-  cursor: pointer;
+  gap: var(--e3);
+  height: 38px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--rail-filet);
+  border-radius: var(--rayon);
+  background: transparent;
+  color: var(--rail-texte);
+  font-size: 14px;
+  font-weight: 520;
+}
+.bascule-theme:hover {
+  background: var(--rail-survol);
+  color: var(--rail-texte-fort);
+}
+.mention-locale {
+  padding: 0 var(--e2);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--rail-texte);
+  opacity: 0.85;
+  text-wrap: balance;
+}
+#version-app {
+  display: block;
+  color: var(--rail-texte-fort);
+  font-weight: 560;
 }
 
-.bouton-theme:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
+/* ---- Scène ------------------------------------------------------------------ */
 
-.infos-nav {
-  padding: 0 var(--espace-2);
-  font-size: 11.5px;
-  color: var(--nav-texte);
-  opacity: 0.75;
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-1);
-}
-
-.contenu {
-  flex: 1;
-  padding: var(--espace-6) var(--espace-6) var(--espace-7);
-  max-width: 1220px;
+.scene {
+  min-width: 0;
+  padding: var(--e6) clamp(24px, 3vw, 48px) var(--e8);
   outline: none;
 }
-
-.entete-vue {
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--e5);
+}
+/* Premier affichage : la page apparaît en fondu, sans bouger. */
+#vue.vue-entre > * {
+  animation: apparaitre 300ms ease both;
+}
+
+.entete-page {
+  display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: var(--espace-4);
+  gap: var(--e5);
   flex-wrap: wrap;
-  margin-bottom: var(--espace-5);
 }
-
-.entete-vue h1 {
-  margin: 0;
-  /* Un cran au-dessus de la valeur d'une tuile de statistique : à taille égale,
-     un chiffre en gras l'emportait sur le titre de la page. */
-  font-size: 26px;
-  letter-spacing: -0.01em;
-}
-
-/* Titre de registre précédé d'une puce colorée : le repère immédiat qui dit
-   d'un coup d'œil si l'on est sur les recettes (bleu) ou les achats (violet). */
-.titre-registre {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-4);
-}
-.puce-registre {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: var(--rayon-petit);
-  flex-shrink: 0;
-}
-.puce-registre.registre-recettes {
-  background: var(--recettes-doux);
-  color: var(--recettes);
-}
-.puce-registre.registre-achats {
-  background: var(--achats-doux);
-  color: var(--achats);
-}
-.entete-vue p {
-  margin: var(--espace-1) 0 0;
-  color: var(--texte-secondaire);
-  font-size: 14px;
-}
-
-.actions-vue {
-  display: flex;
-  gap: var(--espace-2);
-  flex-wrap: wrap;
-  align-items: center;
-}
-/*
- * Sélecteur d'année de la barre d'actions.
- *
- * Il porte la mise du bouton secondaire qui le suit, et non celle d'un champ de
- * saisie : dans une barre d'actions, la bordure appuyée d'un formulaire le
- * faisait passer pour un intrus, et sa hauteur, réglée sur le corps de texte,
- * ne tombait pas sur celle des boutons. Mêmes marges intérieures, même corps,
- * même graisse, même interligne : les bordures s'alignent.
- */
-.actions-vue .selecteur-annee {
-  width: auto;
-  padding: var(--espace-2) var(--espace-6) var(--espace-2) var(--espace-4);
-  border-color: var(--bordure);
-  background-color: transparent;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.actions-vue .selecteur-annee:hover {
-  background-color: var(--survol);
-  border-color: var(--bordure);
-}
-
-h2 {
-  font-size: 17px;
-  margin: 0 0 var(--espace-4);
-}
-
-/* Deuxième section d'une même carte : nettement plus d'air au-dessus du titre
-   qu'en dessous, pour qu'il appartienne à ce qui suit et non à ce qui précède. */
-.titre-section {
-  margin-top: var(--espace-6);
-}
-
-/* Squelette de chargement : blocs gris qui miroitent, en place du contenu.
-   La forme épouse la page qui arrive et occupe l'écran, pour éviter tout saut
-   de mise en page quand les vraies données remplacent le squelette. */
-.squelette {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-4);
-}
-.sq-titre,
-.sq-carte,
-.sq-bloc,
-.sq-barre,
-.sq-ligne {
-  position: relative;
-  overflow: hidden;
-  background: var(--neutre-doux);
-  border-radius: var(--rayon-petit);
-}
-.sq-titre {
-  height: 34px;
-  width: 38%;
-}
-.sq-grille {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: var(--espace-4);
-}
-.sq-carte {
-  height: 82px;
-}
-.sq-bloc {
-  height: 230px;
-}
-/* Forme « liste » : une barre de filtres puis un tableau bien rempli. */
-.sq-barre {
-  height: 58px;
-}
-.sq-tableau {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-2);
-}
-.sq-ligne {
-  height: 44px;
-}
-.squelette [class^="sq-"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--survol), transparent);
-  animation: miroitement 1.3s infinite;
-}
-@keyframes miroitement {
-  to {
-    transform: translateX(100%);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .squelette [class^="sq-"]::after {
-    animation: none;
-  }
-}
-
-/* ---- Cartes -------------------------------------------------------------- */
-
-/*
- * La carte est le seul conteneur de la page. Ce qu'elle contient se regroupe
- * par le blanc et, au besoin, par un filet : une seconde bordure à l'intérieur
- * d'une première n'ajoute aucune information et affaiblit les deux.
- */
-.carte {
-  background: var(--carte);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
-  box-shadow: var(--ombre);
-  padding: var(--espace-5);
-  margin-bottom: var(--espace-5);
-}
-
-.grille-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: var(--espace-4);
-  margin-bottom: var(--espace-5);
-}
-
-.carte-stat {
-  background: var(--carte);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
-  box-shadow: var(--ombre);
-  padding: var(--espace-4);
-  display: flex;
-  align-items: center;
-  gap: var(--espace-4);
-}
-
-.carte-stat .pastille {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--neutre-doux);
-  color: var(--texte-secondaire);
-  flex-shrink: 0;
-}
-
-/* Les deux chiffres de tête portent la pastille d'accent : même tuile, même
-   poids, mais l'œil sait par où commencer. */
-.carte-stat.principale .pastille {
-  background: var(--accent-doux);
-  color: var(--accent);
-}
-
-/* Tuile secondaire à zéro : présente mais en retrait. Le retrait passe par la
-   couleur et non par une opacité globale, qui emportait aussi le libellé sous
-   le seuil de lisibilité. */
-.carte-stat.vide {
-  background: var(--fond);
-}
-.carte-stat.vide .valeur {
-  color: var(--texte-secondaire);
-  font-weight: 600;
-}
-.carte-stat.vide .pastille {
-  background: transparent;
-}
-
-/* Libellé en casse normale : en capitales, « Moyenne par encaissement »
-   passait sur deux lignes et se lisait moins vite. */
-.carte-stat .etiquette {
-  font-size: 13px;
-  color: var(--texte-secondaire);
-}
-
-/* Le texte occupe toute la tuile : la répartition peut ainsi caler ses
-   montants à droite. */
-.carte-stat > div:last-child {
-  flex: 1;
+/* Le titre prend la place que laissent les actions : une phrase longue (un
+   rappel de déclaration) passe à la ligne au lieu de les repousser dessous. */
+.entete-page > div:first-child {
+  flex: 1 1 320px;
   min-width: 0;
 }
-
-/* Répartition ventes / prestations d'une activité mixte, sous le montant
-   qu'elle décompose. */
-.detail-stat {
-  list-style: none;
-  margin: var(--espace-2) 0 0;
-  padding: 0;
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-.detail-stat li {
+.entete-page h1 {
   display: flex;
   align-items: center;
-  gap: var(--espace-2);
-}
-.detail-stat .montant-detail {
-  margin-left: auto;
-  padding-left: var(--espace-3);
-  color: var(--texte);
-  font-variant-numeric: tabular-nums;
-}
-
-.carte-stat .valeur {
-  font-size: 23px;
+  gap: var(--e2);
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.022em;
   font-weight: 700;
-  margin-top: 2px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+}
+/* Date posée au-dessus de la salutation du tableau de bord. */
+.surtitre {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--texte-3);
+}
+.sous-titre {
+  margin-top: 4px;
+  color: var(--texte-2);
+  font-size: 14.5px;
+}
+.point {
+  margin: 0 7px;
+  color: var(--bordure-controle);
+}
+/* Morceau d'une ligne à points (écran URSSAF) : on ne le coupe pas en deux. */
+.morceau {
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  flex-wrap: wrap;
+}
+/* Actions d'en-tête passées à la ligne (écran étroit) : elles restent à droite. */
+.entete-page > .actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.actions.fin {
+  justify-content: flex-end;
+  margin-top: var(--e5);
 }
 
-/* ---- Boutons ------------------------------------------------------------- */
+/* Bandeau global : mise à jour disponible, jeu de démonstration. */
+#bandeaux:not(:empty) {
+  max-width: 1280px;
+  margin: 0 auto var(--e5);
+}
+.bandeau-global {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 10px 10px 10px var(--e4);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: var(--rayon-carte);
+  background: var(--accent-doux);
+  font-size: 14px;
+  animation: deplier 380ms var(--sortie) both;
+}
+.bandeau-global > .icone {
+  color: var(--accent-texte);
+}
+.bandeau-global > span {
+  flex: 1;
+}
+
+/* ---- Boutons ---------------------------------------------------------------- */
 
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--espace-2);
-  border: 1px solid transparent;
-  border-radius: var(--rayon-petit);
-  padding: var(--espace-2) var(--espace-4);
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--bordure-controle);
+  border-radius: var(--rayon);
+  background: var(--carte);
+  color: var(--texte);
   font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
+  font-weight: 580;
+  white-space: nowrap;
   text-decoration: none;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+  transition: background var(--rapide), border-color var(--rapide), box-shadow var(--rapide);
 }
-
-.btn-primaire {
-  background: var(--accent);
-  color: var(--accent-contraste);
+.btn:hover {
+  background: var(--carte-2);
+  border-color: var(--texte-3);
 }
-.btn-primaire:hover {
-  background: var(--accent-fort);
+.btn:active:not(:disabled),
+.btn-icone:active:not(:disabled) {
+  scale: 0.97;
 }
-
-.btn-secondaire {
-  background: transparent;
-  border-color: var(--bordure);
-  color: var(--texte);
-}
-.btn-secondaire:hover {
-  background: var(--survol);
-}
-
-.btn-danger {
-  background: var(--danger-fond);
-  color: #ffffff;
-}
-.btn-danger:hover {
-  filter: brightness(0.94);
-}
-
-/* Bouton tertiaire : ni fond ni bordure, couleur atténuée, léger survol. */
-.btn-tertiaire {
-  background: none;
-  color: var(--texte-secondaire);
-  font-weight: 500;
-  padding: var(--espace-2) var(--espace-3);
-}
-.btn-tertiaire:hover {
-  background: var(--survol);
-  color: var(--texte);
-}
-
 .btn:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
 }
-
+.btn .icone {
+  color: var(--texte-2);
+}
+.btn-principal {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--sur-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(37, 99, 235, 0.3);
+}
+.btn-principal .icone {
+  color: inherit;
+}
+.btn-principal:hover {
+  background: var(--accent-survol);
+  border-color: var(--accent-survol);
+}
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--sur-plein);
+}
+.btn-danger .icone {
+  color: inherit;
+}
+.btn-danger:hover {
+  background: var(--danger-fort);
+  border-color: var(--danger-fort);
+}
+.btn-fantome {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--texte-2);
+}
+.btn-fantome:hover {
+  background: var(--survol);
+  border-color: transparent;
+  color: var(--texte);
+}
+.btn-petit,
+a.btn-petit {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.btn.pleine {
+  grid-column: 1 / -1;
+}
 .btn-icone {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  color: var(--texte-secondaire);
-  cursor: pointer;
-  padding: var(--espace-2);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
   border-radius: var(--rayon-petit);
-  line-height: 0;
+  background: transparent;
+  color: var(--texte-3);
+  transition: background var(--rapide), color var(--rapide);
 }
 .btn-icone:hover {
   background: var(--survol);
@@ -632,1885 +411,4442 @@ h2 {
 }
 .btn-icone.danger:hover {
   background: var(--danger-doux);
-  color: var(--danger);
-}
-
-/* ---- Formulaires --------------------------------------------------------- */
-
-.champ {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-1);
-}
-
-.champ label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--texte);
-}
-
-.champ .indication {
-  font-size: 12px;
-  color: var(--texte-secondaire);
-}
-
-
-input[type="text"],
-input[type="date"],
-input[type="number"],
-input[type="search"],
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-  background: var(--champ-fond);
-  border: 1px solid var(--bordure-controle);
-  border-radius: var(--rayon-petit);
-  padding: var(--espace-2) var(--espace-3);
-  width: 100%;
-}
-
-/* Champ suivi d'un autre bloc dans une modale (remplace une marge en ligne). */
-.champ-espace {
-  margin-bottom: var(--espace-4);
-}
-
-/*
- * Le chevron natif d'un `select` est dessiné par le système : trapu, gris ardoise,
- * souvent posé dans un petit bloc à part, il jure avec le trait fin des icônes
- * Lucide employées partout ailleurs. On le remplace par le chevron du jeu
- * d'icônes, tracé identique à `chevron-bas` dans `icones.js`.
- */
-select {
-  appearance: none;
-  background-repeat: no-repeat;
-  background-position: right var(--espace-3) center;
-  background-size: 16px 16px;
-  padding-right: var(--espace-6);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  cursor: pointer;
-}
-
-/* Même tracé, teinte du thème sombre : une image de fond ne suit pas
-   `currentColor`. */
-:root[data-theme="dark"] select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-}
-
-select:hover {
-  border-color: var(--texte-secondaire);
-}
-
-/* Les options restent dessinées par le système : on leur donne au moins les
-   couleurs du thème, faute de quoi le menu déroulant s'ouvre en clair sur une
-   application sombre. */
-select option {
-  background: var(--champ-fond);
-  color: var(--texte);
-}
-
-/* Rend l'icône du sélecteur de date lisible en thème sombre. */
-:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.8);
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--texte-secondaire);
-  opacity: 0.8;
-}
-
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-button:focus-visible,
-summary:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* En-tête de tri : l'anneau épouse la cellule, sans déborder sur la voisine. */
-.entete-tri:focus-visible {
-  outline-offset: -2px;
-}
-
-.champ.invalide input,
-.champ.invalide select,
-.champ.invalide textarea {
-  border-color: var(--danger);
-}
-
-/* Suggestion cliquable sous un champ (prochain numéro de facture). */
-.lien-suggestion {
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
-  font-size: 12.5px;
-  font-family: inherit;
-  color: var(--accent-texte);
-  cursor: pointer;
-}
-.lien-suggestion:hover {
-  text-decoration: underline;
-}
-
-.erreur-champ {
-  font-size: 12.5px;
-  color: var(--danger-texte);
-  min-height: 0;
-}
-
-/* Pied d'un formulaire posé dans une carte (et non dans une modale) : les
-   actions restent alignées à gauche, sous le dernier champ. */
-.actions-formulaire {
-  display: flex;
-  gap: var(--espace-3);
-  margin-top: var(--espace-5);
-}
-
-.grille-formulaire {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--espace-4) var(--espace-4);
-}
-.grille-formulaire .pleine-largeur {
-  grid-column: 1 / -1;
-}
-
-/* ---- Barre d'outils ------------------------------------------------------ */
-
-.barre-outils {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espace-3);
-  align-items: end;
-  margin-bottom: var(--espace-4);
-}
-.barre-outils .champ {
-  min-width: 130px;
-}
-.barre-outils .champ.recherche {
-  flex: 1;
-  min-width: 240px;
-}
-
-.resume-filtre {
-  color: var(--texte-secondaire);
-  font-size: 15px;
-  margin: 0 0 var(--espace-3);
-}
-
-/*
- * Résumé d'un registre : combien de lignes, pour quel total. C'est le chiffre
- * que l'on vient vérifier avant d'exporter ou de déclarer, et il se perdait
- * dans une ligne grise uniforme. Les deux nombres prennent le poids du texte
- * courant, les mots qui les relient restent en retrait : la ligne se voit sans
- * devenir un bandeau, et la carte ne gagne aucun cadre de plus.
- */
-.resume-registre {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--espace-1) var(--espace-4);
-  margin-bottom: var(--espace-4);
-}
-
-.resume-registre .resume-nombre,
-.resume-registre .resume-total {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--texte);
-}
-
-.resume-registre .resume-total {
-  font-variant-numeric: tabular-nums;
-}
-
-/* « sur 340 (liste filtrée) » : la nuance, pas le chiffre. */
-.resume-registre .resume-portee {
-  font-size: 13.5px;
-}
-
-.lien-sous-tableau {
-  margin: var(--espace-3) 0 0;
-}
-
-.indication-formats {
-  color: var(--texte-secondaire);
-  font-size: 12.5px;
-  margin: -6px 0 var(--espace-3);
-}
-
-/* ---- Puces des filtres actifs -------------------------------------------- */
-
-.puces-filtres {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espace-2);
-}
-.puces-filtres:not(:empty) {
-  margin-bottom: var(--espace-3);
-}
-
-.puce-filtre {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--espace-2);
-  padding: var(--espace-1) var(--espace-2) var(--espace-1) var(--espace-3);
-  border: 1px solid var(--bordure-controle);
-  border-radius: 999px;
-  background: var(--carte);
-  color: var(--texte);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.puce-filtre:hover {
-  border-color: var(--danger-texte);
   color: var(--danger-texte);
 }
-.puce-filtre .icone {
-  color: var(--texte-secondaire);
+.btn-icone:disabled {
+  opacity: 0.4;
 }
-.puce-filtre:hover .icone {
-  color: inherit;
-}
-
-/* ---- Tableaux ------------------------------------------------------------ */
-
-.conteneur-tableau {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-th {
-  text-align: left;
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--texte-secondaire);
-  border-bottom: 1px solid var(--bordure);
-  padding: var(--espace-2) var(--espace-3);
-}
-
-/*
- * Tableau des recettes : largeurs fixées en pourcentages (colgroup), si bien
- * qu'il occupe toujours exactement la largeur disponible. Jamais de barre de
- * défilement horizontale : le contenu passe à la ligne au besoin.
- */
-.table-registre {
-  table-layout: fixed;
-}
-
-td {
-  padding: var(--espace-3);
-  border-bottom: 1px solid var(--bordure-douce);
-  vertical-align: middle;
-  overflow-wrap: break-word;
-}
-tbody tr:last-child td {
-  border-bottom: none;
-}
-tbody tr:hover {
-  background: var(--survol);
-}
-
-td.montant,
-th.montant {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  font-weight: 600;
-}
-/* Le montant est la colonne la plus regardée : un cran plus fort et plus sombre
-   que le reste de la ligne, pour l'accrocher du regard. L'en-tête, lui, ne
-   change pas. */
-td.montant {
-  font-weight: 700;
-  color: var(--texte);
-  font-size: 14.5px;
-}
-
-/* Une date coupée en deux lignes (« 18/07/202 » puis « 6 ») se lit mal. */
-td.col-date {
-  white-space: nowrap;
-}
-
-td.actions {
-  text-align: right;
-  white-space: nowrap;
-  /*
-   * La largeur de la colonne est fixée en pixels dans le `colgroup` des deux
-   * registres : trop étroite, elle laissait le fond des boutons déborder au
-   * survol. Ici, la marge intérieure gauche est réduite pour lui laisser la
-   * place, l'alignement à droite suffisant à séparer de la colonne précédente.
-   */
-  padding-left: var(--espace-1);
-}
-td.actions .btn-icone {
-  vertical-align: middle;
-}
-
-.ligne-vide td {
-  text-align: center;
-  color: var(--texte-secondaire);
-  padding: var(--espace-6) var(--espace-3);
-}
-
-.attenue {
-  color: var(--texte-secondaire);
-}
-
-/* En-têtes triables : le libellé est un bouton, le chevron marque le sens. */
-th.triable {
-  padding: 0;
-}
-.entete-tri {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: var(--espace-2) var(--espace-3);
+.lien-bouton {
   border: 0;
+  padding: 0;
   background: none;
+  color: var(--accent-texte);
+  font-weight: 560;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.danger-texte,
+.btn.danger-texte {
+  color: var(--danger-texte);
+}
+.danger-texte .icone {
   color: inherit;
-  font: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  user-select: none;
-}
-th.montant .entete-tri {
-  justify-content: flex-end;
-}
-.entete-tri:hover {
-  color: var(--texte);
-}
-.entete-tri .icone {
-  margin-left: var(--espace-1);
 }
 
-/* Colonne des cases de sélection multiple. */
-.col-case {
-  text-align: center;
+/* Le résultat du geste s'affiche sur le bouton : « Copié », « Exporté ». */
+.btn.reussi,
+.btn.reussi:hover,
+.btn.reussi:disabled,
+:root[data-theme] .btn.reussi:hover {
+  opacity: 1;
+  background: var(--succes);
+  border-color: var(--succes);
+  color: var(--sur-plein);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--succes) 18%, transparent);
+  transition: background 200ms, border-color 200ms, box-shadow 400ms var(--sortie);
 }
-.col-case input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-  vertical-align: middle;
+.btn.echoue,
+.btn.echoue:hover,
+.btn.echoue:disabled,
+:root[data-theme] .btn.echoue:hover {
+  opacity: 1;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--sur-plein);
 }
-
-/* Barre d'actions groupées, visible quand des recettes sont cochées. */
-/* Barre d'actions contextuelle : un aplat suffit à la détacher, la bordure
-   n'en faisait qu'une boîte de plus dans la carte du registre. */
-.barre-selection {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espace-3);
-  padding: var(--espace-3) var(--espace-4);
-  margin-bottom: var(--espace-3);
-  background: var(--accent-doux);
-  border-radius: var(--rayon-petit);
-  font-size: 13.5px;
+.btn.reussi .icone,
+.btn.echoue .icone {
+  color: var(--sur-plein);
 }
-.info-selection {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-right: auto;
+.btn.reussi span,
+.btn.echoue span,
+.btn.revient > * {
+  animation: glisser-texte 260ms var(--sortie) both;
 }
-.info-selection #compte-selection {
-  font-weight: 600;
-}
-/* Portée réelle de la sélection groupée, quand toutes les lignes ne sont pas
-   affichées : « Supprimer » n'agit que sur ce qui est à l'écran. */
-.note-selection {
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-
-/* ---- Badges -------------------------------------------------------------- */
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--espace-1);
-  font-size: 12px;
-  padding: var(--espace-1) var(--espace-2);
-  border-radius: 999px;
-  background: var(--neutre-doux);
-  color: var(--texte);
-  white-space: nowrap;
-}
-
-/* Vente ou prestation : les deux couleurs du langage d'activité, dans leur
-   variante lisible (le badge porte du texte, pas un aplat). */
-.badge.categorie-ventes {
-  background: var(--vente-doux);
-  color: var(--vente-texte);
-}
-.badge.categorie-prestations {
-  background: var(--prestation-doux);
-  color: var(--prestation-texte);
-}
-
-/* ---- État vide ----------------------------------------------------------- */
-
-.etat-vide {
-  text-align: center;
-  padding: var(--espace-7) var(--espace-5);
-  color: var(--texte-secondaire);
-}
-.etat-vide .grande-icone {
-  color: var(--texte-secondaire);
-  opacity: 0.6;
-  margin-bottom: var(--espace-3);
-}
-.etat-vide .btn {
-  margin-top: var(--espace-4);
-}
-
-/* ---- Dialogues ----------------------------------------------------------- */
-
-dialog {
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
-  padding: 0;
-  width: min(560px, calc(100vw - 32px));
-  background: var(--carte);
-  color: var(--texte);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-}
-
-dialog::backdrop {
-  background: rgba(2, 6, 23, 0.55);
-}
-
-.corps-dialogue {
-  padding: var(--espace-5);
-}
-.corps-dialogue h2 {
-  margin-bottom: var(--espace-4);
-}
-.pied-dialogue {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--espace-3);
-  margin-top: var(--espace-5);
-}
-
-/* Boutons d'accès aux dossiers, repliés les uns sous les autres si besoin. */
-.actions-donnees {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espace-3);
-}
-
-/* Modale d'attente : aucune action possible tant que l'opération dure. */
-.dialogue-attente {
-  width: min(440px, calc(100vw - 32px));
-}
-.etat-attente {
-  color: var(--texte-secondaire);
-}
-
-.barre-attente {
-  margin-top: var(--espace-4);
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent-doux);
-  overflow: hidden;
-}
-.barre-attente span {
-  display: block;
-  width: 40%;
-  height: 100%;
-  border-radius: 2px;
-  background: var(--accent);
-  animation: attente 1.2s ease-in-out infinite;
-}
-
-@keyframes attente {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(250%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .barre-attente span {
-    animation: none;
-    width: 100%;
-  }
-}
-
-/*
- * Contrôle avant export : les points vérifiés s'affichent l'un après l'autre.
- * L'animation n'est pas décorative, elle donne le temps de lire chaque ligne
- * avant que la suivante n'arrive.
- */
-.dialogue-controle {
-  width: min(580px, calc(100vw - 32px));
-}
-
-.sous-titre-controle {
-  /* Remontée sous le titre : le sous-titre appartient au titre, pas au corps. */
-  margin: calc(var(--espace-3) * -1) 0 var(--espace-4);
-  color: var(--texte-secondaire);
-  font-size: 13.5px;
-}
-
-.liste-controle {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 46vh;
-  overflow-y: auto;
-}
-
-.point-controle {
-  display: flex;
-  gap: var(--espace-3);
-  align-items: flex-start;
-  padding: var(--espace-2) 2px;
-}
-
-.point-controle + .point-controle {
-  border-top: 1px solid var(--bordure-douce);
-}
-.point-controle.en-cours {
-  color: var(--texte-secondaire);
-  font-size: 13.5px;
-}
-
-.marque-controle {
-  display: flex;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.point-controle.ok .marque-controle {
+.btn-icone.reussi {
   color: var(--succes);
+  background: var(--succes-doux);
 }
-.point-controle.attention .marque-controle {
-  color: var(--alerte);
+.btn-icone.echoue {
+  color: var(--danger-texte);
+  background: var(--danger-doux);
 }
-.point-controle.erreur .marque-controle {
-  color: var(--danger);
+.btn-icone.reussi span,
+.btn-icone.echoue span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
-
-.texte-controle {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.texte-controle strong {
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.texte-controle span {
-  color: var(--texte-secondaire);
-  font-size: 12.5px;
-}
-
-.point-controle.apparait {
-  animation: point-entre 240ms ease-out both;
-}
-
-@keyframes point-entre {
+@keyframes glisser-texte {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    translate: 0 5px;
   }
+}
+.trace-coche path {
+  stroke-dasharray: 24;
+  animation: cocher 380ms var(--sortie) both 40ms;
+}
+@keyframes cocher {
+  from {
+    stroke-dashoffset: 24;
+  }
+}
+.tourne {
+  animation: tourner 800ms linear infinite;
+}
+@keyframes tourner {
   to {
-    opacity: 1;
-    transform: none;
+    rotate: 360deg;
   }
 }
 
-.conclusion-controle {
-  margin-top: var(--espace-4);
-  padding: var(--espace-3) var(--espace-3);
-  border-radius: var(--rayon-petit);
+/* ---- Cartes ------------------------------------------------------------------ */
+
+.carte {
+  position: relative;
+  background: var(--carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-carte);
+  box-shadow: var(--ombre-carte);
+}
+.carte-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e4) var(--e5);
+  min-height: 56px;
+}
+.carte-tete h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15.5px;
+  line-height: 1.3;
+}
+.carte-tete .note {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.carte-corps {
+  padding: 0 var(--e5) var(--e5);
+}
+.carte-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e3) var(--e5);
+  border-top: 1px solid var(--bordure-douce);
+  background: var(--carte-2);
+  border-radius: 0 0 var(--rayon-carte) var(--rayon-carte);
   font-size: 13.5px;
-  font-weight: 600;
+}
+/* Contenu remplacé sur place (fiche client, étape d'import) : il apparaît en fondu, sans bouger. */
+.arrive > * {
+  animation: apparaitre 260ms ease both;
+}
+.vide-carte {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--e3);
+  padding: var(--e2) var(--e5) var(--e5);
+  font-size: 14px;
+  color: var(--texte-2);
+}
+.note-carte {
+  margin-top: var(--e3);
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+.erreur-page h2 {
+  margin: var(--e5) 0 var(--e2);
+  font-size: 18px;
+}
+.erreur-page p {
+  margin-bottom: var(--e3);
+  color: var(--texte-2);
 }
 
-.conclusion-controle.ok {
+/* ---- Pastilles --------------------------------------------------------------- */
+
+.etat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.etat .icone {
+  width: 13px;
+  height: 13px;
+}
+.etat-ok {
   background: var(--succes-doux);
   color: var(--succes-texte);
 }
-.conclusion-controle.attention {
-  background: var(--alerte-doux);
-  color: var(--alerte-texte);
-}
-.conclusion-controle.erreur {
+.etat-retard {
   background: var(--danger-doux);
   color: var(--danger-texte);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .point-controle.apparait {
-    animation: none;
-  }
-}
-
-/* ---- Toasts -------------------------------------------------------------- */
-
-#toasts {
-  position: fixed;
-  bottom: 18px;
-  right: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-2);
-  z-index: 100;
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-3);
-  background: var(--carte);
-  color: var(--texte);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  padding: var(--espace-3) var(--espace-4);
-  font-size: 14px;
-  box-shadow: var(--ombre);
-  animation: apparition-toast 0.18s ease-out;
-  max-width: 380px;
-}
-
-.toast .icone {
-  flex-shrink: 0;
-}
-.toast.succes .icone {
-  color: var(--succes);
-}
-.toast.erreur .icone {
-  color: var(--danger);
-}
-
-/* Action portée par un toast (« Annuler la suppression ») : la réparation doit
-   se viser à la souris, pas seulement se connaître par cœur au clavier. */
-.action-toast {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--accent-texte);
-  font-weight: 600;
-  text-decoration: underline;
-}
-.action-toast:hover {
-  color: var(--accent-texte);
-}
-
-@keyframes apparition-toast {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ---- Import -------------------------------------------------------------- */
-
-.zone-fichier {
-  border: 2px dashed var(--bordure-controle);
-  border-radius: var(--rayon);
-  padding: var(--espace-6) var(--espace-5);
-  text-align: center;
-  color: var(--texte-secondaire);
-  cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-
-.zone-fichier:hover,
-.zone-fichier.survol {
-  border-color: var(--accent);
-  background: var(--accent-doux);
-}
-.zone-fichier .icone {
-  color: var(--accent);
-  margin-bottom: var(--espace-2);
-}
-
-.grille-correspondance {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: var(--espace-3) var(--espace-4);
-}
-
-.rapport-import ul {
-  margin: var(--espace-2) 0 0;
-  padding-left: var(--espace-5);
-}
-.rapport-import li {
-  margin-bottom: var(--espace-1);
-  font-size: 13.5px;
-}
-
-/* Bilan de l'analyse : trois chiffres, écartés par le blanc. Encadrés un à un,
-   ils formaient trois boîtes dans la boîte de l'étape. */
-.compteurs-import {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espace-3) var(--espace-6);
-  margin: var(--espace-4) 0 var(--espace-5);
-}
-
-.compteur {
-  font-size: 13px;
-  color: var(--texte-secondaire);
-}
-
-.compteur strong {
-  display: block;
-  font-size: 22px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--texte);
-}
-.compteur.ok strong {
-  color: var(--succes-texte);
-}
-.compteur.attention strong {
-  color: var(--alerte-texte);
-}
-.compteur.erreur strong {
-  color: var(--danger-texte);
-}
-
-/* ---- Bandeau de rappel (déclaration URSSAF) -------------------------------- */
-
-.bandeau-rappel {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espace-3);
-  padding: var(--espace-3) var(--espace-4);
-  margin-bottom: var(--espace-5);
-  background: var(--accent-doux);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  font-size: 13.5px;
-}
-.bandeau-rappel > .icone {
-  color: var(--accent);
-}
-.bandeau-rappel > span {
-  margin-right: auto;
-}
-/* Date limite de déclaration dépassée : le rappel change de ton. */
-.bandeau-rappel.en-retard {
+.etat-attention {
   background: var(--alerte-doux);
-}
-.bandeau-rappel.en-retard > .icone {
   color: var(--alerte-texte);
 }
-
-/* ---- Bulles d'aide --------------------------------------------------------- */
-
-/*
- * Le « i » se pose à côté d'un titre et n'occupe rien ; son texte n'apparaît
- * qu'au survol ou au focus clavier. Ce qui appelle une action de l'utilisateur
- * ne passe jamais par ici et reste affiché en clair.
- */
-.infobulle {
-  position: relative;
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: var(--espace-2);
-}
-
-.declencheur-infobulle {
-  display: inline-flex;
-  /* Une cible de 15 px se rate : la marge intérieure l'élargit sans décaler le
-     titre qui la porte. */
-  padding: var(--espace-1);
-  margin: calc(var(--espace-1) * -1);
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  color: var(--texte-secondaire);
-  cursor: help;
-}
-
-.declencheur-infobulle:hover,
-.declencheur-infobulle[aria-expanded="true"] {
+.etat-attente {
+  background: var(--accent-doux);
   color: var(--accent-texte);
 }
-
-.infobulle .bulle {
-  /* Placée en coordonnées de fenêtre par `installerInfobulles()` : ancrée
-     sous son icône, elle serait rognée par la carte et déborderait de l'écran
-     dès que l'icône approche du bord droit. */
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 40;
-  width: max-content;
-  max-width: min(340px, calc(100vw - 24px));
-  padding: var(--espace-2) var(--espace-3);
-  border-radius: var(--rayon-petit);
-  /* Bulle inversée : elle se détache du fond dans les deux thèmes. */
-  background: var(--texte);
-  color: var(--fond);
-  box-shadow: var(--ombre);
-  /* Le titre qui la porte est en gras et parfois en capitales : on repart
-     d'une mise en forme neutre. */
-  font-size: 12.5px;
-  font-weight: 400;
-  line-height: 1.45;
-  text-transform: none;
-  letter-spacing: normal;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 120ms ease;
+.etat-avenir {
+  background: var(--bordure-douce);
+  color: var(--texte-3);
 }
 
-.infobulle .bulle.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .infobulle .bulle {
-    transition: none;
-  }
-}
-
-/* ---- Détail du calcul URSSAF ------------------------------------------------ */
-
-/*
- * Replié sous les trois chiffres de la page : de l'encaissé au reste, chaque
- * prélèvement retranché avec sa base et son taux. C'est lui qui rend les
- * chiffres crédibles, sans les noyer quand on n'en a pas besoin.
- */
-.details-calcul {
-  margin-top: var(--espace-5);
-}
-.corps-calcul {
-  margin-top: var(--espace-3);
-}
-
-.ligne-cotisation {
-  display: flex;
-  align-items: baseline;
-  gap: var(--espace-3);
-  padding: var(--espace-2) 0;
-  font-size: 13.5px;
-  border-top: 1px solid var(--bordure-douce);
-}
-
-.ligne-cotisation > span:first-child {
-  flex: 1;
-  min-width: 140px;
-}
-
-/* Date d'entrée en vigueur du taux, quand la période en a connu plusieurs. */
-.palier-cotisation {
-  color: var(--texte-secondaire);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.base-cotisation {
-  color: var(--texte-secondaire);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.montant-cotisation {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  min-width: 90px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* Prélèvement calculé sur plusieurs bases : son total, puis le détail en
-   retrait, plus discret. */
-.groupe-cotisation > span:first-child {
-  font-weight: 600;
-}
-.ligne-cotisation.sous-ligne {
-  padding-left: var(--espace-4);
-  border-top-style: dashed;
-  color: var(--texte-secondaire);
-  font-size: 13px;
-}
-.ligne-cotisation.sous-ligne .montant-cotisation {
-  font-weight: 400;
-}
-
-/* Place d'un bouton de copie, en bout des lignes qui n'en ont pas : tous les
-   montants de la page tombent ainsi sur la même colonne. */
-.espace-copie {
-  width: calc(16px + 2 * var(--espace-2));
-  flex-shrink: 0;
-}
-
-/* Aboutissement du calcul, séparé de ce qui précède par un filet plus marqué. */
-.ligne-reste {
-  display: flex;
-  align-items: baseline;
-  gap: var(--espace-3);
-  padding-top: var(--espace-3);
-  border-top: 2px solid var(--bordure);
-}
-.intitule-reste {
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 700;
-}
-.montant-reste {
-  font-size: 15px;
-  color: var(--succes-texte);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.precision-reste {
-  margin: var(--espace-2) 0 0;
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-
-/* ---- Jauges de seuils ------------------------------------------------------ */
-
-/*
- * Les plafonds du régime micro et les seuils de franchise de TVA sont deux
- * réglementations distinctes, qui se franchissent indépendamment l'une de
- * l'autre. Les présenter en deux groupes encadrés évite de les lire comme une
- * seule liste de quatre chiffres, source de confusion.
- */
-/* Deux régimes distincts, séparés par l'air et un filet. Le cadre plein qui les
-   entourait créait une carte dans une carte pour dire une chose que la
-   distance dit déjà. */
-.groupe-seuils {
-  margin-top: var(--espace-6);
-  padding-top: var(--espace-5);
-  border-top: 1px solid var(--bordure-douce);
-}
-
-.groupe-seuils h3 {
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
-}
-
-.explication-groupe {
-  margin: var(--espace-1) 0 var(--espace-4);
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-
-.ligne-jauge {
-  margin-bottom: var(--espace-4);
-}
-.ligne-jauge:last-child {
-  margin-bottom: 0;
-}
-
-.entete-jauge {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--espace-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--espace-2);
-  font-size: 13.5px;
-}
-
-.entete-jauge .valeur-jauge {
-  font-variant-numeric: tabular-nums;
-  color: var(--texte-secondaire);
-}
-.entete-jauge .valeur-jauge strong {
-  color: var(--texte);
-}
-.entete-jauge .seuil-majore {
-  font-size: 11.5px;
-}
-
-.jauge {
-  position: relative;
-  height: 9px;
+.categorie {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
   border-radius: 999px;
-  background: var(--neutre-doux);
+  background: var(--prestation-doux);
+  color: var(--prestation-texte);
+  font-size: 12.5px;
+  font-weight: 580;
+  white-space: nowrap;
 }
-
-.jauge > span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 0.2s ease;
-}
-
-/* Repère du seuil de base sur une jauge graduée jusqu'au seuil majoré. */
-.repere-seuil {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--texte);
-  transform: translateX(-50%);
-}
-
-/* Teinte d'activité à l'état normal : une part prestations reste verte. */
-.jauge.prestation > span {
+.categorie i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: var(--prestation);
 }
-.jauge.attention > span {
-  background: var(--alerte);
+.categorie.vente {
+  background: var(--vente-doux);
+  color: var(--vente-texte);
 }
-.jauge.depasse > span {
-  background: var(--danger);
-}
-
-.detail-jauge {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-2);
-  margin-top: var(--espace-2);
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-.detail-jauge.attention {
-  color: var(--alerte-texte);
-}
-.detail-jauge.depasse {
-  color: var(--danger-texte);
-}
-
-/* ---- Graphique du CA mensuel ------------------------------------------------ */
-
-.graphique-ca {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-.graphique-ca .barre {
-  fill: var(--accent);
-}
-.graphique-ca .colonne:hover .barre {
-  fill: var(--accent-fort);
-}
-.graphique-ca .grille {
-  stroke: var(--bordure-douce);
-}
-.graphique-ca text {
-  fill: var(--texte-secondaire);
-  font-size: 11px;
-}
-
-/* Segments empilés : chaque activité garde sa couleur du langage commun. */
-.graphique-ca .seg-vente {
-  fill: var(--vente);
-}
-.graphique-ca .seg-prestation {
-  fill: var(--prestation);
-}
-.graphique-ca .seg-neutre {
-  fill: var(--texte-secondaire);
-}
-/* Le survol éclaire toute la pile du mois, sans changer les couleurs. */
-.graphique-ca .colonne:hover .segment {
-  filter: brightness(1.12);
-}
-
-/* Légende du graphique empilé. */
-.legende-graphique {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espace-2) var(--espace-4);
-  margin-top: var(--espace-3);
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-.entree-legende {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--espace-2);
-}
-.pastille-legende {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-.pastille-legende.seg-vente {
+.categorie.vente i {
   background: var(--vente);
 }
-.pastille-legende.seg-prestation {
+.mode {
+  font-size: 13.5px;
+  color: var(--texte-2);
+  white-space: nowrap;
+}
+.ref {
+  font-size: 13.5px;
+  color: var(--texte-2);
+  font-variant-numeric: tabular-nums;
+}
+.attenue {
+  color: var(--texte-3);
+}
+
+/* Couleurs des séries : graphique, légendes, répartitions, pastilles. */
+.seg-prestation {
+  fill: var(--prestation);
   background: var(--prestation);
 }
-.pastille-legende.seg-neutre {
-  background: var(--texte-secondaire);
+.seg-vente {
+  fill: var(--vente);
+  background: var(--vente);
+}
+.seg-neutre {
+  fill: var(--neutre);
+  background: var(--neutre);
+}
+.seg-total {
+  fill: var(--accent);
+  background: var(--accent);
 }
 
-.grille-deux {
+/* ==========================================================================
+   Tableau de bord
+   ========================================================================== */
+
+.indicateurs {
   display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: var(--espace-4);
-  /* Chaque carte s'arrête à son contenu : étirée, celle du graphique laissait
-     un grand vide sous les barres pour s'aligner sur les jauges. */
-  align-items: start;
+  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr));
+  gap: var(--e5);
 }
-.grille-deux > .carte,
-.grille-deux > .pile-gauche {
-  margin-bottom: var(--espace-5);
+.indicateurs.trois {
+  grid-template-columns: minmax(0, 1.7fr) repeat(2, minmax(0, 1fr));
 }
-
-/* Le graphique et les dernières recettes se regroupent dans la colonne de
-   gauche pour remplir la hauteur de la carte des seuils, plus haute, au lieu de
-   laisser un vide sous le graphique. `min-width: 0` laisse le tableau des
-   dernières recettes se rétrécir dans la colonne sans déborder. */
-.pile-gauche {
+.indicateur {
   display: flex;
   flex-direction: column;
-  gap: var(--espace-5);
-  min-width: 0;
+  gap: 4px;
+  padding: 18px var(--e5) var(--e4);
 }
-/* Seul le `gap` de la pile espace ces cartes : sans cela, la marge basse propre
-   à `.carte` s'y ajouterait et l'écart au-dessus des dernières recettes serait
-   deux fois plus grand que les autres. */
-.pile-gauche > .carte {
-  margin-bottom: 0;
-}
-
-@media (max-width: 1080px) {
-  .grille-deux {
-    grid-template-columns: 1fr;
-  }
-  .grille-deux > .carte,
-  .grille-deux > .pile-gauche {
-    margin-bottom: 0;
-  }
-}
-
-/* ---- Anomalies de numérotation ---------------------------------------------- */
-
-details.anomalies {
-  border-radius: var(--rayon-petit);
-  background: var(--alerte-doux);
-  padding: var(--espace-3) var(--espace-4);
-  margin-bottom: var(--espace-4);
+/* Icône et titre sur une ligne. La hauteur couvre deux lignes de titre : un
+   titre qui passe à la ligne ne décale pas le montant par rapport aux cartes
+   voisines. */
+.indicateur-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
   font-size: 13.5px;
+  font-weight: 560;
+  line-height: 1.35;
+  color: var(--texte-2);
+  text-wrap: balance;
 }
-details.anomalies summary {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-2);
-  cursor: pointer;
-  color: var(--alerte-texte);
-  font-weight: 600;
-  list-style: none;
-}
-details.anomalies summary::-webkit-details-marker {
-  display: none;
-}
-details.anomalies ul {
-  margin: var(--espace-3) 0 2px;
-  padding-left: var(--espace-5);
-  color: var(--texte);
-}
-details.anomalies li {
-  margin-bottom: var(--espace-1);
-}
-.numero-signale {
-  white-space: nowrap;
-}
-/* « ignorer » : action secondaire, en lien discret derrière le numéro. */
-.lien-ignorer {
-  border: 0;
-  background: none;
-  padding: 0 0 0 var(--espace-1);
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.lien-ignorer:hover {
-  color: var(--accent-texte);
-}
-.aide-anomalies {
-  margin: var(--espace-2) 0 0;
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-
-/* ---- Avertissement dans un formulaire ---------------------------------------- */
-
-.avertissement-formulaire {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-3);
-  margin-top: var(--espace-4);
-  padding: var(--espace-3) var(--espace-4);
-  border-radius: var(--rayon-petit);
-  background: var(--alerte-doux);
-  color: var(--texte);
-  font-size: 13.5px;
-}
-.avertissement-formulaire .icone {
-  color: var(--alerte);
-  flex-shrink: 0;
-}
-
-/* ---- Options (cases à cocher des paramètres) ----------------------------------- */
-
-.liste-options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-3);
-}
-
-.option-case {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-3);
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.option-case input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  flex-shrink: 0;
-}
-/* `display: flex` l'emporterait sur l'attribut `hidden`. */
-.option-case[hidden] {
-  display: none;
-}
-
-/* Précisions du régime, sous les listes déroulantes de la même section. */
-.options-regime {
-  margin-top: var(--espace-4);
-}
-
-/* Numéros de facture ignorés, rappelés sous les options. */
-.numeros-ignores {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espace-2) var(--espace-3);
-  margin-top: var(--espace-4);
-  padding-top: var(--espace-4);
-  border-top: 1px solid var(--bordure-douce);
-  font-size: 13.5px;
-}
-.numeros-ignores > span {
-  flex: 1;
-  min-width: 240px;
-}
-
-/* ---- Listes de gestion (modes personnalisés, sauvegardes) --------------------- */
-
-/* Liste divisée : un filet entre deux lignes suffit à les distinguer. Chaque
-   ligne encadrée faisait autant de boîtes que d'éléments. */
-.ligne-gestion {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-3);
-  padding: var(--espace-3) 0;
-  border-bottom: 1px solid var(--bordure-douce);
-}
-.ligne-gestion:last-child {
-  border-bottom: 0;
-}
-.ligne-gestion .libelle-gestion {
-  flex: 1;
-  min-width: 0;
-}
-.ligne-gestion .details-gestion {
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-  white-space: nowrap;
-}
-.ligne-gestion input {
-  background: var(--champ-fond);
-}
-
-/* ---- Résultat / bilan ---------------------------------------------------- */
-
-/* ---- Bilan URSSAF -------------------------------------------------------- */
-
-/*
- * Le geste de cette page est de recopier un nombre dans le formulaire de
- * l'URSSAF. La mise en page le sert : un intitulé qui nomme la période, le
- * montant seul et large, la copie à portée immédiate, et seulement ensuite ce
- * qui l'explique.
- */
-.resultat-bilan {
-  margin-top: var(--espace-5);
-  padding-top: var(--espace-5);
+.indicateur:not(.principal) .indicateur-detail {
+  margin-top: auto;
+  padding-top: 10px;
   border-top: 1px solid var(--bordure-douce);
 }
-/* Une seule largeur pour tout le contenu du bilan : la ventilation et les
-   prélèvements partageaient la carte à des largeurs différentes, et leurs
-   montants tombaient sur deux colonnes décalées. Bornée, la largeur garde
-   aussi chaque montant près de son libellé. Le filet du dessus, lui, reste
-   sur toute la carte. */
-.resultat-bilan > * {
-  max-width: 720px;
-}
-
-/* Où en est la déclaration : date limite, retard, ou déjà faite. */
-.statut-declaration {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espace-2) var(--espace-3);
-  margin-top: var(--espace-4);
-  font-size: 13.5px;
-}
-.statut-declaration > .icone {
+.tuile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--rayon);
+  background: var(--accent-doux);
   color: var(--accent-texte);
-  flex-shrink: 0;
 }
-.statut-declaration > span {
-  margin-right: auto;
+.tuile.achat {
+  background: var(--achat-doux);
+  color: var(--achat-texte);
 }
-.statut-declaration.faite > .icone {
-  color: var(--succes-texte);
+/* Encaissements (chiffre d'affaires, livre des recettes) et analyse (moyenne, rapport). */
+.tuile.recette {
+  background: var(--sarcelle-doux);
+  color: var(--sarcelle-texte);
 }
-.statut-declaration.en-retard {
-  color: var(--alerte-texte);
+.tuile.analyse {
+  background: var(--or-doux);
+  color: var(--or-texte);
 }
-.statut-declaration.en-retard > .icone {
-  color: var(--alerte-texte);
+.tuile.neutre {
+  background: var(--bordure-douce);
+  color: var(--texte-2);
 }
-.statut-declaration:focus {
-  outline: none;
+.tuile.petit {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--rayon-petit);
 }
-
-/* La période affichée et son nombre d'encaissements, en une ligne. */
-.entete-bilan {
-  display: flex;
-  align-items: baseline;
-  gap: var(--espace-3);
-  margin: 0 0 var(--espace-4);
-  font-size: 14.5px;
-}
-.entete-bilan span {
-  font-size: 13px;
-  color: var(--texte-secondaire);
-}
-
-/* Les trois réponses de la page, côte à côte : à déclarer, prélevé, reste.
-   Le montant à déclarer domine ; les deux autres, plus petits, le suivent. */
-.chiffres-cles {
-  display: flex;
-  /* Alignés sur leur première ligne : les trois libellés tombent à la même
-     hauteur, quelle que soit la taille du montant qu'ils annoncent. */
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--espace-4) var(--espace-7);
-}
-.chiffre-cle {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espace-1);
-}
-.etiquette-chiffre {
-  font-size: 13px;
-  color: var(--texte-secondaire);
-}
-.montant-chiffre {
-  font-size: 24px;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.montant-chiffre.reste {
-  color: var(--succes-texte);
-}
-.precision-chiffre {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--texte-secondaire);
-}
-/* Activité non renseignée : l'invitation à la compléter, sous le seul chiffre
-   qui peut s'afficher. */
-.chiffres-cles + .precision-chiffre {
-  margin-top: var(--espace-2);
-}
-
-.ligne-declaration {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espace-4);
-}
-
-.montant-declaration {
-  font-size: 40px;
-  font-weight: 700;
+.indicateur-valeur {
+  margin: 2px 0 var(--e3);
+  font-size: 25px;
+  font-weight: 680;
   line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-/* Ventilation d'une activité mixte : deux lignes, deux cases du formulaire. */
-.ventilation {
-  margin-top: var(--espace-5);
-}
-.ventilation h3 {
-  margin: 0 0 var(--espace-2);
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.ligne-ventilation {
-  display: flex;
-  align-items: baseline;
-  gap: var(--espace-3);
-  padding: var(--espace-3) 0;
-  border-top: 1px solid var(--bordure-douce);
-  font-size: 13.5px;
-}
-.intitule-ventilation {
-  flex: 1;
-  min-width: 140px;
-}
-.montant-ventilation {
-  font-size: 17px;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
   white-space: nowrap;
 }
-.ligne-ventilation .btn-icone {
+.indicateur.vide .indicateur-valeur {
+  color: var(--texte-3);
+}
+/* Grands montants : « 2 705 » se lit d'abord, « ,00 € » suit en retrait.
+   Un montant teinté (le reste, en vert) garde sa couleur jusqu'au bout. */
+.centimes {
+  margin-left: 0.03em;
+  font-size: 0.6em;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--texte-2);
+}
+:is(.reste, .vide) .centimes {
+  color: inherit;
+}
+.indicateur-detail {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+
+/* Le chiffre de l'année : la carte qui compte, plus grande que les autres. */
+.indicateur.principal {
+  background:
+    radial-gradient(120% 140% at 0% 0%, var(--sarcelle-doux) 0%, transparent 55%),
+    var(--carte);
+}
+.indicateur.principal .indicateur-valeur {
+  font-size: clamp(32px, 2.8vw, 38px);
+  letter-spacing: -0.035em;
+}
+.repartition {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin-top: auto;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bordure-douce);
+}
+.repartition span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.repartition .prestations {
+  background: var(--prestation);
+}
+.repartition .ventes {
+  background: var(--vente);
+}
+.repartition .neutre {
+  background: var(--neutre);
+}
+.dessin .repartition span {
+  animation: remplir 900ms var(--sortie) both 200ms;
+}
+.legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--e4);
+  margin-top: var(--e2);
+  font-size: 13px;
+  color: var(--texte-2);
+}
+.indicateur.principal .legende:first-of-type {
+  margin-top: auto;
+}
+.indicateur.principal .repartition + .legende {
+  margin-top: var(--e2);
+}
+/* Petites cartes : la répartition sous le montant, une ligne par part, le
+   libellé à gauche (il passe à la ligne sur un écran étroit) et le montant
+   aligné à droite. */
+.indicateur:not(.principal) .legende {
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 var(--e3);
+}
+.indicateur:not(.principal) .cle {
+  display: flex;
+  align-items: baseline;
+  white-space: normal;
+}
+.indicateur:not(.principal) .cle i {
+  flex: none;
   align-self: center;
 }
-
-.note-legale {
-  display: flex;
-  gap: var(--espace-2);
-  font-size: 13px;
-  color: var(--texte-secondaire);
-  margin-top: var(--espace-4);
+.indicateur:not(.principal) .cle strong {
+  margin-left: auto;
+  padding-left: var(--e2);
+  white-space: nowrap;
 }
-.note-legale .icone {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-code.chemin {
-  background: var(--fond);
-  border: 1px solid var(--bordure);
-  border-radius: 6px;
-  padding: 2px var(--espace-2);
-  font-size: 12.5px;
-  word-break: break-all;
-}
-
-/* ---- Suggestions de saisie (liste maison, sans composant natif) ------------ */
-
-.porte-suggestions {
-  position: relative;
-}
-
-.liste-suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  background: var(--carte);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  box-shadow: var(--ombre);
-  overflow: hidden;
-}
-
-.liste-suggestions [role="option"] {
-  padding: var(--espace-2) var(--espace-3);
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.liste-suggestions [role="option"].actif,
-.liste-suggestions [role="option"]:hover {
-  background: var(--accent-doux);
-}
-
-/* ---- Info-bulle du graphique (instantanée, suit le pointeur) --------------- */
-
-.infobulle-graphique {
-  position: fixed;
-  z-index: 60;
-  background: var(--carte);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-petit);
-  box-shadow: var(--ombre);
-  padding: var(--espace-2) var(--espace-3);
-  font-size: 12.5px;
-  line-height: 1.5;
-  /* Le détail par activité est multiligne : les retours à la ligne portés par
-     `data-info` doivent être respectés. */
-  white-space: pre-line;
-  pointer-events: none;
-}
-
-/* ---- Recherche SIRET ----------------------------------------------------- */
-
-.ligne-siret {
-  display: flex;
-  gap: var(--espace-3);
-  align-items: end;
-}
-.ligne-siret .champ {
-  flex: 1;
-}
-
-.bloc-nouveau-client {
-  margin-top: var(--espace-2);
-}
-
-/* Résultat de la recherche SIRET : une ligne de réponse sous le champ, pas un
-   panneau encadré posé dans la modale. */
-.resultat-siret {
-  display: flex;
-  align-items: center;
-  gap: var(--espace-2);
-  margin-top: var(--espace-3);
-  font-size: 13.5px;
-}
-.resultat-siret .icone {
-  color: var(--accent);
-}
-.resultat-siret .nom-trouve {
-  font-weight: 600;
-}
-
-/* ---- Responsive ---------------------------------------------------------- */
-
-@media (max-width: 880px) {
-  .disposition {
-    flex-direction: column;
-  }
-
-  .barre-laterale {
-    width: 100%;
-    height: auto;
-    position: static;
-    padding: var(--espace-3) var(--espace-3);
-  }
-
-  .marque {
-    padding-bottom: var(--espace-2);
-  }
-  .liens-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: var(--espace-1);
-  }
-  .barre-laterale a {
-    white-space: nowrap;
-    padding: var(--espace-2) var(--espace-3);
-  }
-  .pied-nav {
-    flex-direction: row;
-    align-items: center;
-    margin-top: var(--espace-3);
-  }
-  .bouton-theme {
-    width: auto;
-  }
-  .infos-nav {
-    display: none;
-  }
-
-  .contenu {
-    padding: var(--espace-4) var(--espace-4) var(--espace-7);
-  }
-  .grille-formulaire {
-    grid-template-columns: 1fr;
-  }
-}
-
-/*
- * Sous 700 px, les registres (recettes, achats) ne tiennent plus en colonnes :
- * chaque ligne devient une carte où le libellé de colonne, porté par
- * `data-label`, précède sa valeur. Ciblé sur ces deux tableaux seulement ;
- * ceux qui ont peu de colonnes gardent leur défilement horizontal.
- */
-@media (max-width: 700px) {
-  .table-registre,
-  .table-registre tbody {
-    display: block;
-  }
-  .table-registre thead {
-    display: none;
-  }
-  .table-registre colgroup {
-    display: none;
-  }
-
-  .table-registre tbody tr {
-    display: block;
-    border: 1px solid var(--bordure);
-    border-radius: var(--rayon-petit);
-    padding: var(--espace-2) var(--espace-4);
-    margin-bottom: var(--espace-3);
-  }
-  /* En carte, le survol de ligne entière n'a plus de sens. */
-  .table-registre tbody tr:hover {
-    background: transparent;
-  }
-
-  .table-registre td {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--espace-4);
-    padding: var(--espace-2) 0;
-    border: none;
-    border-bottom: 1px solid var(--bordure-douce);
-    text-align: right;
-    white-space: normal;
-  }
-  .table-registre tr td:last-child {
-    border-bottom: none;
-  }
-  .table-registre td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    font-size: 12px;
-    color: var(--texte-secondaire);
-    text-align: left;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  /* Case de sélection en tête de carte, actions en pied : ni l'une ni les
-     autres n'ont de libellé à afficher. */
-  .table-registre td.col-case {
-    justify-content: flex-start;
-  }
-  .table-registre td.actions {
-    justify-content: flex-end;
-    gap: var(--espace-2);
-  }
-  .table-registre td.col-case::before,
-  .table-registre td.actions::before {
-    content: none;
-  }
-  /* Le montant, mis en avant, occupe seul sa ligne dans la carte. */
-  .table-registre td.montant {
-    font-size: 16px;
-  }
-
-  /* Ligne « Afficher plus » / « aucun résultat » : un bloc centré, sans carte. */
-  .table-registre .ligne-vide {
-    border: none;
-    padding: 0;
-  }
-  .table-registre .ligne-vide td {
-    justify-content: center;
-    border: none;
-    text-align: center;
-  }
-  .table-registre .ligne-vide td::before {
-    content: none;
-  }
-}
-
-/* ---- Éléments introduits en v1.4 ----------------------------------------- */
-
-/* Choix du registre à importer (recettes / achats). */
-.choix-registre {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espace-2);
-}
-
-/* Aperçu « 28 mai 2026 » sous un champ date. */
-.apercu-date {
-  color: var(--texte-secondaire);
-  font-size: 12.5px;
-  min-height: 1em;
-}
-
-/* Chemin suivi d'un bouton « copier ». */
-.chemin-copiable {
+.cle {
   display: inline-flex;
   align-items: center;
-  gap: var(--espace-2);
-  max-width: 100%;
+  gap: 6px;
+  white-space: nowrap;
 }
-.chemin-copiable .chemin {
-  overflow-x: auto;
+.cle i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
 }
-
-/* Lien texte atténué (à côté d'un bouton, dans un bandeau). */
-.lien-attenue {
-  color: var(--texte-secondaire);
-  font-size: 13px;
-  text-decoration: underline;
+.cle-prestations i {
+  background: var(--prestation);
 }
-.lien-attenue:hover {
+.cle-ventes i {
+  background: var(--vente);
+}
+.cle-neutre i {
+  background: var(--neutre);
+}
+.cle-total i {
+  background: var(--accent);
+}
+/* Achats : le mois affiché en plein, les mois d'avant dans la même teinte, plus claire. */
+.cle-achat i {
+  background: var(--achat);
+}
+.cle-achat-avant i {
+  background: color-mix(in srgb, var(--achat) 38%, transparent);
+}
+.cle strong {
   color: var(--texte);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+.legende .compteurs {
+  margin-left: auto;
+  color: var(--texte-3);
+}
+.legende .compteurs strong {
+  color: var(--texte-2);
+  font-weight: 620;
 }
 
-/* Bandeau du jeu de démonstration : distinct du rappel URSSAF. */
-.bandeau-demo {
-  background: var(--succes-doux);
-}
-.bandeau-demo > .icone {
-  color: var(--succes);
-}
-
-/* Note d'alerte (sauvegardes en échec) : reprend la note légale en teinte alerte. */
-.note-legale.alerte {
-  color: var(--alerte-texte);
-}
-.note-legale.alerte .icone {
-  color: var(--alerte);
+.grille-tableau {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 384px;
+  gap: var(--e5);
+  align-items: start;
 }
 
-/* Équivalent textuel d'un graphique : replié par défaut, sous les barres. */
-.details-graphique {
-  margin-top: var(--espace-3);
-  font-size: 13px;
-}
-.details-graphique summary {
+/* ---- Graphique mensuel ------------------------------------------------------ */
+
+/* Graphique et déclaration partagent leur rangée : même hauteur, le graphique
+   prend toute la place que la déclaration lui donne. */
+.carte-graphique,
+.declaration {
+  align-self: stretch;
   display: flex;
-  align-items: center;
-  gap: var(--espace-2);
-  color: var(--texte-secondaire);
-  cursor: pointer;
-  width: max-content;
-  list-style: none;
+  flex-direction: column;
 }
-.details-graphique summary::-webkit-details-marker {
-  display: none;
+.graphique {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  margin: 0 var(--e5) var(--e2);
 }
-.details-graphique summary:hover {
-  color: var(--texte);
+.graphique-zone {
+  position: absolute;
+  inset: 0;
 }
-/* Le chevron pivote vers le haut une fois le tableau déplié. */
-.details-graphique[open] summary .icone {
-  transform: rotate(180deg);
+.graphique svg {
+  display: block;
+  overflow: visible;
 }
-.details-graphique summary .icone {
-  transition: transform 0.15s ease;
+.graphique .grille {
+  stroke: var(--bordure-douce);
+  stroke-width: 1;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .details-graphique summary .icone {
-    transition: none;
-  }
+.graphique .base {
+  stroke: var(--bordure);
 }
-.details-graphique .conteneur-tableau {
-  margin-top: var(--espace-2);
+.graphique .axe {
+  fill: var(--texte-3);
+  font-size: 11.5px;
+  font-family: var(--police);
 }
-
-/* ---- Micro-animations ---------------------------------------------------- */
-/* Porteuses de sens : elles disent ce qui apparaît, se remplit ou
-   change, et se coupent entièrement pour qui préfère moins de mouvement.
-   Le changement de page, lui, est instantané : rien ne « remonte ». */
-
-/* Transition d'entrée, identique à chaque changement de page : un simple fondu,
-   sans mouvement, joué une fois le contenu (ou le placeholder) prêt. Seule la
-   zone de contenu est concernée : le menu de gauche ne bouge pas. */
-.vue-cachee {
+.graphique .axe-courant {
+  fill: var(--texte);
+  font-weight: 650;
+}
+.graphique .colonne .zone {
+  fill: transparent;
+  transition: fill var(--rapide);
+}
+.graphique .colonne:hover .zone,
+.graphique .colonne:focus-visible .zone {
+  fill: var(--survol);
+}
+.graphique .colonne:focus {
+  outline: none;
+}
+.graphique .etiquette-valeur {
+  fill: var(--texte-2);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--police);
+  transition: opacity 120ms ease;
+}
+/* La bulle reprend le montant : celui du sommet s'efface dessous. */
+.graphique .colonne:hover .etiquette-valeur,
+.graphique .colonne:focus-visible .etiquette-valeur {
   opacity: 0;
 }
-.vue-entre {
-  animation: entree-page 0.2s ease-out;
+.graphique .etiquette-valeur.meilleur {
+  fill: var(--texte);
+  font-weight: 700;
 }
-
-@keyframes entree-page {
+.barres {
+  transform-box: fill-box;
+  transform-origin: bottom;
+}
+.dessin .barres.anime {
+  animation: monter 700ms var(--sortie) both;
+  animation-delay: calc(var(--rang) * 40ms + 150ms);
+}
+.dessin .etiquette-valeur.anime {
+  animation: apparaitre 400ms ease backwards;
+  animation-delay: calc(var(--rang) * 40ms + 650ms);
+}
+/* D'une année à l'autre, chaque colonne part de sa hauteur précédente, et
+   son total la suit (variables posées par graphique.js). */
+.barres.morph {
+  animation: changer-hauteur 560ms var(--sortie) both;
+}
+.etiquette-valeur.morph {
+  animation: suivre-hauteur 560ms var(--sortie) both;
+}
+@keyframes changer-hauteur {
   from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+    transform: scaleY(var(--depuis));
   }
 }
-
-/* Une ligne qui vient d'être ajoutée s'illumine brièvement, puis s'apaise. */
-.ligne-nouvelle {
-  animation: apparition-ligne 1.1s ease-out;
-}
-
-@keyframes apparition-ligne {
-  0% {
-    background: var(--accent-doux);
-  }
-  100% {
-    background: transparent;
+@keyframes suivre-hauteur {
+  from {
+    transform: translateY(var(--decalage));
   }
 }
-
-/* Une ligne supprimée s'efface et se retire avant le rafraîchissement. */
-.ligne-part {
-  animation: depart-ligne 0.24s ease forwards;
-}
-
-@keyframes depart-ligne {
-  to {
-    opacity: 0;
-    transform: translateX(-14px);
+@keyframes monter {
+  from {
+    transform: scaleY(0);
   }
 }
-
-/* Les jauges de seuils se remplissent depuis la gauche au premier affichage. */
-.jauge > span {
-  transform-origin: left;
-  animation: remplir-jauge 0.45s ease-out;
-}
-
-@keyframes remplir-jauge {
+@keyframes remplir {
   from {
     transform: scaleX(0);
   }
 }
 
-/* Les barres du graphique montent depuis la ligne de base. */
-.barre-graphique {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation: monter-barre 0.5s ease-out both;
+.bulle-graphique {
+  position: absolute;
+  z-index: 5;
+  min-width: 200px;
+  padding: 10px 12px;
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  border: 1px solid var(--bordure);
+  color: var(--texte);
+  font-size: 13px;
+  box-shadow: var(--ombre-haute);
+  pointer-events: none;
+  translate: -50% calc(-100% - 10px);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.bulle-graphique.visible {
+  opacity: 1;
+}
+.bulle-graphique strong {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 650;
+}
+.bulle-graphique .ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e4);
+  color: var(--texte-2);
+  font-variant-numeric: tabular-nums;
+}
+.bulle-graphique .ligne span:last-child {
+  color: var(--texte);
+  font-weight: 560;
+}
+.bulle-graphique .ligne i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+.bulle-graphique .total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bordure-douce);
+}
+.bulle-graphique .ligne:first-of-type.total {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.bulle-graphique .total span:last-child {
+  font-weight: 680;
 }
 
-@keyframes monter-barre {
+/* Le tableau des chiffres prend la place du graphique, sans agrandir la carte :
+   il défile à l'intérieur. */
+.vue-tableau {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  margin-bottom: var(--e2);
+}
+.vue-tableau .defile {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+}
+.vue-tableau .tableau th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.vue-tableau .tableau td {
+  height: 40px;
+}
+.vue-tableau .tableau th:first-child,
+.vue-tableau .tableau td:first-child {
+  padding-left: var(--e5);
+}
+.vue-tableau .tableau th:last-child,
+.vue-tableau .tableau td:last-child {
+  padding-right: var(--e5);
+}
+.pied-graphique {
+  margin: 0;
+  padding: var(--e3) var(--e5) var(--e4);
+}
+.vide-graphique {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e3);
+  min-height: 240px;
+  padding: var(--e5);
+  color: var(--texte-2);
+  text-align: center;
+}
+.vide-graphique .icone {
+  color: var(--texte-3);
+}
+
+/* ---- Déclaration URSSAF (carte du tableau de bord) --------------------------- */
+
+.declaration {
+  overflow: hidden;
+}
+.declaration .carte-tete {
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.declaration-corps {
+  flex: 1;
+  padding: var(--e5);
+}
+.declaration-corps.vide-carte {
+  padding: var(--e5);
+}
+.declaration-periode {
+  font-size: 18px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+.echeance {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+.echeance .icone {
+  margin-top: 2px;
+}
+.echeance.retard {
+  color: var(--danger-texte);
+  font-weight: 560;
+}
+.lignes-montants {
+  display: flex;
+  flex-direction: column;
+}
+/* Carte de déclaration : le montant à déclarer, puis le prélèvement et le
+   reste, sur des lignes alignées sous l'échéance ; la dernière colonne porte
+   le bouton « Copier » du montant à déclarer. */
+.declaration .lignes-montants {
+  margin-top: var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+}
+.declaration .ligne-montant {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 30px;
+  align-items: center;
+  gap: var(--e2);
+  min-height: 40px;
+  padding: 4px 0;
+}
+.declaration .ligne-montant.principal {
+  color: var(--texte);
+  font-weight: 560;
+}
+.declaration .ligne-montant.principal .valeur {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.note-estimation {
+  margin-top: var(--e2);
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.ligne-montant {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: 7px 0;
+  font-size: 14px;
+  color: var(--texte-2);
+}
+.ligne-montant + .ligne-montant {
+  border-top: 1px solid var(--bordure-douce);
+}
+.ligne-montant .valeur {
+  color: var(--texte);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ligne-montant.reste {
+  color: var(--texte);
+  font-weight: 620;
+}
+.ligne-montant.reste .valeur {
+  color: var(--succes-texte);
+  font-weight: 700;
+}
+.ligne-montant small {
+  font-size: 12px;
+  color: var(--texte-3);
+}
+.declaration .carte-pied {
+  gap: var(--e2);
+  justify-content: flex-end;
+}
+.declaration .carte-pied .btn-principal {
+  flex: 1;
+}
+.declaration-corps > .bandeau-retour {
+  margin: 0 0 var(--e4);
+}
+
+/* ---- Dernières recettes et plafonds -------------------------------------------- */
+
+.carte-dernieres,
+.carte-plafonds {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.carte-dernieres.pleine {
+  grid-column: 1 / -1;
+}
+.carte-dernieres {
+  container-type: inline-size;
+}
+/* Le libellé prend la place qui reste, sur une ligne, quitte à s'abréger ;
+   sur une carte étroite (écran de 1280 px), il cède sa colonne au montant. */
+.carte-dernieres .libelle {
+  width: 100%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@container (max-width: 640px) {
+  .carte-dernieres .tableau :is(th, td):nth-child(3) {
+    display: none;
+  }
+}
+.lignes-ajustees {
+  position: relative;
+  flex: 1;
+  min-height: 190px;
+  overflow: hidden;
+}
+.lignes-ajustees .tableau {
+  position: absolute;
+  inset: 0 0 auto;
+}
+.lignes-ajustees .tableau td {
+  height: auto;
+}
+.lien-suite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: auto;
+  padding: var(--e3);
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 13.5px;
+  font-weight: 580;
+  text-decoration: none;
+  border-radius: 0 0 var(--rayon-carte) var(--rayon-carte);
+}
+.lien-suite:hover {
+  background: var(--survol);
+}
+.lien-suite .icone {
+  transition: translate var(--rapide) var(--sortie);
+}
+.lien-suite:hover .icone {
+  translate: 3px 0;
+}
+
+.activite-seuils {
+  margin: -6px var(--e5) var(--e3);
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.regime {
+  padding: 0 var(--e5) var(--e5);
+}
+.regime + .regime {
+  border-top: 1px solid var(--bordure-douce);
+  padding-top: var(--e4);
+}
+.carte-plafonds .regime:last-child {
+  flex: 1;
+}
+.regime h3 {
+  font-size: 14px;
+  font-weight: 650;
+}
+.regime .explication {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.regle {
+  margin-top: var(--e4);
+}
+.regle-tete {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e3);
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+.regle-tete .valeurs {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.regle-tete .valeurs strong {
+  color: var(--texte);
+  font-weight: 650;
+}
+.piste {
+  position: relative;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--bordure-douce);
+}
+.piste .rempli {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--sarcelle);
+  transform-origin: left;
+}
+.piste.prestation .rempli {
+  background: var(--prestation);
+}
+.piste.attention .rempli {
+  background: var(--alerte);
+}
+.piste.depasse .rempli {
+  background: var(--danger);
+}
+.dessin .piste .rempli {
+  animation: remplir 1s var(--sortie) both 300ms;
+}
+.repere {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--texte-2);
+}
+.regle-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.regle-note .icone {
+  margin-top: 2px;
+}
+.regle-note.attention {
+  color: var(--alerte-texte);
+}
+.regle-note.depasse {
+  color: var(--danger-texte);
+}
+
+/* ==========================================================================
+   Tableaux
+   ========================================================================== */
+
+.tableau {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+.tableau th {
+  padding: 9px var(--e3);
+  background: var(--carte-2);
+  border-top: 1px solid var(--bordure-douce);
+  border-bottom: 1px solid var(--bordure);
+  color: var(--texte-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.tableau td {
+  height: 52px;
+  padding: 8px var(--e3);
+  border-bottom: 1px solid var(--bordure-douce);
+  vertical-align: middle;
+}
+.tableau tbody tr {
+  transition: background var(--rapide);
+}
+.tableau tbody tr:hover {
+  background: var(--survol);
+}
+.tableau tbody tr.choisie {
+  background: var(--accent-doux);
+}
+.tableau th:first-child,
+.tableau td:first-child {
+  padding-left: var(--e5);
+}
+.tableau th:last-child,
+.tableau td:last-child {
+  padding-right: var(--e5);
+}
+.tableau .montant {
+  text-align: right;
+  white-space: nowrap;
+}
+.tableau td.montant {
+  font-weight: 620;
+}
+.tableau .date {
+  white-space: nowrap;
+  color: var(--texte-2);
+}
+.tableau .client {
+  font-weight: 560;
+  white-space: nowrap;
+}
+.tableau td > .attenue {
+  white-space: nowrap;
+}
+.tableau .ref,
+.tableau .mode {
+  white-space: nowrap;
+}
+.tableau .libelle {
+  color: var(--texte-2);
+}
+.tableau tfoot td {
+  height: auto;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  border-bottom: 0;
+  background: var(--carte-2);
+  font-weight: 650;
+}
+.tableau tfoot tr:last-child td:first-child {
+  border-bottom-left-radius: var(--rayon-carte);
+}
+.tableau tfoot tr:last-child td:last-child {
+  border-bottom-right-radius: var(--rayon-carte);
+}
+.tableau td.vide,
+p.vide {
+  height: auto;
+  padding: var(--e7) var(--e5);
+  text-align: center;
+  color: var(--texte-2);
+}
+.vide > .icone {
+  margin: 0 auto var(--e2);
+  color: var(--texte-3);
+}
+.tableau td.vide .btn,
+.tableau td.vide .lien-bouton {
+  margin-top: var(--e3);
+}
+.tableau tr.ligne-vide:hover {
+  background: none;
+}
+
+/* ==========================================================================
+   Registres
+   ========================================================================== */
+
+.outils {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  flex-wrap: wrap;
+  padding: var(--e4) var(--e5);
+}
+.recherche {
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 300px;
+}
+.recherche.large {
+  max-width: none;
+}
+/* Filtres des registres : l'année à portée de main, le reste derrière
+   « Filtres », et ce qui agit en pastilles. */
+.choix-annee.actif .annee-choisie {
+  color: var(--accent-texte);
+}
+.btn-filtres.actif {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+}
+.compte-filtres {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--sur-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.filtres-actifs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.filtres-actifs:empty {
+  display: none;
+}
+.pastille-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 7px 0 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 999px;
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+  font-size: 13px;
+  font-weight: 560;
+  animation: apparaitre 200ms ease both;
+  transition: background var(--rapide), border-color var(--rapide);
+}
+.pastille-filtre:hover {
+  border-color: var(--accent);
+}
+.pastille-filtre .icone {
+  opacity: 0.75;
+}
+.panneau-filtres {
+  position: fixed;
+  inset: auto;
+  width: 280px;
+  margin: 0;
+  padding: var(--e4);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  box-shadow: var(--ombre-haute);
+  color: var(--texte);
+}
+.panneau-filtres:popover-open {
+  display: grid;
+  gap: var(--e3);
+  animation: apparaitre 160ms ease both;
+}
+.champ-filtre .etiquette-champ {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--texte-2);
+}
+.panneau-filtres .lien-bouton {
+  justify-self: start;
+}
+.recherche .icone {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--texte-3);
+  pointer-events: none;
+}
+.champ-texte,
+.recherche input,
+.selecteur select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--bordure-controle);
+  border-radius: var(--rayon);
+  background: var(--champ);
+  color: var(--texte);
+  font-size: 14px;
+  transition: border-color var(--rapide), box-shadow var(--rapide);
+}
+.recherche input {
+  padding: 0 12px 0 35px;
+}
+.champ-texte {
+  padding: 0 12px;
+}
+.champ-texte::placeholder,
+.recherche input::placeholder {
+  color: var(--texte-3);
+}
+.champ-texte:hover,
+.recherche input:hover,
+.selecteur select:hover {
+  border-color: var(--texte-3);
+}
+.champ-texte:focus,
+.recherche input:focus,
+.selecteur select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--anneau);
+}
+.champ-texte[aria-invalid='true'],
+.selecteur select[aria-invalid='true'] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-doux);
+}
+/* L'icône du sélecteur de date reste lisible en sombre. */
+:root[data-theme='dark'] .champ-texte::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+}
+.selecteur {
+  position: relative;
+  display: block;
+}
+.selecteur select {
+  appearance: none;
+  padding: 0 32px 0 12px;
+  font-weight: 520;
+  cursor: pointer;
+}
+.selecteur select option {
+  background: var(--carte);
+  color: var(--texte);
+}
+.selecteur .icone {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--texte-3);
+  pointer-events: none;
+}
+.outils .selecteur,
+.actions .selecteur {
+  width: auto;
+}
+.selecteur.actif select {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+}
+
+/* Avis : encadré seul sur la page ; dans une carte, bande de toute sa
+   largeur entre deux filets, jamais une boîte dans la boîte. */
+.avis {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e3);
+  padding: 10px var(--e4);
+  border: 1px solid color-mix(in srgb, var(--alerte) 28%, transparent);
+  border-radius: var(--rayon-moyen);
+  background: var(--alerte-doux);
+  font-size: 13.5px;
+}
+.carte .avis {
+  padding: var(--e3) var(--e5);
+  border-width: 1px 0;
+  border-radius: 0;
+}
+.zone-avis > .avis {
+  margin-bottom: var(--e4);
+}
+.carte-corps > .avis {
+  margin: 0 calc(-1 * var(--e5)) var(--e4);
+}
+.avis > .icone {
+  margin-top: 1px;
+  color: var(--alerte);
+}
+.avis strong {
+  font-weight: 650;
+}
+.avis p + p:not(.aide-avis) {
+  margin-top: 3px;
+}
+.avis .lien-bouton {
+  font-size: 12.5px;
+}
+.aide-avis {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--texte-2);
+}
+.numero-signale {
+  white-space: nowrap;
+}
+.zone-avis > .bandeau-retour,
+.zone-retours > .bandeau-retour {
+  margin: 0 var(--e5) var(--e4);
+}
+
+.resume-registre {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e4);
+  padding: 0 var(--e5) var(--e3);
+  font-size: 14px;
+  color: var(--texte-2);
+}
+.resume-registre:empty {
+  display: none;
+}
+.resume-registre strong {
+  color: var(--texte);
+  font-weight: 680;
+}
+.lien-discret {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  border: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bordure-douce);
+  color: var(--texte-2);
+  font-size: 12.5px;
+  font-weight: 560;
+}
+.lien-discret:hover {
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+}
+.resume-registre .lien-bouton {
+  margin-left: auto;
+}
+.resume-registre .lien-discret + .lien-bouton {
+  margin-left: var(--e3);
+}
+
+.tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 4px;
+}
+.tri:hover {
+  color: var(--texte);
+}
+.indicateur-tri {
+  display: inline-flex;
+}
+th[aria-sort='none'] .indicateur-tri .icone {
+  opacity: 0.4;
+}
+th.montant .tri {
+  flex-direction: row-reverse;
+}
+.icone.monte {
+  rotate: 180deg;
+}
+
+.col-case {
+  width: 44px;
+}
+.tableau td.col-case,
+.tableau th.col-case {
+  padding-right: 0;
+}
+/* Un clic sur la ligne l'ouvre ; le reste passe par le menu « … ». */
+.registre tbody tr[data-id] {
+  cursor: pointer;
+}
+
+/* Titres de colonnes collés en haut, total collé en bas ; une ombre les
+   détache des lignes tant qu'ils flottent (classe posée par registre.js). */
+.registre thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+.registre thead th {
+  transition: box-shadow var(--rapide);
+}
+.registre thead.colle th {
+  box-shadow: 0 1px 0 var(--bordure), 0 8px 14px -10px rgba(28, 26, 23, 0.28);
+}
+.registre tfoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+}
+.registre tfoot td {
+  transition: box-shadow var(--rapide), border-radius var(--rapide);
+}
+.registre tfoot.colle td {
+  box-shadow: 0 -1px 0 var(--bordure), 0 -8px 14px -10px rgba(28, 26, 23, 0.28);
+}
+/* Collé au bas de l'écran, le total n'arrondit plus les coins de la carte. */
+.registre tfoot.colle tr td:is(:first-child, :last-child) {
+  border-radius: 0;
+}
+.registre tfoot .attenue {
+  font-weight: 520;
+}
+
+/* Le registre mois par mois : un séparateur ouvre chaque mois, avec son sous-total. */
+.tableau .separateur-mois td {
+  height: auto;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--carte-2);
+  font-size: 13px;
+}
+.separateur-mois .mois {
+  font-weight: 650;
+  color: var(--texte);
+}
+.separateur-mois .compte {
+  margin-left: var(--e3);
+  color: var(--texte-3);
+}
+.separateur-mois td.montant {
+  font-weight: 650;
+  color: var(--texte-2);
+}
+.tableau tbody tr.separateur-mois:hover {
+  background: none;
+}
+
+/* Ce que la recherche a trouvé, surligné dans les cellules. */
+.registre mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--or) 26%, transparent);
+  color: inherit;
+}
+.tableau .col-actions {
+  width: 52px;
+  padding-left: 0;
+  text-align: right;
+}
+.bouton-menu {
+  color: var(--texte-3);
+  opacity: 0.55;
+  transition: opacity var(--rapide), background var(--rapide), color var(--rapide);
+}
+.tableau tr:hover .bouton-menu,
+.bouton-menu:focus-visible,
+.bouton-menu[aria-expanded='true'] {
+  opacity: 1;
+}
+.bouton-menu[aria-expanded='true'] {
+  background: var(--survol);
+  color: var(--texte);
+}
+
+/* Colonne du PDF joint : trombone pour voir, flèche pour joindre ; en-tête
+   et boutons centrés sur le même axe. */
+.tableau .col-piece {
+  width: 44px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
+.piece-oui {
+  color: var(--accent-texte);
+}
+.piece-oui:hover {
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+}
+.piece-oui.pop {
+  animation: pop 480ms var(--sortie);
+}
+@keyframes pop {
+  0% {
+    scale: 0.3;
+  }
+  55% {
+    scale: 1.15;
+  }
+}
+.piece-non {
+  opacity: 0;
+}
+.tableau tr:hover .piece-non,
+.piece-non:focus-visible {
+  opacity: 1;
+}
+.tableau tr.cible-depot td {
+  background: var(--accent-doux);
+}
+.tableau tr.cible-depot td.col-piece .piece-non {
+  opacity: 1;
+  color: var(--accent-texte);
+  animation: pop 400ms var(--sortie);
+}
+
+/* Retour sur une ligne : « Ajoutée · Annuler », sous le libellé. Son cadre ne
+   compte pas dans la largeur de la colonne (contain) : dans une colonne
+   étroite (écran de 1280 px), le retour passe à la ligne au lieu d'élargir le
+   tableau au-delà de sa carte. */
+.cadre-retour {
+  display: block;
+  contain: inline-size;
+  margin-top: 4px;
+}
+/* Registre étroit : le retour se réduit à sa coche et « Annuler » ; le texte
+   reste dans l'infobulle et pour les lecteurs d'écran. Une erreur, elle, se
+   lit toujours en entier. */
+#registre {
+  container-type: inline-size;
+}
+@container (max-width: 1060px) {
+  .retour-ligne:not(.erreur):has(.lien-bouton) .texte-retour {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.retour-ligne {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  max-width: 100%;
+  padding: 3px 4px 3px 8px;
+  border-radius: var(--rayon-carte);
+  background: var(--succes-doux);
+  color: var(--succes-texte);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.retour-ligne:not(:has(.lien-bouton)) {
+  padding-right: 9px;
+}
+.retour-ligne.erreur {
+  background: var(--danger-doux);
+  color: var(--danger-texte);
+}
+.retour-ligne .lien-bouton {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: inherit;
+  font-weight: 650;
+  text-decoration: none;
+}
+.retour-ligne .lien-bouton:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.tableau tr.place-retiree td {
+  height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background: var(--carte-2);
+  color: var(--texte-2);
+  font-size: 13.5px;
+}
+.place-retiree td > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e2);
+  margin-right: var(--e3);
+  vertical-align: middle;
+}
+.place-retiree .lien-bouton {
+  vertical-align: middle;
+}
+.place-retiree.part td {
+  animation: disparaitre 240ms ease-in both;
+}
+.tableau tr.depart td {
+  animation: partir 220ms ease-in both;
+}
+@keyframes partir {
+  to {
+    opacity: 0;
+    translate: 16px 0;
+  }
+}
+.tableau tr.nouvelle td,
+.client-ligne.nouvelle {
+  animation: surligner 2.4s var(--sortie), entrer-ligne 420ms var(--sortie) both;
+}
+@keyframes surligner {
+  0%,
+  35% {
+    background: color-mix(in srgb, var(--succes) 12%, var(--carte));
+  }
+}
+@keyframes entrer-ligne {
   from {
-    transform: scaleY(0);
+    opacity: 0;
+    translate: 0 -6px;
   }
 }
 
-/* Léger enfoncement au clic, sur tous les boutons. */
-.btn:active:not(:disabled) {
-  transform: translateY(1px);
+/* ---- Barre de sélection flottante --------------------------------------------- */
+
+/* Centrée sur la zone de contenu : `100%` (la fenêtre sans sa barre de
+   défilement) et non `100vw`, qui la compte et décalait la barre de 8 px
+   par rapport au tableau sous Windows. */
+.barre-selection {
+  position: fixed;
+  left: calc(var(--largeur-rail) + (100% - var(--largeur-rail)) / 2);
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: 6px 8px 6px 16px;
+  border-radius: var(--rayon-carte);
+  background: var(--barre);
+  border: 1px solid var(--barre-bordure);
+  color: var(--barre-texte);
+  box-shadow: var(--ombre-haute);
+  translate: -50% 0;
+  transition: translate 300ms var(--sortie), opacity 180ms;
+}
+.barre-selection[hidden] {
+  display: flex !important;
+  translate: -50% 150%;
+  opacity: 0;
+  pointer-events: none;
+}
+.barre-selection .compte {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e2);
+  margin-right: var(--e3);
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.barre-selection .note-selection {
+  margin-right: var(--e2);
+  font-size: 12.5px;
+  color: var(--barre-texte-2);
+  white-space: nowrap;
+}
+.barre-selection .btn {
+  height: 32px;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: var(--barre-texte);
+  box-shadow: none;
+}
+.barre-selection .btn .icone {
+  color: inherit;
+}
+.barre-selection .btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.barre-selection .btn.danger {
+  background: var(--barre-danger);
+  border-color: var(--barre-danger);
+  color: var(--sur-plein);
+}
+.barre-selection .btn-icone {
+  color: var(--barre-texte-2);
+}
+.barre-selection .btn-icone:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--sur-plein);
+}
+/* La barre annonce le résultat du lot. */
+.barre-selection.resultat {
+  background: var(--barre-resultat);
+  border-color: var(--barre-resultat-bordure);
+  animation: rebond 420ms var(--sortie);
+}
+.barre-selection.resultat .btn {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+@keyframes rebond {
+  0% {
+    scale: 0.94;
+  }
+  60% {
+    scale: 1.02;
+  }
 }
 
+/* ---- Menu contextuel « … » ----------------------------------------------------- */
+
+.menu-contextuel {
+  position: fixed;
+  z-index: 70;
+  min-width: 230px;
+  padding: 4px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  box-shadow: var(--ombre-haute);
+  transform-origin: top right;
+  animation: ouvrir-liste 180ms var(--sortie);
+}
+.menu-contextuel.vers-le-haut {
+  transform-origin: bottom right;
+}
+.menu-contextuel button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--rayon-petit);
+  background: transparent;
+  color: var(--texte);
+  font-size: 13.5px;
+  text-align: left;
+}
+.menu-contextuel button .icone {
+  color: var(--texte-3);
+}
+.menu-contextuel button:hover,
+.menu-contextuel button:focus-visible {
+  outline: none;
+  background: var(--survol);
+}
+.menu-contextuel button.danger,
+.menu-contextuel button.danger .icone {
+  color: var(--danger-texte);
+}
+.menu-contextuel button.danger:hover,
+.menu-contextuel button.danger:focus-visible {
+  background: var(--danger-doux);
+}
+.menu-contextuel hr {
+  margin: 4px 6px;
+  border: 0;
+  border-top: 1px solid var(--bordure-douce);
+}
+
+/* ==========================================================================
+   Panneau latéral de saisie : il glisse depuis la droite, la liste reste
+   visible derrière.
+   ========================================================================== */
+
+dialog.panneau {
+  position: fixed;
+  inset: 0 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 100vw);
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--bordure);
+  background: var(--carte);
+  color: var(--texte);
+  box-shadow: var(--ombre-panneau);
+  animation: glisser 340ms var(--sortie) both;
+}
+dialog.panneau:not([open]) {
+  display: none;
+}
+dialog.panneau::backdrop {
+  background: var(--voile);
+  backdrop-filter: blur(1.5px);
+  animation: apparaitre 240ms ease both;
+}
+/* Le panneau reçoit le focus à l'ouverture : pas de contour, il n'est pas un contrôle. */
+dialog.panneau:focus {
+  outline: none;
+}
+dialog.panneau.ferme {
+  animation: glisser-retour 200ms ease-in both;
+}
+dialog.panneau.ferme::backdrop {
+  animation: disparaitre 200ms ease-in both;
+}
+dialog.panneau.large {
+  width: min(760px, 100vw);
+}
+@keyframes glisser {
+  from {
+    translate: 100% 0;
+  }
+}
+@keyframes glisser-retour {
+  to {
+    translate: 100% 0;
+  }
+}
+@keyframes apparaitre {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes disparaitre {
+  to {
+    opacity: 0;
+  }
+}
+.formulaire-panneau {
+  display: contents;
+}
+.panneau-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: var(--e4) var(--e5);
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.panneau-tete > div {
+  min-width: 0;
+}
+.panneau-tete h2 {
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panneau-tete p {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.panneau-corps {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  padding: var(--e5);
+}
+/* Les champs du panneau arrivent les uns après les autres. */
+.panneau-corps > [style*='--i'] {
+  animation: entrer 380ms var(--sortie) both;
+  animation-delay: calc(var(--i) * 35ms + 90ms);
+}
+.panneau-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: var(--e4) var(--e5);
+  border-top: 1px solid var(--bordure-douce);
+  background: var(--carte-2);
+}
+.panneau-pied .aide {
+  font-size: 12.5px;
+  color: var(--texte-3);
+  white-space: nowrap;
+}
+.panneau-pied .actions {
+  flex-wrap: nowrap;
+}
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--bordure-controle);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--carte);
+  font: 600 11.5px/18px var(--police);
+  text-align: center;
+  color: var(--texte-2);
+}
+.apercu-pdf {
+  flex: 1;
+  min-height: 0;
+  padding: var(--e4) var(--e5);
+  background: var(--carte-2);
+}
+.apercu-pdf iframe {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--papier);
+  box-shadow: var(--ombre-carte);
+}
+
+/* ---- Champs de formulaire ------------------------------------------------------ */
+
+.deux-champs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e4);
+  align-items: start;
+}
+.champ {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.champ > label,
+.champ > .etiquette,
+.etiquette-champ {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texte);
+}
+.facultatif {
+  font-weight: 500;
+  color: var(--texte-3);
+}
+.champ-montant {
+  position: relative;
+}
+.champ-montant input {
+  height: 56px;
+  padding-right: 48px;
+  font-size: 28px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.champ-montant .devise {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  translate: 0 -50%;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--texte-3);
+  pointer-events: none;
+}
+.apercu-date {
+  font-size: 12px;
+  color: var(--texte-3);
+}
+.apercu-date.erreur {
+  color: var(--danger-texte);
+}
+.apercu-date:empty {
+  display: none;
+}
+
+/* ---- Champ de date et son calendrier (à la place de celui du navigateur) ---- */
+
+.champ-date {
+  position: relative;
+}
+.champ-date .champ-texte {
+  padding-right: 40px;
+  font-variant-numeric: tabular-nums;
+}
+.champ-date-bouton {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  translate: 0 -50%;
+}
+.champ-date:has([aria-expanded='true']) .champ-date-bouton {
+  color: var(--accent-texte);
+}
+.calendrier {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  width: 292px;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-carte);
+  background: var(--carte);
+  box-shadow: var(--ombre-haute);
+  transform-origin: top left;
+  animation: ouvrir-liste 180ms var(--sortie);
+}
+.calendrier-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.calendrier-titre {
+  font-size: 14px;
+  font-weight: 650;
+}
+.calendrier-grille {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.calendrier-grille th {
+  padding: 4px 0 6px;
+  color: var(--texte-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.calendrier-grille td {
+  padding: 1px;
+  text-align: center;
+}
+.calendrier-grille button {
+  width: 100%;
+  height: 34px;
+  border: 0;
+  border-radius: var(--rayon);
+  background: transparent;
+  color: var(--texte);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--rapide), color var(--rapide);
+}
+.calendrier-grille button:hover {
+  background: var(--survol);
+}
+.calendrier-grille button.autre-mois {
+  color: var(--texte-3);
+  opacity: 0.6;
+}
+.calendrier-grille button.aujourdhui {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--accent-texte);
+  font-weight: 650;
+}
+.calendrier-grille button.choisi,
+.calendrier-grille button.choisi:hover {
+  background: var(--accent);
+  color: var(--sur-accent);
+  font-weight: 650;
+  opacity: 1;
+}
+.calendrier-grille button:focus-visible {
+  outline-offset: -2px;
+}
+.calendrier-pied {
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--bordure-douce);
+}
+.calendrier-pied .lien-bouton {
+  font-size: 13px;
+}
+.message-erreur,
+.erreur-champ {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 560;
+  color: var(--danger-texte);
+}
+.message-erreur .icone,
+.erreur-champ .icone {
+  margin-top: 2px;
+}
+.message-erreur:empty,
+.erreur-champ:empty {
+  display: none;
+}
+.message-erreur.centre {
+  justify-content: center;
+  margin: 0 var(--e5) var(--e4);
+}
+/* Erreur d'un formulaire : une ligne rouge, pas un encadré dans le panneau. */
+.erreur-panneau {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  color: var(--danger-texte);
+  font-size: 13.5px;
+  font-weight: 560;
+}
+.erreur-panneau .icone {
+  margin-top: 1px;
+}
+.erreur-panneau:empty {
+  display: none;
+}
+.suggestion {
+  align-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent-texte);
+  font-size: 12.5px;
+  font-weight: 580;
+}
+.suggestion:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.aide-champ {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.aide-champ:empty {
+  display: none;
+}
+.aide-champ.ok {
+  color: var(--succes-texte);
+}
+.aide-champ.erreur {
+  color: var(--danger-texte);
+}
+/* Recette très similaire : non bloquant, dit avant d'enregistrer. */
+.avertissement {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  font-size: 13.5px;
+  animation: deplier 320ms var(--sortie) both;
+}
+.avertissement > .icone {
+  margin-top: 1px;
+  color: var(--alerte);
+}
+/* Champ refusé : il secoue la tête. */
+.secoue {
+  animation: secouer 360ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes secouer {
+  20%,
+  60% {
+    translate: -5px 0;
+  }
+  40%,
+  80% {
+    translate: 5px 0;
+  }
+}
+/* Champ rempli par une suggestion : un éclat bref. */
+.champ-texte.rempli {
+  animation: eclat 700ms var(--sortie);
+}
+@keyframes eclat {
+  0% {
+    background: var(--accent-doux);
+    box-shadow: 0 0 0 4px var(--anneau);
+  }
+}
+
+/* ---- Cases à cocher : la coche se dessine ------------------------------------------ */
+
+.case {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  border: 1.5px solid var(--bordure-controle);
+  border-radius: 6px;
+  background: var(--champ);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background var(--rapide), border-color var(--rapide), scale 120ms;
+}
+.case:hover {
+  border-color: var(--accent);
+}
+.case:active {
+  scale: 0.9;
+}
+.case:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.case::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--sur-plein);
+  border-width: 0 2px 2px 0;
+  rotate: 45deg;
+  scale: 0;
+  transition: scale 200ms var(--sortie);
+}
+.case:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.case:checked::after {
+  scale: 1;
+}
+.case:indeterminate {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.case:indeterminate::after {
+  width: 8px;
+  height: 0;
+  margin: 0;
+  border-width: 0 0 2px;
+  rotate: 0deg;
+  scale: 1;
+}
+
+/* ---- Groupes à bascule, avec leur curseur qui glisse --------------------------------- */
+
+.segmente {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: var(--rayon-groupe);
+  background: var(--bordure-douce);
+}
+.segmente button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--rayon-petit);
+  background: transparent;
+  color: var(--texte-2);
+  font-size: 13.5px;
+  font-weight: 580;
+  white-space: nowrap;
+  transition: background var(--rapide), color var(--rapide), box-shadow var(--rapide);
+}
+.segmente button:hover {
+  color: var(--texte);
+}
+.segmente button[aria-pressed='true'] {
+  background: var(--carte);
+  color: var(--texte);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--bordure);
+}
+.segmente i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.segmente.compact {
+  display: inline-flex;
+}
+.segmente.compact button {
+  flex: none;
+  height: 30px;
+  font-size: 13px;
+}
+.segmente .curseur {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  bottom: 3px;
+  border-radius: var(--rayon-petit);
+  background: var(--carte);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--bordure);
+  transition: transform 340ms var(--sortie);
+}
+.segmente.avec-curseur button[aria-pressed='true'] {
+  background: transparent;
+  box-shadow: none;
+}
+/* Choix de l'année, « ‹ 2026 › » : le même bac que les groupes à bascule,
+   l'année posée dans la pastille blanche de l'option choisie. */
+.choix-annee {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--rayon-groupe);
+  background: var(--bordure-douce);
+}
+.choix-annee button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--rayon-petit);
+  background: transparent;
+  color: var(--texte-2);
+  transition: background var(--rapide), color var(--rapide);
+}
+.choix-annee button:hover {
+  background: var(--survol);
+  color: var(--texte);
+}
+.choix-annee button[aria-disabled='true'] {
+  background: transparent;
+  color: var(--texte-3);
+  opacity: 0.45;
+  cursor: default;
+}
+.annee-choisie {
+  display: grid;
+  place-items: center;
+  min-width: 56px;
+  height: 30px;
+  padding: 0 10px;
+  color: var(--texte);
+  font-size: 13.5px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+.champ.invalide .segmente {
+  box-shadow: 0 0 0 2px var(--danger-doux), 0 0 0 1px var(--danger);
+}
+
+/* ---- Suggestions (autocomplétion) ------------------------------------------------ */
+
+/* Le champ qui propose passe devant ses voisins : chacun est animé, donc empilé à part. */
+.avec-suggestions {
+  position: relative;
+}
+.avec-suggestions:focus-within {
+  z-index: 30;
+}
+.deux-champs:focus-within,
+.panneau-corps > .champ:focus-within,
+.deux-champs:has(.calendrier:not([hidden])),
+.panneau-corps > .champ:has(.calendrier:not([hidden])) {
+  position: relative;
+  z-index: 30;
+}
+.suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: 320px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  box-shadow: var(--ombre-haute);
+  transform-origin: top;
+}
+.suggestions.entre {
+  animation: ouvrir-liste 220ms var(--sortie);
+}
+@keyframes ouvrir-liste {
+  from {
+    opacity: 0;
+    scale: 1 0.96;
+    translate: 0 -4px;
+  }
+}
+.sugg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.sugg[aria-selected='true'] {
+  background: var(--accent-doux);
+}
+.sugg.extra {
+  margin-top: 2px;
+  border-top: 1px solid var(--bordure-douce);
+  border-radius: 0 0 var(--rayon-petit) var(--rayon-petit);
+}
+.sugg-texte {
+  flex: 1;
+  min-width: 0;
+}
+.sugg-texte strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.sugg-texte strong mark {
+  background: none;
+  color: var(--accent-texte);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.sugg-texte > span {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--texte-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sugg-meta {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sugg-meta small {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--texte-3);
+}
+
+.monogramme {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+  font-size: 13px;
+  font-weight: 700;
+}
+.monogramme.petit {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+.monogramme.achat {
+  background: var(--achat-doux);
+  color: var(--achat-texte);
+}
+/* Initiales d'un client : une teinte tirée de son nom (voir `teinteDe`), la
+   même sur tous les écrans. 0 à 3 : framboise, sarcelle, or, et le bleu de base. */
+.monogramme[data-teinte='0'] {
+  background: var(--framboise-doux);
+  color: var(--framboise-texte);
+}
+.monogramme[data-teinte='1'] {
+  background: var(--sarcelle-doux);
+  color: var(--sarcelle-texte);
+}
+.monogramme[data-teinte='2'] {
+  background: var(--or-doux);
+  color: var(--or-texte);
+}
+
+/* ---- Pièces jointes ------------------------------------------------------------------- */
+
+.zone-piece {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: var(--rayon-moyen);
+  transition: box-shadow var(--rapide);
+}
+.zone-piece.survol {
+  box-shadow: 0 0 0 3px var(--anneau);
+}
+.depot-piece {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  width: 100%;
+  padding: var(--e3);
+  border: 1.5px dashed var(--bordure-controle);
+  border-radius: var(--rayon-moyen);
+  background: var(--carte-2);
+  color: var(--texte-2);
+  font-size: 13px;
+  text-align: left;
+  transition: border-color var(--rapide), background var(--rapide);
+}
+.depot-piece:hover,
+.zone-piece.survol .depot-piece {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+.depot-piece strong {
+  display: block;
+  color: var(--texte);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.piece-jointe {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 10px var(--e3);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  overflow: hidden;
+}
+.piece-jointe.arrive-piece {
+  animation: deplier 360ms var(--sortie) both;
+}
+.piece-icone {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  border-radius: 7px;
+  background: var(--danger-doux);
+  color: var(--danger-texte);
+}
+.piece-icone em {
+  position: absolute;
+  bottom: -5px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--danger);
+  color: var(--sur-plein);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.piece-infos {
+  flex: 1;
+  min-width: 0;
+}
+.piece-infos strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.piece-infos span {
+  font-size: 12px;
+  color: var(--texte-3);
+}
+/* Barre de copie : se remplit une fois, à l'arrivée du fichier. */
+.piece-progression {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--succes);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.arrive-piece .piece-progression {
+  animation: copier-piece 700ms var(--sortie) both 100ms;
+}
+@keyframes copier-piece {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  80% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+/* ---- Retours sur place ---------------------------------------------------------------- */
+
+/* Ligne de retour posée en tête d'une carte, avec « Annuler » : du texte
+   coloré, sans encadré. */
+.bandeau-retour {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  margin: var(--e3) var(--e5);
+  color: var(--succes-texte);
+  font-size: 13.5px;
+  font-weight: 560;
+}
+.bandeau-retour.erreur {
+  color: var(--danger-texte);
+}
+.bandeau-retour span {
+  flex: 1;
+}
+.bandeau-retour .lien-bouton {
+  color: inherit;
+  font-weight: 650;
+}
+.fiche-client > .bandeau-retour,
+#liste-clients > .bandeau-retour {
+  margin: var(--e3) var(--e3) 0;
+}
+#liste-modes > .bandeau-retour,
+.carte-corps > .bandeau-retour,
+#numeros-ignores > .bandeau-retour {
+  margin: 0 0 var(--e3);
+}
+.declaration-page > .bandeau-retour {
+  margin: var(--e4) var(--e5) 0;
+}
+@keyframes deplier {
+  from {
+    opacity: 0;
+    translate: 0 -6px;
+    scale: 0.98;
+  }
+}
+
+/* Confettis d'une recette ajoutée : une couche au premier plan, transparente
+   aux clics, qui couvre l'écran. */
+.couche-confettis {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.couche-confettis i {
+  position: absolute;
+  will-change: transform, opacity;
+}
+
+/* Minuteur d'un « Annuler » éphémère : l'anneau se vide jusqu'à la
+   disparition du bouton. Il prend la couleur du texte qui l'entoure. */
+.minuteur {
+  display: inline-grid;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  vertical-align: -2px;
+}
+.minuteur svg {
+  width: 100%;
+  height: 100%;
+  rotate: -90deg;
+  overflow: visible;
+}
+/* Le cercle de fond, toujours visible, le distingue d'une roue de chargement. */
+.minuteur circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0.3;
+}
+.minuteur .reste {
+  opacity: 1;
+  stroke-dasharray: 100;
+  stroke-linecap: round;
+  animation: decompter var(--duree) linear var(--ecoule) forwards;
+}
+.btn .minuteur {
+  margin-left: 0;
+}
+@keyframes decompter {
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+/* Mouvement réduit : l'anneau reste plein plutôt que de se vider d'un coup. */
 @media (prefers-reduced-motion: reduce) {
-  .vue-entre,
-  .ligne-nouvelle,
-  .ligne-part,
-  .jauge > span,
-  .barre-graphique {
-    animation: none;
+  .minuteur .reste {
+    animation-name: none;
   }
-  .btn:active:not(:disabled) {
-    transform: none;
+}
+
+/* Deux ondes vertes autour de la déclaration faite, de l'import réussi. */
+.halo {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  animation: onde 900ms var(--sortie) both;
+}
+.halo.seconde {
+  animation-duration: 1100ms;
+  animation-delay: 180ms;
+}
+@keyframes onde {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--succes) 55%, transparent);
   }
+  to {
+    box-shadow: 0 0 0 18px color-mix(in srgb, var(--succes) 0%, transparent);
+  }
+}
+
+/* ==========================================================================
+   URSSAF
+   ========================================================================== */
+
+.periodes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--e3);
+}
+.periode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: var(--e4);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-carte);
+  background: var(--carte);
+  box-shadow: var(--ombre-carte);
+  color: var(--texte);
+  text-align: left;
+  transition: border-color var(--rapide), box-shadow var(--rapide), translate var(--moyen) var(--sortie);
+}
+.periode:hover {
+  border-color: var(--bordure-controle);
+  translate: 0 -1px;
+}
+.periode[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--anneau);
+}
+.periode .nom {
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.periode .montant {
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  color: var(--texte-2);
+  font-variant-numeric: tabular-nums;
+}
+/* Douze mois : deux rangées de six, plus compactes. */
+.periodes.mensuelles {
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--e2);
+}
+.periodes.mensuelles .periode {
+  padding: var(--e3);
+}
+.periodes.mensuelles .periode .montant {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.declaration-page .carte-tete {
+  align-items: flex-start;
+  padding-top: var(--e5);
+}
+.declaration-page .carte-tete h2 {
+  font-size: 19px;
+}
+.statut-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+/* Bande de la largeur de la carte, entre deux filets : pas une boîte dans la carte. */
+.chiffres-cles {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  border-top: 1px solid var(--bordure-douce);
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.chiffres-cles.seul {
+  grid-template-columns: 1fr;
+}
+.chiffre-cle {
+  padding: var(--e4) var(--e5);
+}
+.chiffre-cle + .chiffre-cle {
+  border-left: 1px solid var(--bordure-douce);
+}
+.chiffre-cle .libelle {
+  font-size: 13px;
+  color: var(--texte-2);
+  font-weight: 560;
+}
+.chiffre-cle .valeur {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  margin-top: 4px;
+  font-size: 26px;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.chiffre-cle.principal .valeur {
+  font-size: 38px;
+  letter-spacing: -0.035em;
+}
+.chiffre-cle .valeur .btn {
+  letter-spacing: 0;
+}
+.chiffre-cle.reste .valeur {
+  color: var(--succes-texte);
+}
+.chiffre-cle .precision {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.bloc {
+  padding: var(--e5) var(--e5) 0;
+}
+.bloc h3 {
+  margin-bottom: var(--e2);
+  font-size: 14px;
+}
+.bloc-note {
+  margin: var(--e3) var(--e5) 0;
+}
+.declaration-page > .avis {
+  margin-top: var(--e4);
+}
+.case-urssaf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 30px;
+  align-items: center;
+  gap: var(--e3);
+  padding: 10px 0;
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 14px;
+}
+.case-urssaf strong {
+  font-size: 16px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+/* Le détail se déplie dans la carte, sous un simple filet. */
+.details-calcul {
+  margin: var(--e4) var(--e5) var(--e2);
+  border-top: 1px solid var(--bordure-douce);
+}
+.chiffres-cles + .details-calcul {
+  margin-top: 0;
+  border-top: 0;
+}
+.details-calcul summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  font-size: 14px;
+  font-weight: 580;
+  color: var(--texte-2);
+  cursor: pointer;
+  list-style: none;
+}
+.details-calcul summary::-webkit-details-marker {
+  display: none;
+}
+.details-calcul summary:hover {
+  color: var(--texte);
+}
+.details-calcul summary .icone {
+  transition: rotate var(--moyen) var(--sortie);
+}
+.details-calcul[open] summary .icone {
+  rotate: 180deg;
+}
+.details-calcul .contenu {
+  padding: 0 0 var(--e4);
+}
+.details-calcul .ligne-montant.sous {
+  padding: 2px 0 2px var(--e4);
+  border-top: 0;
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.details-calcul .ligne-montant.sous .valeur {
+  color: var(--texte-2);
+  font-weight: 500;
+}
+.details-calcul .ligne-montant.reste {
+  margin-top: 4px;
+  border-top: 1px solid var(--bordure);
+  font-size: 15px;
+}
+.notes {
+  margin-top: var(--e3);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--texte-3);
+}
+
+/* ==========================================================================
+   Clients
+   ========================================================================== */
+
+.deux-panneaux {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--e4);
+  align-items: start;
+}
+.liste-clients {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--e2) var(--e2);
+}
+.client-ligne {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--e3);
+  width: 100%;
+  padding: 10px var(--e3);
+  border: 0;
+  border-radius: var(--rayon-moyen);
+  background: transparent;
+  color: var(--texte);
+  text-align: left;
+  transition: background var(--rapide);
+}
+.client-ligne:hover {
+  background: var(--survol);
+}
+.client-ligne[aria-pressed='true'] {
+  background: var(--accent-doux);
+}
+.client-ligne .nom {
+  display: block;
+  font-weight: 600;
+}
+.client-ligne .details {
+  display: block;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+/* Part du client dans le chiffre d'affaires du carnet : qui pèse, d'un coup d'œil. */
+.part-ca {
+  display: block;
+  max-width: 220px;
+  height: 3px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: var(--bordure-douce);
+  overflow: hidden;
+}
+.part-ca i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--framboise);
+}
+.client-ligne .ca {
+  text-align: right;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.client-ligne .ca small {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--texte-3);
+}
+.fiche-client {
+  position: sticky;
+  top: var(--e6);
+  overflow: hidden;
+}
+.fiche-tete {
+  display: flex;
+  gap: var(--e4);
+  align-items: center;
+  padding: var(--e5);
+  border-bottom: 1px solid var(--bordure-douce);
+  background:
+    radial-gradient(120% 160% at 0% 0%, var(--accent-doux) 0%, transparent 60%),
+    var(--carte);
+}
+/* La fiche s'éclaire de la teinte du client choisi. */
+.fiche-tete:has(.monogramme[data-teinte='0']) {
+  background: radial-gradient(120% 160% at 0% 0%, var(--framboise-doux) 0%, transparent 60%), var(--carte);
+}
+.fiche-tete:has(.monogramme[data-teinte='1']) {
+  background: radial-gradient(120% 160% at 0% 0%, var(--sarcelle-doux) 0%, transparent 60%), var(--carte);
+}
+.fiche-tete:has(.monogramme[data-teinte='2']) {
+  background: radial-gradient(120% 160% at 0% 0%, var(--or-doux) 0%, transparent 60%), var(--carte);
+}
+.fiche-tete .monogramme {
+  width: 52px;
+  height: 52px;
+  font-size: 17px;
+}
+.fiche-tete h2 {
+  font-size: 19px;
+}
+.fiche-titre {
+  flex: 1;
+  min-width: 0;
+}
+.fiche-titre .sous-titre {
+  margin-top: 2px;
+}
+.fiche-chiffres {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.fiche-chiffres div {
+  padding: var(--e4) var(--e5);
+}
+.fiche-chiffres div + div {
+  border-left: 1px solid var(--bordure-douce);
+}
+.fiche-chiffres div > span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.fiche-chiffres strong {
+  font-size: 20px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+/* Un gros client garde une fiche à hauteur d'écran : ses lignes défilent. */
+.fiche-lignes {
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+}
+.fiche-lignes .tableau th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-top: 0;
+}
+.fiche-vide {
+  align-items: center;
+  padding: var(--e7) var(--e5);
+  text-align: center;
+}
+.fiche-vide .icone {
+  color: var(--texte-3);
+}
+.formulaire-fiche {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  padding: var(--e5);
+}
+.ligne-siret {
+  display: flex;
+  gap: var(--e2);
+}
+
+/* ==========================================================================
+   Exports
+   ========================================================================== */
+
+/* Trois cartes de même hauteur : les réglages et les boutons se calent en bas,
+   le contrôle avant export prend la place de l'aperçu. */
+.documents {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--e4);
+  align-items: stretch;
+}
+.documents.deux {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.document {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* Arrivée depuis le bouton « Exporter » d'un registre : la carte s'éclaire. */
+.document.mise-en-avant {
+  animation: mettre-en-avant 1.8s var(--sortie) 200ms;
+}
+@keyframes mettre-en-avant {
+  0%,
+  40% {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--anneau);
+  }
+}
+.apercu {
+  position: relative;
+  height: 232px;
+  flex: none;
+  border-bottom: 1px solid var(--bordure-douce);
+  background:
+    radial-gradient(90% 120% at 50% 0%, var(--accent-doux), transparent 70%),
+    var(--carte-2);
+  overflow: hidden;
+}
+.document.recette .apercu {
+  background:
+    radial-gradient(90% 120% at 50% 0%, var(--sarcelle-doux), transparent 70%),
+    var(--carte-2);
+}
+.document.achat .apercu {
+  background:
+    radial-gradient(90% 120% at 50% 0%, var(--achat-doux), transparent 70%),
+    var(--carte-2);
+}
+.document.analyse .apercu {
+  background:
+    radial-gradient(90% 120% at 50% 0%, var(--or-doux), transparent 70%),
+    var(--carte-2);
+}
+.pages {
+  position: absolute;
+  inset: 0;
+  transition: translate 420ms var(--sortie), opacity 300ms ease;
+}
+.apercu.en-controle .pages {
+  translate: 0 60%;
+  opacity: 0;
+}
+.page-miniature {
+  position: absolute;
+  left: 50%;
+  top: 28px;
+  width: 58%;
+  height: 210px;
+  translate: -50% 0;
+  padding: 14px;
+  border-radius: 4px;
+  background: var(--papier);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1), 0 12px 28px -12px rgba(15, 23, 42, 0.35);
+  transition: translate var(--moyen) var(--sortie), rotate var(--moyen) var(--sortie);
+}
+.page-miniature.arriere {
+  translate: -42% 10px;
+  rotate: 4deg;
+  opacity: 0.7;
+}
+.document:hover .page-miniature:not(.arriere) {
+  translate: -50% -6px;
+}
+.document:hover .page-miniature.arriere {
+  rotate: 7deg;
+}
+/* Le rapport « sort de l'imprimante » : la page remonte, puis redescend. */
+.apercu.imprime .page-miniature:not(.arriere) {
+  animation: imprimer 1s var(--sortie);
+}
+@keyframes imprimer {
+  0% {
+    translate: -50% 0;
+  }
+  35% {
+    translate: -50% 110%;
+  }
+  36% {
+    translate: -50% -110%;
+  }
+  100% {
+    translate: -50% 0;
+  }
+}
+.page-miniature .l {
+  height: 5px;
+  margin-bottom: 7px;
+  border-radius: 2px;
+  background: var(--papier-trait);
+}
+.page-miniature .l.titre {
+  width: 50%;
+  height: 7px;
+  margin-bottom: 12px;
+  background: var(--papier-titre);
+}
+.page-miniature .l.courte {
+  width: 68%;
+}
+.page-miniature .l.accent {
+  width: 30%;
+  background: var(--papier-accent);
+}
+/* Sur le papier (toujours clair), le trait d'accent prend l'encre du registre. */
+.document.recette .page-miniature .l.accent {
+  background: #7fd8cb;
+}
+.document.achat .page-miniature .l.accent {
+  background: #c4b5fd;
+}
+.barres-mini {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 52px;
+  margin: 4px 0 12px;
+  border-bottom: 1px solid var(--papier-trait);
+}
+.barres-mini i {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  background: var(--papier-prestation);
+}
+.barres-mini i:nth-child(3n) {
+  background: var(--papier-vente);
+}
+
+.controle-apercu {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--e3) var(--e4);
+  overflow-y: auto;
+  background: var(--carte);
+  opacity: 0;
+  translate: 0 -12px;
+  pointer-events: none;
+  transition: opacity 260ms ease, translate 420ms var(--sortie);
+}
+.apercu.en-controle .controle-apercu {
+  opacity: 1;
+  translate: 0 0;
+  pointer-events: auto;
+}
+.controle-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  color: var(--texte-2);
+}
+.controle-tete strong {
+  font-weight: 650;
+}
+.controle-tete .btn-icone {
+  width: 26px;
+  height: 26px;
+}
+.controle-apercu .points {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 2px;
+}
+.controle-apercu .points li {
+  display: grid;
+  grid-template-columns: 15px auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--e2);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.controle-apercu .points li strong {
+  display: inline;
+}
+.controle-apercu .points li span {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--texte-3);
+}
+.controle-apercu .points .icone {
+  margin: 0;
+}
+.conclusion-controle {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--succes-texte);
+}
+.conclusion-controle.attention {
+  color: var(--alerte-texte);
+}
+.conclusion-controle.erreur {
+  color: var(--danger-texte);
+}
+
+.document-corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e5);
+  flex: 1;
+}
+.document-titre {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+}
+.document-corps h2 {
+  font-size: 16px;
+}
+.document-corps > p {
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+.document-reglages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  margin-top: auto;
+}
+.document-periode {
+  display: flex;
+  gap: var(--e2);
+}
+.document-periode .selecteur {
+  flex: 1;
+}
+.option-pieces {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  min-height: 24px;
+  font-size: 13.5px;
+  color: var(--texte-2);
+  cursor: pointer;
+}
+p.option-pieces {
+  cursor: default;
+}
+.formats {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: var(--e2);
+}
+
+.points {
+  list-style: none;
+  margin: var(--e2) 0 0;
+  padding: var(--e3) 0 0;
+  border-top: 1px solid var(--bordure-douce);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.points li {
+  display: flex;
+  gap: var(--e2);
+  font-size: 13px;
+  color: var(--texte-2);
+  opacity: 0;
+  translate: 0 4px;
+  transition: opacity 240ms, translate 240ms var(--sortie);
+}
+.points li.vu {
+  opacity: 1;
+  translate: 0 0;
+}
+.points li strong {
+  display: block;
+  color: var(--texte);
+  font-weight: 600;
+}
+.points .icone {
+  margin-top: 2px;
+  color: var(--succes);
+}
+.points li.attention .icone,
+.points li.alerte .icone {
+  color: var(--alerte);
+}
+.points li.erreur .icone {
+  color: var(--danger);
+}
+.points li.info .icone {
+  color: var(--accent);
+}
+
+/* ==========================================================================
+   Import
+   ========================================================================== */
+
+.etapes {
+  display: flex;
+  gap: var(--e2);
+  margin: 0;
+  padding: var(--e4) var(--e5);
+  list-style: none;
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.etape {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  color: var(--texte-3);
+  font-size: 14px;
+  font-weight: 560;
+}
+.etape .num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--bordure-controle);
+  font-size: 12px;
+  font-weight: 650;
+}
+.etape.active {
+  color: var(--texte);
+}
+.etape.active .num {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--sur-plein);
+}
+.etape.faite .num {
+  background: var(--succes-doux);
+  border-color: transparent;
+  color: var(--succes-texte);
+}
+.etape + .etape::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  margin-right: var(--e2);
+  background: var(--bordure-controle);
+}
+.choix-registre {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: var(--e5);
+}
+.depot {
+  display: block;
+  margin: var(--e5) var(--e5) var(--e4);
+  padding: var(--e7) var(--e5);
+  border: 1.5px dashed var(--bordure-controle);
+  border-radius: var(--rayon-carte);
+  background: var(--carte-2);
+  text-align: center;
+  color: var(--texte-2);
+  cursor: pointer;
+  transition: border-color var(--rapide), background var(--rapide);
+}
+.choix-registre + .depot {
+  margin-top: 0;
+}
+.depot:hover,
+.depot.survol,
+.depot:focus-within {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+.depot .tuile {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--e3);
+  border-radius: var(--rayon-carte);
+}
+.depot strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--texte);
+  font-size: 15.5px;
+}
+.depot span {
+  font-size: 13.5px;
+}
+.reprise-fichier {
+  margin: 0 var(--e5) var(--e4);
+  font-size: 13.5px;
+  color: var(--texte-2);
+  text-align: center;
+}
+.fichier-importe {
+  align-items: center;
+  padding-top: var(--e4);
+}
+.fichier-importe strong {
+  font-weight: 650;
+}
+.col-correspondance {
+  width: 300px;
+}
+.defaut-categorie {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding-top: var(--e4);
+}
+.defaut-categorie .selecteur {
+  width: 260px;
+}
+.corps-verification {
+  padding-top: var(--e5);
+}
+.points-import {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: var(--e3);
+}
+.points-import li {
+  font-size: 13.5px;
+}
+.points-import .option-pieces {
+  margin-top: 6px;
+}
+.reussite-import {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e7) var(--e5);
+  text-align: center;
+}
+.reussite-import h2 {
+  font-size: 20px;
+}
+.reussite-import p {
+  max-width: 52ch;
+  color: var(--texte-2);
+}
+.reussite-import .actions {
+  margin-top: var(--e3);
+}
+.sceau-reussite {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--succes);
+  color: var(--sur-plein);
+  box-shadow: 0 0 0 8px var(--succes-doux);
+  animation: rebond 520ms var(--sortie);
+}
+.sceau-reussite .trace-coche path {
+  animation-delay: 180ms;
+}
+
+/* ==========================================================================
+   Accueil guidé (premier lancement)
+   ========================================================================== */
+
+/* Tout l'écran : à gauche le panneau aux couleurs du menu, avec les étapes qui
+   se cochent ; à droite l'étape en cours, seule. */
+.accueil {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: minmax(320px, 32%) minmax(0, 1fr);
+  background: var(--fond);
+  animation: apparaitre 420ms ease both;
+}
+.accueil.ferme {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 340ms ease;
+}
+.accueil-cote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e7);
+  padding: var(--e7) var(--e6);
+  background: linear-gradient(180deg, var(--rail-haut), var(--rail) 60%);
+  color: var(--rail-texte);
+}
+.accueil-marque {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  color: var(--rail-texte-fort);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.accueil-marque .marque-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+}
+.accueil-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+/* Les étapes, reliées par un fil qui se remplit à mesure qu'on avance. */
+.accueil-etapes {
+  --avance: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin: auto 0;
+  padding: 0;
+  list-style: none;
+}
+.accueil-etapes::before,
+.accueil-etapes::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 14px;
+  width: 2px;
+  border-radius: 2px;
+}
+.accueil-etapes::before {
+  bottom: 14px;
+  background: var(--rail-filet);
+}
+.accueil-etapes::after {
+  height: calc((100% - 28px) * var(--avance));
+  background: var(--rail-icone-active);
+  transition: height 600ms var(--sortie);
+}
+.accueil-etapes li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 15px;
+  font-weight: 560;
+  opacity: 0.65;
+  transition: opacity var(--moyen), color var(--moyen);
+}
+.accueil-etapes li.faite {
+  opacity: 0.9;
+}
+.accueil-etapes li.courante {
+  opacity: 1;
+  color: var(--rail-texte-fort);
+  font-weight: 650;
+}
+.accueil-repere {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--rail-filet);
+  border-radius: 50%;
+  background: var(--rail);
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: border-color var(--moyen), background var(--moyen), box-shadow var(--moyen);
+}
+.accueil-repere .icone {
+  display: none;
+}
+.courante .accueil-repere {
+  border-color: var(--rail-icone-active);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--rail-icone-active) 22%, transparent);
+}
+.faite .accueil-repere {
+  border-color: var(--rail-icone-active);
+  background: var(--rail-icone-active);
+  color: var(--rail);
+}
+.faite .accueil-repere .numero {
+  display: none;
+}
+.faite .accueil-repere .icone {
+  display: block;
+}
+
+/* L'étape en cours. */
+.accueil-scene {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: var(--e8) var(--e7);
+}
+.accueil-plus-tard {
+  position: absolute;
+  top: var(--e5);
+  right: var(--e6);
+}
+.accueil-etape {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  width: min(560px, 100%);
+}
+.accueil-etape h1 {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  outline: none;
+}
+.etape-surtitre {
+  margin-bottom: -8px;
+  color: var(--accent-texte);
+  font-size: 13px;
+  font-weight: 620;
+}
+.etape-intro {
+  margin-top: -6px;
+  color: var(--texte-2);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+.accueil-etape .champ-texte {
+  height: 44px;
+  font-size: 15px;
+}
+.accueil-etape #a-prenom {
+  height: 52px;
+  font-size: 18px;
+}
+.etape-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e2);
+  margin-top: var(--e3);
+}
+.etape-actions .btn {
+  height: 42px;
+  padding: 0 18px;
+}
+.etape-actions .btn .icone {
+  color: inherit;
+}
+.etape-autre {
+  padding-top: var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+  color: var(--texte-3);
+  font-size: 13.5px;
+}
+.nom-accueil.arrive {
+  animation: apparaitre 260ms ease both;
+}
+
+/* D'une étape à l'autre : l'actuelle s'efface dans le sens de la marche, la
+   suivante arrive de l'autre côté, ses éléments l'un après l'autre. */
+.accueil-etape.part {
+  opacity: 0;
+  translate: -20px 0;
+  transition: opacity 170ms ease-in, translate 170ms ease-in;
+}
+.accueil-etape.part[data-sens='arriere'] {
+  translate: 20px 0;
+}
+.accueil-etape.entre > * {
+  animation: etape-entree 440ms var(--sortie) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+.accueil-etape.entre[data-sens='arriere'] > * {
+  animation-name: etape-entree-retour;
+}
+@keyframes etape-entree {
+  from {
+    opacity: 0;
+    translate: 20px 0;
+  }
+}
+@keyframes etape-entree-retour {
+  from {
+    opacity: 0;
+    translate: -20px 0;
+  }
+}
+
+/* Choix en cartes : de vrais boutons radio, cachés, la carte entière se clique. */
+.choix-cartes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.choix-cartes.deux {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.choix-carte {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 12px 14px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-carte);
+  background: var(--carte);
+  cursor: pointer;
+  transition: border-color var(--rapide), box-shadow var(--rapide), background var(--rapide);
+}
+.choix-carte:hover {
+  border-color: var(--bordure-controle);
+}
+.choix-carte:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-doux) 50%, var(--carte));
+  box-shadow: 0 0 0 3px var(--anneau);
+}
+.choix-carte:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.choix-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--rayon-groupe);
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+}
+.choix-texte {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--texte-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.choix-texte strong {
+  color: var(--texte);
+  font-size: 14.5px;
+  font-weight: 620;
+}
+.choix-coche {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--bordure-controle);
+  border-radius: 50%;
+  color: transparent;
+  transition: background var(--rapide), border-color var(--rapide), color var(--rapide);
+}
+.choix-carte:has(input:checked) .choix-coche {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--sur-accent);
+  animation: pop 360ms var(--sortie);
+}
+.choix-cartes.compactes .choix-carte {
+  padding: 9px 12px;
+}
+.nature-prestations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.nature-prestations.deplie {
+  animation: deplier 360ms var(--sortie) both;
+}
+.option-accueil {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--e5);
+  padding-top: var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+}
+.option-accueil strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 620;
+}
+.option-accueil span {
+  color: var(--texte-2);
+  font-size: 13px;
+}
+
+/* « C'est prêt » : ce qui a été réglé, sur des lignes entre filets. */
+.recapitulatif {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--bordure-douce);
+  list-style: none;
+}
+.recapitulatif li {
+  display: grid;
+  grid-template-columns: 20px 100px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--e3);
+  padding: 11px 0;
+  border-bottom: 1px solid var(--bordure-douce);
+  color: var(--texte-2);
+  font-size: 14px;
+}
+.recapitulatif .icone {
+  color: var(--texte-3);
+}
+.recapitulatif strong {
+  color: var(--texte);
+  font-weight: 600;
+}
+.recapitulatif em {
+  color: var(--texte-3);
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   Paramètres
+   ========================================================================== */
+
+.bienvenue .carte-corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding-top: var(--e5);
+}
+.bienvenue {
+  background:
+    radial-gradient(120% 160% at 0% 0%, var(--accent-doux) 0%, transparent 60%),
+    var(--carte);
+}
+.bienvenue h2 {
+  font-size: 19px;
+}
+.bienvenue p {
+  max-width: 78ch;
+  color: var(--texte-2);
+}
+.parametres {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: var(--e6);
+  align-items: start;
+}
+.sommaire {
+  position: sticky;
+  top: var(--e6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sommaire a {
+  padding: 7px var(--e3);
+  border-radius: var(--rayon);
+  color: var(--texte-2);
+  font-size: 14px;
+  font-weight: 540;
+  text-decoration: none;
+  transition: background var(--rapide), color var(--rapide);
+}
+.sommaire a:hover {
+  background: var(--survol);
+  color: var(--texte);
+}
+.sommaire a.actif {
+  background: var(--accent-doux);
+  color: var(--accent-texte);
+  font-weight: 620;
+}
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+}
+.section-param {
+  scroll-margin-top: var(--e6);
+}
+.section-param .carte-corps > .sous-titre {
+  margin: 0 0 var(--e2);
+}
+.section-param .carte-corps > .chemin + .sous-titre {
+  margin-top: var(--e3);
+  padding-top: var(--e3);
+  border-top: 1px solid var(--bordure-douce);
+}
+.section-param .carte-corps > .actions {
+  margin-top: var(--e4);
+}
+.grille-champs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e4) var(--e5);
+}
+.grille-champs .large {
+  grid-column: 1 / -1;
+}
+.identite {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: var(--e4) var(--e5);
+}
+.identite .large {
+  grid-column: span 2;
+}
+.identite span {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.identite strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.option {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--e5);
+  /* Entre le texte et le réglage, la place de « Enregistré » reste gardée :
+     la pastille n'y chevauche jamais la description, et rien ne bouge. */
+  column-gap: calc(var(--e5) + 88px);
+  padding: var(--e4) 0;
+  border-top: 1px solid var(--bordure-douce);
+}
+.option:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.option.separee {
+  margin-top: var(--e4);
+  padding-top: var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+}
+.option strong {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+.option > div > span {
+  font-size: 13px;
+  color: var(--texte-2);
+}
+.option-champ {
+  position: relative;
+}
+/* Réglage qui se déplie sous son option (début d'activité de l'ACRE). */
+.detail-option {
+  align-items: start;
+  padding-bottom: var(--e4);
+}
+.detail-option > .notes {
+  margin: 26px 0 0;
+}
+.interrupteur {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bordure-controle);
+  transition: background var(--moyen) var(--sortie);
+}
+.interrupteur::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--sur-plein);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+  transition: translate var(--moyen) var(--sortie);
+}
+.interrupteur[aria-checked='true'] {
+  background: var(--accent);
+}
+.interrupteur[aria-checked='true']::after {
+  translate: 16px 0;
+}
+/* « Enregistré » à côté du réglage modifié. */
+.enregistre {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  translate: 0 -50%;
+  color: var(--succes-texte);
+  font-size: 12.5px;
+  font-weight: 600;
+  animation: glisser-texte 260ms var(--sortie) both;
+}
+.option-champ > .enregistre {
+  top: 0;
+  right: 0;
+  translate: none;
+}
+/* Première ligne, sans marge haute : la pastille reste à hauteur du réglage. */
+.option:first-child > .enregistre {
+  top: calc(50% - var(--e4) / 2);
+}
+.enregistre.part {
+  opacity: 0;
+  transition: opacity 280ms;
+}
+.ligne-gestion {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 10px 0;
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 14px;
+}
+.ligne-gestion:first-child {
+  border-top: 0;
+}
+.ligne-gestion > .icone {
+  color: var(--texte-3);
+}
+.ligne-gestion .quoi {
+  flex: 1;
+  min-width: 0;
+}
+.ligne-gestion input.quoi {
+  max-width: 320px;
+}
+.ligne-gestion .quoi strong {
+  font-weight: 600;
+}
+.ligne-gestion .quand {
+  color: var(--texte-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#liste-modes + .erreur-panneau {
+  margin-top: var(--e2);
+}
+#ajouter-mode {
+  margin-top: var(--e3);
+}
+.numeros-ignores {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e4) 0 0;
+  border-top: 1px solid var(--bordure-douce);
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+.chemin {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-size: 13.5px;
+  font-weight: 540;
+  color: var(--texte);
+  overflow-wrap: anywhere;
+}
+.chemin span {
+  flex: 1;
+}
+.restauration {
+  padding-top: var(--e5);
+}
+.restauration > p {
+  margin-bottom: var(--e3);
+}
+.restauration > .btn {
+  margin-top: var(--e3);
+}
+
+/* ==========================================================================
+   Boîtes de dialogue (confirmation, attente)
+   ========================================================================== */
+
+dialog.boite {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--bordure);
+  border-radius: 16px;
+  background: var(--carte);
+  color: var(--texte);
+  box-shadow: var(--ombre-haute);
+  animation: ouvrir-boite 220ms var(--sortie);
+}
+dialog.boite::backdrop {
+  background: var(--voile);
+  backdrop-filter: blur(1.5px);
+  animation: apparaitre 200ms ease both;
+}
+@keyframes ouvrir-boite {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+.boite-corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e5);
+}
+.boite-corps h2 {
+  font-size: 17px;
+}
+.boite-corps p {
+  color: var(--texte-2);
+  font-size: 14px;
+}
+.boite-pied {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e2);
+  margin-top: var(--e3);
+}
+.barre-attente {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bordure-douce);
+}
+.barre-attente span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: attente 1.2s ease-in-out infinite;
+}
+@keyframes attente {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 300% 0;
+  }
+}
+
+/* ---- Notifications --------------------------------------------------------------- */
+
+/* Zone en premier plan (popover) : elle passe devant une boîte ou un panneau ouvert. */
+.toasts {
+  position: fixed;
+  inset: auto 24px 24px auto;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--e2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.toasts[popover]:not(:popover-open) {
+  display: none;
+}
+body:has(.barre-selection:not([hidden])) .toasts {
+  bottom: 84px;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  min-width: 300px;
+  max-width: 440px;
+  padding: 10px 10px 10px 14px;
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  color: var(--texte);
+  border: 1px solid var(--bordure);
+  box-shadow: var(--ombre-haute);
+  font-size: 14px;
+  animation: arriver 320ms var(--sortie) both;
+}
+.toast .icone {
+  color: var(--succes);
+}
+.toast.erreur .icone {
+  color: var(--danger);
+}
+.toast span {
+  flex: 1;
+}
+@keyframes arriver {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+
+/* ---- Bulles d'aide ------------------------------------------------------------------- */
+
+.infobulle {
+  display: inline-flex;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.declencheur-infobulle {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--texte-3);
+}
+.declencheur-infobulle:hover,
+.declencheur-infobulle[aria-expanded='true'] {
+  background: var(--survol);
+  color: var(--accent-texte);
+}
+/* Placée en coordonnées de fenêtre par `installerInfobulles` : jamais rognée
+   par la carte qui la contient. */
+.bulle-aide {
+  position: fixed;
+  z-index: 90;
+  width: max-content;
+  max-width: 340px;
+  padding: 10px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-moyen);
+  background: var(--carte);
+  color: var(--texte-2);
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.5;
+  text-align: left;
+  text-wrap: pretty;
+  box-shadow: var(--ombre-haute);
+  visibility: hidden;
+  opacity: 0;
+  translate: 0 -4px;
+  transition: opacity 140ms ease, translate 200ms var(--sortie), visibility 0s linear 140ms;
+}
+.bulle-aide.visible {
+  visibility: visible;
+  opacity: 1;
+  translate: 0 0;
+  transition: opacity 140ms ease, translate 200ms var(--sortie), visibility 0s;
+}
+
+/* ---- Squelette de chargement --------------------------------------------------------- */
+
+.squelette {
+  gap: var(--e4);
+}
+.squelette > div,
+.sq-grille > div,
+.sq-tableau > div {
+  border-radius: var(--rayon-carte);
+  background: linear-gradient(90deg, var(--bordure-douce) 25%, var(--carte-2) 50%, var(--bordure-douce) 75%);
+  background-size: 200% 100%;
+  animation: miroiter 1.4s ease-in-out infinite;
+}
+.sq-titre {
+  width: 260px;
+  height: 34px;
+}
+.squelette .sq-grille,
+.squelette .sq-tableau {
+  display: grid;
+  gap: var(--e4);
+  background: none;
+  animation: none;
+}
+.sq-grille {
+  grid-template-columns: 1.7fr 1fr 1fr 1fr;
+}
+.sq-carte {
+  height: 150px;
+}
+.sq-bloc {
+  height: 380px;
+}
+.sq-tableau {
+  gap: 6px !important;
+}
+.sq-ligne {
+  height: 48px;
+  border-radius: var(--rayon) !important;
+}
+@keyframes miroiter {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---- Transitions ------------------------------------------------------------------------ */
+
+@keyframes entrer {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* Thème : le nouveau se révèle en cercle depuis le bouton. */
+::view-transition-old(root) {
+  animation: none;
+  display: none;
+}
+::view-transition-new(root) {
+  animation: none;
+}
+.bascule-theme-en-cours::view-transition-old(root) {
+  display: block;
+}
+
+/* Fondu enchaîné (changement de page, période déclarée) : les deux images de
+   l'écran, de même durée et de même courbe, s'additionnent (plus-lighter ; le
+   navigateur ne le fait de lui-même qu'avec son animation par défaut), donc
+   ce qui ne change pas reste net, sans voile blanc. Rien ne se déplace. */
+.fondu-en-cours::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+.fondu-en-cours::view-transition-old(root) {
+  display: block;
+  mix-blend-mode: plus-lighter;
+  animation: 280ms ease both disparaitre;
+}
+.fondu-en-cours::view-transition-new(root) {
+  mix-blend-mode: plus-lighter;
+  animation: 280ms ease both apparaitre;
+}
+/* Le menu reste hors du fondu : il est montré tel quel, vivant, et son
+   indicateur glisse d'un lien à l'autre sans rien d'autre. */
+.fondu-en-cours .rail {
+  view-transition-name: menu;
+}
+::view-transition-group(menu),
+::view-transition-new(menu) {
+  animation: none;
+}
+::view-transition-old(menu) {
+  display: none;
 }

@@ -1,130 +1,77 @@
 /**
- * Vue « URSSAF » : bilan d'une période (mois, trimestre ou année) pour savoir
- * quel chiffre d'affaires déclarer, avant quelle date, ce que l'URSSAF
- * prélèvera et ce qu'il en restera. Simple calcul local, aucune connexion.
+ * Vue « URSSAF » : les périodes de l'année en onglets avec leur état (douze
+ * mois ou quatre trimestres, selon le rythme choisi dans les paramètres, ou
+ * l'année entière), puis la période choisie : ce qu'il faut déclarer, avant
+ * quelle date, ce que l'URSSAF prélèvera et ce qu'il en restera. Simple calcul
+ * local, aucune connexion.
  *
  * L'écran répond d'abord en trois chiffres (à déclarer, prélevé, reste) ; le
  * calcul qui les justifie, base par base et taux par taux, se déplie à la
- * demande. Tout afficher d'emblée noyait la seule réponse attendue.
+ * demande.
  */
 
 import { api } from '../api.js';
 import { etat, definirParametres } from '../etat.js';
-import {
-  echapperHtml, toast, copierDansPressePapiers, optionsAnnees, OPTIONS_MOIS
-} from '../ui.js';
+import { echapperHtml, toast, accorder, choixAnnee, brancherChoixAnnee, mouvementReduit, enFondu, montantDetaille } from '../ui.js';
+import { reussite, halo, bandeauRetour, brancherSegmentes, copierDansPressePapiers } from '../retours.js';
 import { icone } from '../icones.js';
+import { pastilleEtat } from '../declarations.js';
 import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
 import {
-  formaterDate, dernierePeriodeEchue, dateEnFrancaisLong, aujourdHuiIso,
-  idPeriode, periodeDepuisId, finPeriode, echeanceDeclaration, periodeDeclaree
+  formaterDate, dateEnFrancaisLong, aujourdHuiIso, idPeriode, periodeDepuisId, nomMois, trimestreDe,
+  echeanceDeclaration
 } from '/partage/dates.js';
 import { majusculeInitiale } from '/partage/texte.js';
+import {
+  etatPeriode, periodeATraiter, libellePeriode, periodePrecedente, joursEntre
+} from '/partage/declarations.js';
+import { libelleActivite, caseUrssaf, natureDesPrestations } from '/partage/seuils.js';
+import { periodeAcre } from '/partage/acre.js';
 
-/** « 12,3 » plutôt que « 12.3 ». */
+/** « 12,3 % » plutôt que « 12.3 % ». */
 const pourcentage = (taux) => `${String(taux).replace('.', ',')} %`;
 
-/**
- * Place réservée en fin de ligne, de la largeur d'un bouton de copie : les
- * lignes qui n'en ont pas alignent ainsi leurs montants sur celles qui en ont.
- */
-const ESPACE_COPIE = '<span class="espace-copie" aria-hidden="true"></span>';
+/** Nom court d'un onglet : « 1er trimestre », « Janvier ». */
+const nomOnglet = (type, valeur) => (type === 'trimestre'
+  ? `${valeur}${valeur === 1 ? 'er' : 'e'} trimestre`
+  : majusculeInitiale(nomMois(valeur)));
+
+/** Période affichée, retenue d'une visite à l'autre. */
+let memoire = null;
 
 /**
- * Bouton de copie d'un montant à reporter.
- *
- * Le geste réel de cette page est de recopier un nombre dans le formulaire de
- * l'URSSAF : ce qui part au presse-papiers est donc le nombre nu, sans symbole
- * de devise ni espace de milliers, prêt à être collé dans un champ qui
- * n'accepte rien d'autre.
- */
-const boutonCopier = (montant, quoi, { compact = false } = {}) => `
-  <button type="button" class="${compact ? 'btn-icone' : 'btn btn-secondaire'}"
-    data-copier-montant="${montant}"
-    title="Copier ${echapperHtml(quoi)}"
-    aria-label="Copier ${echapperHtml(quoi)}, sans symbole de devise">
-    ${icone('copier', { taille: 16 })}${compact ? '' : '<span>Copier</span>'}
-  </button>`;
-
-/**
- * Les trois chiffres de la page : ce qu'il faut déclarer, ce que l'URSSAF
- * prélèvera, ce qu'il en restera. Le montant à déclarer domine, les deux
- * autres le suivent.
- *
- * Sans type d'activité, rien ne peut être estimé : seul le premier chiffre
- * s'affiche, avec de quoi débloquer les deux autres.
- */
-function chiffresCles(bilan, devise, estMixte) {
-  const c = bilan.cotisations;
-  const aDeclarer = `
-    <div class="chiffre-cle">
-      <span class="etiquette-chiffre">À déclarer${estMixte ? ' (total)' : ''}</span>
-      <div class="ligne-declaration">
-        <strong class="montant-declaration">${echapperHtml(formaterMontantEntier(bilan.aDeclarer, devise))}</strong>
-        ${boutonCopier(bilan.aDeclarer, 'le montant à déclarer')}
-      </div>
-    </div>`;
-
-  if (!c) {
-    return `
-      <div class="chiffres-cles">${aDeclarer}</div>
-      <p class="precision-chiffre">
-        <a href="#/parametres">Indiquez votre type d’activité</a> pour estimer ce que l’URSSAF
-        prélèvera et ce qu’il vous restera.
-      </p>`;
-  }
-
-  return `
-    <div class="chiffres-cles">
-      ${aDeclarer}
-      <div class="chiffre-cle">
-        <span class="etiquette-chiffre">Prélevé par l’URSSAF</span>
-        <strong class="montant-chiffre">${echapperHtml(formaterMontantEntier(c.totalPreleve, devise))}</strong>
-        <span class="precision-chiffre">estimation</span>
-      </div>
-      <div class="chiffre-cle">
-        <span class="etiquette-chiffre">Il vous reste</span>
-        <strong class="montant-chiffre reste">${echapperHtml(formaterMontant(c.reste, devise))}</strong>
-        <span class="precision-chiffre">${c.versementLiberatoire ? 'impôt sur le revenu compris' : 'avant impôt sur le revenu'}</span>
-      </div>
-    </div>`;
-}
-
-/**
- * Le calcul qui mène de l'encaissé au reste, replié par défaut : l'encaissé,
- * chaque prélèvement retranché (avec sa base et son taux), puis le reste.
- * Un prélèvement calculé sur plusieurs bases (activité mixte, changement de
- * taux en cours de période) montre son total puis le détail en retrait.
+ * Le calcul qui mène de l'encaissé au reste : l'encaissé, chaque prélèvement
+ * retranché (avec sa base et son taux), puis le reste. Un prélèvement calculé
+ * sur plusieurs bases (activité mixte, changement de taux en cours de
+ * période) montre son total puis le détail en retrait.
  *
  * Tous les prélèvements sont en euros entiers, comme l'URSSAF les arrondit ;
- * seuls l'encaissé et le reste gardent leurs centimes.
+ * seuls l'encaissé et le reste gardent leurs centimes. Un prélèvement nul
+ * s'écrit « 0 € », sans signe moins.
  */
-function detailCalcul(bilan, devise, formatDate) {
+function detailCalcul(bilan, devise, formatDate, libelleReste, parametres) {
   const c = bilan.cotisations;
   if (!c) return '';
+  // Options qui changent l'estimation et que l'utilisateur a pu oublier d'indiquer.
+  const oublis = [
+    !c.versementLiberatoire && 'avez opté pour le versement libératoire de l’impôt sur le revenu',
+    !parametres.acre && 'bénéficiez de l’ACRE'
+  ].filter(Boolean);
   const entier = (m) => echapperHtml(formaterMontantEntier(m, devise));
   const auCentime = (m) => echapperHtml(formaterMontant(m, devise));
+  const moins = (m) => (m ? `− ${entier(m)}` : entier(0));
 
   // Quand un taux a changé pendant la période, la même activité revient à deux
   // taux : préciser depuis quand lève l'ambiguïté. Inutile sinon.
   const plusieursPaliers = new Set(c.lignes.map((l) => l.duJour)).size > 1;
-  const depuis = (l) => (plusieursPaliers
-    ? ` <span class="palier-cotisation">à partir du ${echapperHtml(formaterDate(l.duJour, formatDate))}</span>`
-    : '');
+  const depuis = (l) => (plusieursPaliers ? ` à partir du ${echapperHtml(formaterDate(l.duJour, formatDate))}` : '');
   const calcul = (l) => `${entier(l.base)} × ${pourcentage(l.taux)}`;
-
-  const ligne = (classe, libelle, base, montant) => `
-    <div class="ligne-cotisation ${classe}">
-      <span>${libelle}</span>
-      <span class="base-cotisation">${base}</span>
-      <span class="montant-cotisation">${montant}</span>
-      ${ESPACE_COPIE}
-    </div>`;
-
+  const ligne = (libelle, valeur, classe = '') =>
+    `<div class="ligne-montant ${classe}"><span>${libelle}</span><span class="valeur">${valeur}</span></div>`;
   const prelevement = (titre, { lignes, total }) => (lignes.length <= 1
-    ? ligne('', titre, lignes[0] ? calcul(lignes[0]) : '', `− ${entier(total)}`)
-    : ligne('groupe-cotisation', titre, '', `− ${entier(total)}`) + lignes.map((l) =>
-      ligne('sous-ligne', `${echapperHtml(l.libelle)}${depuis(l)}`, calcul(l), entier(l.montant))).join(''));
+    ? ligne(`${titre}${lignes[0]?.acre ? ', taux ACRE' : ''}${lignes[0] ? ` <small>${calcul(lignes[0])}</small>` : ''}`, moins(total))
+    : ligne(titre, moins(total)) + lignes.map((l) =>
+      ligne(`${echapperHtml(l.libelle)}${depuis(l)} : ${calcul(l)}`, entier(l.montant), 'sous')).join(''));
 
   const notes = [
     bilan.chiffreAffaires !== bilan.aDeclarer
@@ -133,269 +80,307 @@ function detailCalcul(bilan, devise, formatDate) {
     // Chiffre d'affaires qu'aucun taux ne couvre, hors recettes non classées
     // (déjà signalées plus haut) : encaissements antérieurs au premier taux connu.
     c.horsEstimation > 0 && bilan.nonCategorise.nombreEncaissements === 0
-      ? `${auCentime(c.horsEstimation)} encaissés avant le plus ancien taux connu ne sont pas comptés : le reste est donc trop élevé.`
+      ? `${auCentime(c.horsEstimation)} encaissés avant le plus ancien taux connu ne sont pas comptés : le reste affiché est donc surestimé.`
       : '',
-    'Estimation hors taxe pour frais de chambre consulaire et hors ACRE ; le montant exact reste celui de l’URSSAF. Les frais de votre activité ne sont pas déduits.',
-    c.versementLiberatoire
-      ? ''
-      : 'Vous avez opté pour le versement libératoire de l’impôt ? <a href="#/parametres">Indiquez-le dans les paramètres</a>.'
+    'Prélèvements arrondis à l’euro, comme sur le site de l’URSSAF. Estimation hors taxe pour frais de chambre consulaire ; le montant exact reste celui de l’URSSAF. Les frais de votre activité ne sont pas déduits.',
+    c.lignes.some((l) => l.acre)
+      ? 'Avec l’ACRE, la part du chiffre d’affaires qui dépasse un revenu égal au plafond de la sécurité sociale repasse au taux normal : l’estimation n’en tient pas compte.'
+      : '',
+    oublis.length ? `Vous ${oublis.join(' ou ')} ? <a href="#/parametres?section=regime">Indiquez-le dans les Paramètres</a>.` : ''
   ].filter(Boolean);
 
   return `
-    <details class="details-graphique details-calcul">
-      <summary>${icone('chevron-bas', { taille: 14 })}<span>Voir le détail du calcul</span></summary>
-      <div class="corps-calcul">
-        ${ligne('groupe-cotisation', 'Encaissé sur la période', '', auCentime(bilan.chiffreAffaires))}
+    <details class="details-calcul">
+      <summary>${icone('chevron-bas', { taille: 16 })}Voir le détail du calcul</summary>
+      <div class="contenu">
+        ${ligne('Encaissé sur la période', auCentime(bilan.chiffreAffaires))}
         ${prelevement('Cotisations sociales', c)}
         ${prelevement('Formation professionnelle', c.formationPro)}
-        ${c.versementLiberatoire ? prelevement('Versement libératoire de l’impôt', c.versementLiberatoire) : ''}
-        <div class="ligne-reste">
-          <span class="intitule-reste">Il vous reste</span>
-          <strong class="montant-reste">${auCentime(c.reste)}</strong>
-          ${ESPACE_COPIE}
-        </div>
-        ${notes.map((n) => `<p class="precision-reste">${n}</p>`).join('')}
+        ${c.versementLiberatoire ? prelevement('Versement libératoire de l’impôt sur le revenu', c.versementLiberatoire) : ''}
+        ${ligne(libelleReste, auCentime(c.reste), 'reste')}
+        ${notes.map((n) => `<p class="notes">${n}</p>`).join('')}
       </div>
     </details>`;
 }
 
-/**
- * Où en est la déclaration de la période affichée : en cours, à faire avant
- * telle date, en retard, ou déjà faite. Une année entière n'est pas une
- * périodicité de déclaration : rien à dire dans ce cas.
- *
- * Le bouton « Marquer comme déclarée » fait ici ce que « C'est fait » fait sur
- * le tableau de bord. Il n'est proposé que pour la périodicité choisie dans
- * les paramètres : marquer un mois quand on déclare par trimestre
- * brouillerait le rappel.
- */
-function blocEcheance(periode) {
-  const id = idPeriode(periode.annee, periode.type, periode.valeur);
-  if (!id) return '';
-  const { periodiciteUrssaf, dernierePeriodeDeclaree } = etat.parametres;
-  const echeance = dateEnFrancaisLong(echeanceDeclaration(periode.annee, periode.type, periode.valeur));
+export async function vueUrssaf(conteneur, params) {
+  const p = () => etat.parametres;
   const aujourdHui = aujourdHuiIso();
-
-  const statut = (classe, nomIcone, texte, action = '') => `
-    <div class="statut-declaration ${classe}" id="statut-declaration" tabindex="-1">
-      ${icone(nomIcone, { taille: 16 })}
-      <span>${texte}</span>
-      ${action}
-    </div>`;
-
-  if (periodeDeclaree(id, dernierePeriodeDeclaree)) {
-    return statut('faite', 'cercle-valide', 'Période marquée comme déclarée.');
-  }
-  if (aujourdHui <= finPeriode(periode.annee, periode.type, periode.valeur)) {
-    return statut('', 'calendrier',
-      `Période en cours : à déclarer une fois terminée, au plus tard le ${echapperHtml(echeance)}.`);
-  }
-
-  const enRetard = aujourdHui > echeanceDeclaration(periode.annee, periode.type, periode.valeur);
-  const peutMarquer = periodiciteUrssaf === '' || periodiciteUrssaf === periode.type;
-  return statut(
-    enRetard ? 'en-retard' : '',
-    enRetard ? 'cercle-alerte' : 'calendrier',
-    enRetard
-      ? `Échéance dépassée : à déclarer au plus tard le ${echapperHtml(echeance)}.`
-      : `À déclarer au plus tard le ${echapperHtml(echeance)}.`,
-    peutMarquer ? `
-      <button type="button" class="btn btn-tertiaire" id="marquer-declaree" data-periode="${id}">
-        ${icone('cercle-valide', { taille: 16 })}<span>Marquer comme déclarée</span>
-      </button>` : ''
-  );
-}
-
-export async function vueUrssaf(conteneur) {
+  const anneeCourante = Number(aujourdHui.slice(0, 4));
+  const aTraiter = periodeATraiter(p());
   const { annees } = await api.listerAnnees();
-  const anneeCourante = new Date().getFullYear();
-  const anneesProposees = annees.length > 0 ? annees : [anneeCourante];
+  // L'année en cours et celle de la période à traiter restent proposées, même
+  // sans encaissement (janvier, pour décembre).
+  const anneesProposees = [...new Set([...annees, anneeCourante, ...(aTraiter ? [aTraiter.annee] : [])])].sort((a, b) => b - a);
 
-
-  // Le bilan se recalcule au moindre changement de période : aucun bouton
-  // « Calculer », le résultat est toujours celui de la période affichée.
-  conteneur.innerHTML = `
-    <header class="entete-vue">
-      <div>
-        <h1>Déclaration URSSAF</h1>
-        <p>Le chiffre d’affaires encaissé à déclarer, pour la période de votre choix.</p>
-      </div>
-    </header>
-
-    <div class="carte">
-      <div class="barre-outils">
-        <div class="champ">
-          <label for="urssaf-annee">Année</label>
-          <select id="urssaf-annee">${optionsAnnees(anneesProposees)}</select>
-        </div>
-        <div class="champ">
-          <label for="urssaf-type">Périodicité</label>
-          <select id="urssaf-type">
-            <option value="mois">Mensuelle</option>
-            <option value="trimestre">Trimestrielle</option>
-            <option value="annee">Annuelle</option>
-          </select>
-        </div>
-        <div class="champ" id="conteneur-urssaf-valeur">
-          <label for="urssaf-valeur">Période</label>
-          <select id="urssaf-valeur"></select>
-        </div>
-      </div>
-
-      <div id="resultat-urssaf" aria-live="polite"></div>
-    </div>`;
-
-  const refs = {
-    annee: conteneur.querySelector('#urssaf-annee'),
-    type: conteneur.querySelector('#urssaf-type'),
-    valeur: conteneur.querySelector('#urssaf-valeur'),
-    conteneurValeur: conteneur.querySelector('#conteneur-urssaf-valeur'),
-    resultat: conteneur.querySelector('#resultat-urssaf')
-  };
-
-  /**
-   * Période proposée au premier affichage : la dernière échue, celle que
-   * l'utilisateur a justement à déclarer. Proposer le mois en cours n'aurait
-   * pas de sens, il n'est pas terminé.
-   */
-  const echue = periodeDepuisId(dernierePeriodeEchue(etat.parametres.periodiciteUrssaf)?.id);
-
-  function rafraichirValeurs() {
-    if (refs.type.value === 'annee') {
-      refs.conteneurValeur.hidden = true;
-      return;
-    }
-    refs.conteneurValeur.hidden = false;
-    const estMois = refs.type.value === 'mois';
-    refs.valeur.innerHTML = estMois
-      ? OPTIONS_MOIS
-      : [1, 2, 3, 4]
-        .map((t) => `<option value="${t}">${t}${t === 1 ? 'er' : 'e'} trimestre</option>`)
-        .join('');
-    // La période échue n'est proposée que pour la périodicité qui la produit :
-    // passer de mensuel à trimestriel à la main doit rester libre.
-    if (echue && echue.type === refs.type.value) {
-      refs.valeur.value = String(echue.valeur);
-    } else if (estMois) {
-      refs.valeur.value = String(new Date().getMonth() + 1);
-    }
+  // ---- Période affichée : demandée par le lien, retenue, ou à traiter
+  const demandee = periodeDepuisId(params?.get('periode'));
+  const vueParDefaut = p().periodiciteUrssaf || 'trimestre';
+  let choix;
+  if (demandee) choix = demandee;
+  else if (memoire && memoire.periodicite === p().periodiciteUrssaf) choix = memoire.choix;
+  else if (aTraiter) choix = { annee: aTraiter.annee, type: aTraiter.type, valeur: aTraiter.valeur };
+  else choix = { annee: anneeCourante, type: vueParDefaut, valeur: vueParDefaut === 'mois' ? Number(aujourdHui.slice(5, 7)) : trimestreDe(Number(aujourdHui.slice(5, 7))) };
+  const retenir = () => { memoire = { periodicite: p().periodiciteUrssaf, choix: { ...choix } }; };
+  retenir();
+  if (!anneesProposees.includes(choix.annee)) {
+    anneesProposees.push(choix.annee);
+    anneesProposees.sort((a, b) => b - a);
   }
-  if (echue) {
-    refs.type.value = echue.type;
-    // Une année encore absente du registre (janvier, période de décembre) ne
-    // peut pas être sélectionnée : on garde alors la plus récente proposée.
-    if (anneesProposees.includes(echue.annee)) refs.annee.value = String(echue.annee);
-  }
-
-  /** La période affichée, sous forme de nombres. */
-  const periodeAffichee = () => ({
-    annee: Number(refs.annee.value),
-    type: refs.type.value,
-    valeur: refs.type.value === 'annee' ? null : Number(refs.valeur.value)
-  });
 
   // Le détail du calcul reste déplié d'une période à l'autre, si
   // l'utilisateur l'a ouvert : il compare alors les calculs.
   let detailOuvert = false;
 
-  refs.resultat.addEventListener('toggle', (evenement) => {
-    if (evenement.target.matches('.details-calcul')) detailOuvert = evenement.target.open;
-  }, true);
+  const rythme = () => {
+    const periodicite = p().periodiciteUrssaf;
+    const acre = periodeAcre(p());
+    const morceaux = [
+      periodicite === 'mois' ? 'Déclaration mensuelle' : periodicite === 'trimestre' ? 'Déclaration trimestrielle' : 'Rythme de déclaration non renseigné',
+      p().typeActivite ? echapperHtml(libelleActivite(p())) : 'activité non renseignée',
+      `${p().versementLiberatoire ? 'avec' : 'sans'} versement libératoire`,
+      // L'ACRE en cours se rappelle ; terminée, elle n'a plus rien à dire ici.
+      // Espaces insécables : la mention ne se coupe pas en fin de ligne.
+      ...(acre && acre.fin >= aujourdHui ? [`ACRE jusqu’au ${echapperHtml(formaterDate(acre.fin, p().formatDate))}`] : [])
+    ];
+    // Chaque morceau reste d'un seul tenant : la ligne ne se coupe qu'après un
+    // point (`<wbr>`, sans ajouter d'espace).
+    const point = '<span class="point">·</span><wbr>';
+    return `${morceaux.map((m) => `<span class="morceau">${m}</span>`).join(point)}${point}<a href="#/parametres?section=regime">Modifier</a>`;
+  };
 
-  refs.resultat.addEventListener('click', async (evenement) => {
-    // Copie d'un montant à reporter : le nombre nu, sans devise ni séparateur.
-    const copie = evenement.target.closest('[data-copier-montant]');
-    if (copie) {
-      await copierDansPressePapiers(copie.dataset.copierMontant, 'montant');
+  conteneur.innerHTML = `
+    <div class="page">
+      <header class="entete-page">
+        <div>
+          <h1>Déclaration URSSAF</h1>
+          <p class="sous-titre">${rythme()}</p>
+        </div>
+        <div class="actions">
+          ${choixAnnee({ id: 'urssaf-annee', etiquette: 'Année' })}
+          <div class="segmente compact" role="group" aria-label="Découpage">
+            <button type="button" data-decoupage="mois" aria-pressed="${choix.type === 'mois'}">Mois</button>
+            <button type="button" data-decoupage="trimestre" aria-pressed="${choix.type === 'trimestre'}">Trimestres</button>
+            <button type="button" data-decoupage="annee" aria-pressed="${choix.type === 'annee'}">Année</button>
+          </div>
+        </div>
+      </header>
+      <div class="periodes" role="group" aria-label="Périodes" id="periodes"></div>
+      <section class="carte declaration-page" id="detail" aria-labelledby="titre-periode" aria-live="polite"></section>
+    </div>`;
+
+  const page = conteneur.querySelector('.page');
+  const zoneOnglets = page.querySelector('#periodes');
+  const zone = page.querySelector('#detail');
+  brancherSegmentes(page);
+
+  // ---- Onglets
+  async function rendreOnglets() {
+    if (choix.type === 'annee') {
+      zoneOnglets.hidden = true;
+      zoneOnglets.innerHTML = '';
       return;
     }
+    const { periodes } = await api.periodesUrssaf({ annee: choix.annee, type: choix.type });
+    const devise = p().devise;
+    zoneOnglets.hidden = false;
+    zoneOnglets.classList.toggle('mensuelles', choix.type === 'mois');
+    zoneOnglets.innerHTML = periodes.map((periode) => {
+      const etatP = etatPeriode({ annee: choix.annee, type: choix.type, valeur: periode.valeur }, p(), aujourdHui);
+      const montant = etatP === 'a-venir' ? 'À venir'
+        : periode.nombreEncaissements === 0 ? 'Aucun encaissement'
+          : `${formaterMontantEntier(periode.aDeclarer, devise)} ${etatP === 'declaree' ? 'déclarés' : etatP === 'en-cours' ? 'à ce jour' : etatP === 'ecoulee' ? 'encaissés' : 'à déclarer'}`;
+      return `<button type="button" class="periode" data-valeur="${periode.valeur}" aria-pressed="${periode.valeur === choix.valeur}">
+          <span class="nom">${nomOnglet(choix.type, periode.valeur)}</span>
+          <span class="montant">${echapperHtml(montant)}</span>
+          ${pastilleEtat(etatP)}
+        </button>`;
+    }).join('');
+  }
 
-    // Déclaration faite : mémorisée comme par « C'est fait » sur le tableau de
-    // bord, ce qui éteint aussi le rappel.
-    const marquer = evenement.target.closest('#marquer-declaree');
-    if (marquer) {
-      marquer.disabled = true;
-      try {
-        const reponse = await api.enregistrerParametres({
-          ...etat.parametres,
-          dernierePeriodeDeclaree: marquer.dataset.periode
-        });
-        definirParametres(reponse.parametres);
-        toast('Période marquée comme déclarée.');
-        await calculer();
-        // Le bouton a disparu avec le rendu : le focus va au nouveau statut.
-        refs.resultat.querySelector('#statut-declaration')?.focus();
-      } catch (erreur) {
-        marquer.disabled = false;
-        toast(erreur.message, 'erreur');
-      }
-    }
-  });
+  // ---- Détail de la période choisie
+  async function rendreDetail() {
+    const { devise, formatDate } = p();
+    const estMixte = p().typeActivite === 'mixte';
+    const bilan = await api.bilanUrssaf({ annee: choix.annee, type: choix.type, valeur: choix.type === 'annee' ? '' : choix.valeur });
+    const c = bilan.cotisations;
+    const parPeriode = choix.type !== 'annee';
+    const etatP = parPeriode ? etatPeriode(choix, p(), aujourdHui) : null;
+    const id = parPeriode ? idPeriode(choix.annee, choix.type, choix.valeur) : null;
+    const echeance = parPeriode ? dateEnFrancaisLong(echeanceDeclaration(choix.annee, choix.type, choix.valeur)) : '';
+    const quand = {
+      'en-retard': `Échéance du ${echeance} dépassée de ${accorder(joursEntre(echeanceDeclaration(choix.annee, choix.type, choix.valeur), aujourdHui), 'jour')}`,
+      'a-declarer': `À déclarer avant le ${echeance}`,
+      'en-cours': 'Période en cours',
+      'a-venir': `À déclarer avant le ${echeance}`,
+      declaree: 'Période marquée comme déclarée',
+      ecoulee: p().periodiciteUrssaf ? 'Hors de votre rythme de déclaration' : `Échéance : ${echeance}`
+    }[etatP] ?? '';
+    const declarable = etatP === 'a-declarer' || etatP === 'en-retard';
+    const annulable = etatP === 'declaree' && id === p().dernierePeriodeDeclaree;
+    const libelleTotal = choix.type === 'annee' ? 'Encaissé sur l’année'
+      : etatP === 'declaree' ? 'Déclaré' : etatP === 'en-cours' ? 'Encaissé à ce jour' : 'À déclarer';
+    // Tant que la période n'est pas déclarée, les cotisations restent à payer :
+    // le prélèvement et le reste se disent au futur.
+    const aPayer = ['a-declarer', 'en-retard', 'en-cours', 'a-venir'].includes(etatP);
+    const libellePreleve = aPayer ? 'Sera prélevé par l’URSSAF' : 'Prélevé par l’URSSAF';
+    const libelleReste = aPayer ? 'Il vous restera' : 'Il vous reste';
+    const caseDeclaration = (etiquette, cle, montant) => `<div class="case-urssaf">
+        <span>${etiquette}</span>
+        <strong>${echapperHtml(formaterMontantEntier(montant, devise))}</strong>
+        <button type="button" class="btn-icone" data-copier="${montant}" aria-label="Copier le montant des ${cle}, sans symbole de devise" title="Copier">${icone('copier', { taille: 16 })}</button>
+      </div>`;
 
-  refs.type.addEventListener('change', () => {
-    rafraichirValeurs();
-    calculer();
-  });
-  refs.annee.addEventListener('change', () => calculer());
-  refs.valeur.addEventListener('change', () => calculer());
-  rafraichirValeurs();
+    zone.innerHTML = `
+      <div class="carte-tete">
+        <div>
+          <h2 id="titre-periode">${libellePeriode(choix)}</h2>
+          <div class="statut-ligne">${etatP ? pastilleEtat(etatP) : ''}${quand ? `<span>${quand}</span>` : ''}<span class="attenue">${accorder(bilan.nombreEncaissements, 'encaissement')}</span></div>
+        </div>
+        <div class="actions">
+          ${declarable && choix.type === p().periodiciteUrssaf ? `<button type="button" class="btn btn-principal" id="declarer">${icone('coche', { taille: 16 })}<span>Marquer comme déclarée</span></button>` : ''}
+          ${annulable ? `<button type="button" class="btn btn-fantome" id="annuler-declaration">${icone('annuler', { taille: 16 })}Annuler la déclaration</button>` : ''}
+        </div>
+      </div>
 
-  async function calculer() {
+      <div class="chiffres-cles${c ? '' : ' seul'}">
+        <div class="chiffre-cle principal">
+          <span class="libelle">${libelleTotal}${estMixte ? ' (total)' : ''}</span>
+          <div class="valeur">${echapperHtml(formaterMontantEntier(bilan.aDeclarer, devise))}
+            <button type="button" class="btn btn-petit" data-copier="${bilan.aDeclarer}" aria-label="Copier le montant, sans symbole de devise">${icone('copier', { taille: 15 })}Copier</button></div>
+        </div>
+        ${c ? `
+        <div class="chiffre-cle">
+          <span class="libelle">${libellePreleve}</span>
+          <div class="valeur">${echapperHtml(formaterMontantEntier(c.totalPreleve, devise))}</div>
+          <span class="precision">estimation</span>
+        </div>
+        <div class="chiffre-cle reste">
+          <span class="libelle">${libelleReste}</span>
+          <div class="valeur">${montantDetaille(c.reste, devise)}</div>
+          <span class="precision">${c.versementLiberatoire ? 'impôt sur le revenu compris' : 'avant impôt sur le revenu'}</span>
+        </div>` : ''}
+      </div>
+      ${c ? '' : `<p class="notes bloc-note"><a href="#/parametres?section=regime">Indiquez votre type d’activité</a> pour estimer ce que l’URSSAF prélèvera et ce qu’il vous restera.</p>`}
+      ${parPeriode && caseUrssaf(p().typeActivite) ? `<p class="notes bloc-note">À reporter dans la case
+        « ${echapperHtml(caseUrssaf(p().typeActivite))} » de votre déclaration.</p>` : ''}
+
+      ${estMixte ? `<div class="bloc">
+        <h3>À reporter case par case</h3>
+        ${caseDeclaration(caseUrssaf('ventes'), 'ventes', bilan.ventes.aDeclarer)}
+        ${caseDeclaration(caseUrssaf(natureDesPrestations(p().naturePrestations)), 'prestations', bilan.prestations.aDeclarer)}
+      </div>` : ''}
+
+      ${estMixte && bilan.nonCategorise.nombreEncaissements > 0 ? `
+        <p class="avis">${icone('cercle-alerte', { taille: 17 })}<span>${accorder(bilan.nonCategorise.nombreEncaissements, 'recette', 'recettes')}
+        sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
+        classez-les en vente ou en prestation pour une ventilation et une estimation exactes.</span></p>` : ''}
+
+      ${detailCalcul(bilan, devise, formatDate, libelleReste, p())}`;
+
+    if (detailOuvert) zone.querySelector('.details-calcul')?.setAttribute('open', '');
+  }
+
+  async function rendreTout() {
     try {
-      const periode = periodeAffichee();
-      const bilan = await api.bilanUrssaf({
-        annee: periode.annee,
-        type: periode.type,
-        valeur: periode.valeur ?? ''
-      });
-      const { devise, formatDate } = etat.parametres;
-      const estMixte = etat.parametres.typeActivite === 'mixte';
-
-      /** Une ligne de ventilation : intitulé, montant à reporter, copie. */
-      const ligneVentilation = (etiquette, montant) => `
-        <div class="ligne-ventilation">
-          <span class="intitule-ventilation">${echapperHtml(etiquette)}</span>
-          <strong class="montant-ventilation">${echapperHtml(formaterMontantEntier(montant, devise))}</strong>
-          ${boutonCopier(montant, `le montant des ${etiquette.toLowerCase()}`, { compact: true })}
-        </div>`;
-
-      const nombre = bilan.nombreEncaissements;
-      refs.resultat.innerHTML = `
-        <div class="resultat-bilan">
-          <p class="entete-bilan">
-            <strong>${echapperHtml(majusculeInitiale(bilan.libellePeriode))}</strong>
-            <span>${nombre} encaissement${nombre > 1 ? 's' : ''}</span>
-          </p>
-
-          ${chiffresCles(bilan, devise, estMixte)}
-
-          ${blocEcheance(periode)}
-
-          ${estMixte ? `
-            ${/* En activité mixte, le formulaire de l'URSSAF réclame les deux
-                  montants, chacun dans sa case : ils ont leur propre copie. */ ''}
-            <section class="ventilation">
-              <h3>À reporter case par case</h3>
-              ${ligneVentilation('Ventes de marchandises', bilan.ventes.aDeclarer)}
-              ${ligneVentilation('Prestations de services', bilan.prestations.aDeclarer)}
-            </section>` : ''}
-
-          ${estMixte && bilan.nonCategorise.nombreEncaissements > 0 ? `
-            <p class="note-legale">
-              ${icone('cercle-alerte', { taille: 16 })}
-              <span>${bilan.nonCategorise.nombreEncaissements} recette${bilan.nonCategorise.nombreEncaissements > 1 ? 's' : ''}
-              sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
-              classez-les en vente ou en prestation pour une ventilation et une estimation exactes.</span>
-            </p>` : ''}
-
-          ${detailCalcul(bilan, devise, formatDate)}
-        </div>`;
-
-      if (detailOuvert) refs.resultat.querySelector('.details-calcul')?.setAttribute('open', '');
+      await Promise.all([rendreOnglets(), rendreDetail()]);
     } catch (erreur) {
       toast(erreur.message, 'erreur');
     }
   }
 
-  await calculer(); // premier affichage : dernière période échue
+  async function enregistrerDerniereDeclaree(valeur) {
+    const reponse = await api.enregistrerParametres({ ...p(), dernierePeriodeDeclaree: valeur });
+    definirParametres(reponse.parametres);
+  }
+
+  // ---- Événements
+  zone.addEventListener('toggle', (evenement) => {
+    if (evenement.target.matches('.details-calcul')) detailOuvert = evenement.target.open;
+  }, true);
+
+  brancherChoixAnnee(page.querySelector('#urssaf-annee'), {
+    annees: anneesProposees,
+    choisie: choix.annee,
+    surChoix: (annee) => {
+      choix = { ...choix, annee };
+      retenir();
+      enFondu(rendreTout);
+    }
+  });
+
+  page.addEventListener('click', async (evenement) => {
+    const decoupage = evenement.target.closest('[data-decoupage]');
+    if (decoupage && decoupage.dataset.decoupage !== choix.type) {
+      page.querySelectorAll('[data-decoupage]').forEach((b) => b.setAttribute('aria-pressed', String(b === decoupage)));
+      const type = decoupage.dataset.decoupage;
+      // On garde le même moment de l'année : juillet devient le 3e trimestre.
+      const mois = choix.type === 'mois' ? choix.valeur : choix.type === 'trimestre' ? choix.valeur * 3 : 12;
+      choix = { annee: choix.annee, type, valeur: type === 'mois' ? mois : type === 'trimestre' ? trimestreDe(mois) : null };
+      retenir();
+      await enFondu(rendreTout);
+      return;
+    }
+
+    const onglet = evenement.target.closest('.periode');
+    if (onglet) {
+      choix = { ...choix, valeur: Number(onglet.dataset.valeur) };
+      retenir();
+      history.replaceState(null, '', `#/urssaf?periode=${idPeriode(choix.annee, choix.type, choix.valeur)}`);
+      zoneOnglets.querySelectorAll('.periode').forEach((b) => b.setAttribute('aria-pressed', String(b === onglet)));
+      await enFondu(() => rendreDetail().catch((erreur) => toast(erreur.message, 'erreur')));
+      return;
+    }
+
+    const copie = evenement.target.closest('[data-copier]');
+    if (copie) {
+      // Le nombre nu, sans devise ni séparateur : prêt à coller dans le formulaire de l'URSSAF.
+      copierDansPressePapiers(copie.dataset.copier, copie);
+      return;
+    }
+
+    const declarer = evenement.target.closest('#declarer');
+    if (declarer) {
+      declarer.disabled = true;
+      try {
+        await enregistrerDerniereDeclaree(idPeriode(choix.annee, choix.type, choix.valeur));
+      } catch (erreur) {
+        declarer.disabled = false;
+        toast(erreur.message, 'erreur');
+        return;
+      }
+      reussite(declarer, 'Déclarée', { duree: 5000 });
+      halo(declarer);
+      // Le bouton a dit « Déclarée » : la période passe en fondu à son nouvel
+      // état, et « Annuler la déclaration » prend la place du bouton (pas de
+      // ligne « Annuler » en plus, qui ferait doublon).
+      setTimeout(() => {
+        if (page.isConnected) enFondu(rendreTout);
+      }, mouvementReduit() ? 200 : 1100);
+      return;
+    }
+
+    if (evenement.target.closest('#annuler-declaration')) {
+      const avant = p().dernierePeriodeDeclaree;
+      const precedente = periodePrecedente(choix);
+      try {
+        await enregistrerDerniereDeclaree(idPeriode(precedente.annee, precedente.type, precedente.valeur));
+        await enFondu(async () => {
+          await rendreTout();
+          bandeauRetour(zone, `${libellePeriode(choix)} : déclaration annulée`, async () => {
+            try {
+              await enregistrerDerniereDeclaree(avant);
+              await enFondu(rendreTout);
+            } catch (erreur) {
+              toast(erreur.message, 'erreur');
+            }
+          });
+        });
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
+    }
+  });
+
+  await rendreTout();
 }

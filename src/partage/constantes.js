@@ -54,6 +54,14 @@ export function libelleCategorieCourt(code) {
 
 /** Paramètres appliqués tant que l'utilisateur n'a rien configuré. */
 export const PARAMETRES_DEFAUT = {
+  // Prénom de l'utilisateur, pour le saluer sur le tableau de bord. Il ne
+  // figure sur aucun export.
+  prenom: '',
+  // Accueil guidé du premier lancement : '' tant qu'il n'a pas commencé (ou
+  // pour un livre d'avant son arrivée, qui n'en a pas besoin), 'en-cours'
+  // s'il a été interrompu (il reprend au lancement suivant), 'termine' une
+  // fois fini ou remis à plus tard.
+  accueil: '',
   nomEntreprise: '',
   siren: '',
   siret: '',
@@ -70,6 +78,10 @@ export const PARAMETRES_DEFAUT = {
   // à la formation professionnelle diffère de celui d'un commerçant.
   versementLiberatoire: false,
   activiteArtisanale: false,
+  // ACRE : taux réduit de cotisations sociales, à partir du début d'activité
+  // (date ISO) jusqu'à la fin du 3e trimestre civil qui suit.
+  acre: false,
+  debutActivite: '',
   devise: 'EUR',
   formatDate: 'JJ/MM/AAAA',
   modesPersonnalises: [],

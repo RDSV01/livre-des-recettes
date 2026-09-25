@@ -33,6 +33,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { PARAMETRES_DEFAUT } from './partage/constantes.js';
 import { aujourdHuiIso } from './partage/dates.js';
+import { normaliserTexte } from './partage/texte.js';
 import { dossierSauvegardesParDefaut } from './emplacements.js';
 
 const NOM_FICHIER = 'livre-des-recettes.json';
@@ -73,7 +74,7 @@ function horodatageFichier(date = new Date()) {
  * fichiers, un fichier de données vide sous le bon nom. Le renommage, lui,
  * garantit qu'on lit toujours l'ancien fichier entier ou le nouveau entier.
  */
-function ecrireDurablement(chemin, contenu) {
+export function ecrireDurablement(chemin, contenu) {
   const temporaire = `${chemin}.tmp`;
   const fd = fs.openSync(temporaire, 'w');
   try {
@@ -402,6 +403,83 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
   /** Vrai si la ligne existait et a été supprimée. */
   const supprimerUn = (collection, id) => supprimerLot(collection, [id]).length > 0;
 
+  /** Une ligne, ou `null` si elle est absente. */
+  const obtenirUn = (collection, id) => {
+    const ligne = donnees[collection].find((e) => e.id === id);
+    return ligne ? { ...ligne } : null;
+  };
+
+  /**
+   * Retire la pièce jointe d'une ligne. Retourne `{ ligne, piece }` (la fiche
+   * retirée, pour pouvoir la rattacher), ou `null` si la ligne est absente.
+   * Le fichier, lui, reste en place : les sauvegardes peuvent encore le citer.
+   */
+  function retirerPiece(collection, id) {
+    const ligne = donnees[collection].find((e) => e.id === id);
+    if (!ligne) return null;
+    const { pieceJointe, ...sans } = ligne;
+    const apres = { ...sans, modifieLe: horodatage() };
+    const nouvelle = donnees[collection].map((e) => (e.id === id ? apres : e));
+    return remplacer(collection, nouvelle, { ligne: { ...apres }, piece: pieceJointe ?? null });
+  }
+
+  /**
+   * Modifie un client. Si son nom change, ses recettes (rapprochées par le
+   * nom, sans casse ni accents, comme partout ailleurs) prennent le nouveau
+   * nom dans la même écriture : le carnet et le livre ne se contredisent
+   * jamais, et la fiche du client garde ses encaissements.
+   *
+   * @returns {{ client: object, recettesRenommees: number }|null} `null` si
+   *   le client est absent.
+   */
+  function modifierClient(id, champs) {
+    const ancien = donnees.clients.find((c) => c.id === id);
+    if (!ancien) return null;
+    const maintenant = horodatage();
+    const client = { ...ancien, ...champs, modifieLe: maintenant };
+    const cle = normaliserTexte(ancien.nom);
+    let recettesRenommees = 0;
+    const recettes = donnees.recettes.map((r) => {
+      if (client.nom === ancien.nom || r.client === client.nom || normaliserTexte(r.client) !== cle) return r;
+      recettesRenommees += 1;
+      return { ...r, client: client.nom, modifieLe: maintenant };
+    });
+    const avant = { clients: donnees.clients, recettes: donnees.recettes };
+    return ecrire(
+      () => {
+        donnees.clients = donnees.clients.map((c) => (c.id === id ? client : c));
+        donnees.recettes = recettes;
+        return { client: { ...client }, recettesRenommees };
+      },
+      () => { Object.assign(donnees, avant); }
+    );
+  }
+
+  /**
+   * Identifiants des pièces citées par le livre ET par ses sauvegardes : une
+   * pièce qu'une sauvegarde cite encore doit survivre, pour que la restaurer
+   * retrouve ses PDF. Une sauvegarde illisible fait tout garder, par prudence.
+   */
+  function piecesCitees() {
+    const citees = new Set();
+    const relever = (contenu) => {
+      for (const liste of [contenu?.recettes, contenu?.achats]) {
+        for (const ligne of Array.isArray(liste) ? liste : []) {
+          if (ligne?.pieceJointe?.id) citees.add(String(ligne.pieceJointe.id));
+        }
+      }
+    };
+    relever(donnees);
+    for (const { fichier } of sauvegardes()) {
+      try {
+        relever(JSON.parse(fs.readFileSync(path.join(dossierSauvegardes, fichier), 'utf8')));
+      } catch {
+        return null;
+      }
+    }
+    return citees;
+  }
+
   return {
     cheminFichier,
     dossierSauvegardes,
@@ -501,6 +579,21 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     /** Modifie plusieurs recettes en une écriture (`null` si l'une est inconnue). */
     modifierRecettes: (changements) => modifierLot('recettes', changements),
 
+    // ---- Pièces jointes (communes aux deux registres) ---------------------------
+
+    /** Une ligne d'un registre (`recettes` ou `achats`), ou `null`. */
+    obtenirLigne: obtenirUn,
+    /** Attache la fiche d'une pièce à une ligne ; retourne la ligne, ou `null`. */
+    joindrePiece: (collection, id, piece) => modifierUn(collection, id, { pieceJointe: piece }),
+    retirerPiece,
+    /** Pièces citées par le livre et ses sauvegardes, ou `null` si l'une est illisible. */
+    piecesCitees,
+    /** Nombre et poids des pièces jointes du livre. */
+    bilanPieces() {
+      const fiches = [...donnees.recettes, ...donnees.achats].map((l) => l.pieceJointe).filter(Boolean);
+      return { nombre: fiches.length, taille: fiches.reduce((t, p) => t + (Number(p.taille) || 0), 0) };
+    },
+
     listerAchats: () => copies(donnees.achats),
     ajouterAchat: (champs) => ajouterLot('achats', [champs])[0],
     ajouterAchats: (lot) => ajouterLot('achats', lot),
@@ -513,7 +606,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     listerClients: () => copies(donnees.clients)
       .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' })),
     ajouterClient: (champs) => ajouterLot('clients', [champs])[0],
-    modifierClient: (id, champs) => modifierUn('clients', id, champs),
+    modifierClient,
     supprimerClient: (id) => supprimerUn('clients', id),
 
     // ---- Paramètres ----------------------------------------------------------

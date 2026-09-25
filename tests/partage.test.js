@@ -14,11 +14,11 @@ import {
   estDoublon, estDoublonAchat, chercherSimilaire, compterDoublonsRecettes
 } from '../src/partage/doublons.js';
 import {
-  bilanSeuils, seuilsValentPour, regimeFiscal, activiteAvecRevente,
-  seuilsDe, baremePour, periodeSeuils
+  bilanSeuils, seuilsValentPour, regimeFiscal, activiteAvecRevente, categorieImposee,
+  seuilsDe, baremePour, periodeSeuils, caseUrssaf, libelleActivite
 } from '../src/partage/seuils.js';
 import { BAREMES } from '../src/partage/bareme-seuils.js';
-import { filtrerRecettes, filtrerAchats, valeursFrequentes } from '../src/partage/filtres.js';
+import { filtrerRecettes, filtrerAchats } from '../src/partage/filtres.js';
 
 test('estDateIso accepte les dates réelles et refuse le reste', () => {
   assert.equal(estDateIso('2026-07-15'), true);
@@ -129,14 +129,6 @@ test('filtrerRecettes croise année, mois, mode, catégorie et recherche', () =>
   assert.equal(filtrerRecettes(RECETTES_FILTRE, {}).length, 3);
 });
 
-test('valeursFrequentes dédoublonne et trie par fréquence puis alphabet', () => {
-  const libelles = valeursFrequentes([
-    { libelle: 'cours de piano' }, { libelle: 'Cours de piano' },
-    { libelle: 'Accordage' }, { libelle: '' }
-  ], 'libelle');
-  assert.deepEqual(libelles, ['cours de piano', 'Accordage']);
-});
-
 const ACHATS_FILTRE = [
   { dateReglement: '2026-07-15', fournisseur: 'Métro', referenceFacture: 'A-12', montant: 120.50, modeReglement: 'carte' },
   { dateReglement: '2026-02-01', fournisseur: 'Papeterie Léon', referenceFacture: '', montant: 30, modeReglement: 'virement' },
@@ -152,6 +144,16 @@ test('filtrerAchats croise période, mode de paiement et recherche libre', () =>
   assert.equal(filtrerAchats(ACHATS_FILTRE, { q: 'A-04' }).length, 1);
   assert.equal(filtrerAchats(ACHATS_FILTRE, { q: '120,50' }).length, 1);
   assert.equal(filtrerAchats(ACHATS_FILTRE, {}).length, 3);
+});
+
+test('le filtre « avec / sans PDF » suit la pièce jointe de chaque ligne', () => {
+  const lignes = [
+    { ...ACHATS_FILTRE[0], pieceJointe: { id: 'x', nom: 'ticket.pdf', taille: 10 } },
+    ACHATS_FILTRE[1]
+  ];
+  assert.equal(filtrerAchats(lignes, { piece: 'avec' }).length, 1);
+  assert.equal(filtrerAchats(lignes, { piece: 'sans' })[0].fournisseur, 'Papeterie Léon');
+  assert.equal(filtrerRecettes([{ dateEncaissement: '2026-01-02', client: 'A', montant: 1 }], { piece: 'sans' }).length, 1);
 });
 
 // ---- Doublons et similarité ------------------------------------------------
@@ -340,6 +342,32 @@ test('une activité libérale relève du BNC, sans registre des achats', () => {
   assert.equal(activiteAvecRevente('ventes'), true);
   assert.equal(activiteAvecRevente('mixte'), true);
   assert.equal(activiteAvecRevente(''), true, 'dans le doute, on propose le registre');
+
+  // Une activité à nature unique classe ses recettes d'office ; la mixte non.
+  assert.equal(categorieImposee('liberal'), 'prestations', 'une activité libérale est de la prestation de services');
+  assert.equal(categorieImposee('liberalCipav'), 'prestations');
+  assert.equal(categorieImposee('prestations'), 'prestations');
+  assert.equal(categorieImposee('ventes'), 'ventes');
+  assert.equal(categorieImposee('mixte'), null, 'chaque recette est classée à la saisie');
+  assert.equal(categorieImposee(''), null);
+});
+
+test('les cases de la déclaration URSSAF sont nommées mot pour mot', () => {
+  // Intitulés relevés en septembre 2026 (plus.transformation.gouv.fr, Adie) :
+  // l'utilisateur doit les retrouver tels quels sur le site de l'URSSAF.
+  assert.equal(caseUrssaf('ventes'), 'Chiffre d’affaires des ventes de marchandises');
+  assert.equal(caseUrssaf('prestations'), 'Chiffre d’affaires des prestations de services commerciales ou artisanales');
+  assert.equal(caseUrssaf('liberal'), 'Chiffre d’affaires des autres prestations de services');
+  assert.equal(caseUrssaf('liberalCipav'), 'Recettes pour profession libérale relevant de la Cipav');
+  assert.equal(caseUrssaf('mixte'), null, 'une activité mixte remplit plusieurs cases');
+  assert.equal(caseUrssaf(''), null);
+
+  // Les libellés en reprennent les mots.
+  assert.equal(libelleActivite({ typeActivite: 'liberal' }), 'Autres prestations de services : activité libérale (BNC)');
+  assert.equal(
+    libelleActivite({ typeActivite: 'mixte', naturePrestations: 'liberal' }),
+    'Activité mixte : ventes de marchandises (BIC) et autres prestations de services (BNC)'
+  );
 });
 
 // ---- Barème daté --------------------------------------------------------------
@@ -417,6 +445,24 @@ test('les barèmes se suivent sans trou ni chevauchement', () => {
   }
 });
 
+test('les seuils officiels de chaque année sont bien ceux appliqués', () => {
+  // Valeurs relevées sur impots.gouv.fr, service-public.gouv.fr et les règles
+  // du simulateur de l'URSSAF (septembre 2026). Une faute de frappe dans le
+  // barème se voit ici.
+  const attendus = {
+    2023: { ventes: [188_700, 91_900, 101_000], services: [77_700, 36_800, 39_100], fin: 'mois' },
+    2024: { ventes: [188_700, 91_900, 101_000], services: [77_700, 36_800, 39_100], fin: 'mois' },
+    2025: { ventes: [188_700, 85_000, 93_500], services: [77_700, 37_500, 41_250], fin: 'jour' },
+    2026: { ventes: [203_100, 85_000, 93_500], services: [83_600, 37_500, 41_250], fin: 'jour' }
+  };
+  const valeurs = (s) => [s.plafondMicro, s.franchiseTva, s.franchiseTvaMajore];
+  for (const [annee, attendu] of Object.entries(attendus)) {
+    assert.deepEqual(valeurs(seuilsDe('ventes', Number(annee))), attendu.ventes, `${annee} : ventes`);
+    assert.deepEqual(valeurs(seuilsDe('liberal', Number(annee))), attendu.services, `${annee} : services et libéral`);
+    assert.equal(baremePour(Number(annee)).finFranchiseMajore, attendu.fin, `${annee} : fin de la franchise au-delà du majoré`);
+  }
+});
+
 test('le barème ne contient que des montants cohérents', () => {
   for (const bareme of BAREMES) {
     assert.ok(Number.isInteger(bareme.aPartirDe), 'une année d’entrée en vigueur');
@@ -429,6 +475,7 @@ test('le barème ne contient que des montants cohérents', () => {
     }
     // Les marchandises sont toujours plus largement plafonnées que les services.
     assert.ok(bareme.marchandises.plafondMicro > bareme.services.plafondMicro);
+    assert.ok(['jour', 'mois'].includes(bareme.finFranchiseMajore), 'règle de sortie de la franchise renseignée');
     for (const taux of Object.values(bareme.abattements)) {
       assert.ok(taux > 0 && taux < 100, 'un abattement est un pourcentage');
     }

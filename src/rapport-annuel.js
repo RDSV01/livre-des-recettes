@@ -15,6 +15,7 @@ import { enEuros } from './partage/montants.js';
 import { normaliserTexte } from './partage/texte.js';
 import { moisDe, nomMois } from './partage/dates.js';
 import { libelleMode } from './partage/constantes.js';
+import { categorieImposee } from './partage/seuils.js';
 import {
   filtrerParPeriode, totalMontants, totalCentimes, regrouper, parDateAsc
 } from './totaux.js';
@@ -89,7 +90,12 @@ function mensuel(recettes, achats) {
  */
 export function rapportAnnuel({ recettes = [], achats = [], parametres = {} }, annee) {
   const modes = parametres.modesPersonnalises ?? [];
-  const duRegistre = filtrerParPeriode(recettes, { annee }).sort(parDateAsc('dateEncaissement'));
+  // Une activité à nature unique classe toutes ses recettes d'office, même
+  // celles saisies avant que la catégorie soit posée à l'enregistrement.
+  const imposee = categorieImposee(parametres.typeActivite);
+  const duRegistre = filtrerParPeriode(recettes, { annee })
+    .sort(parDateAsc('dateEncaissement'))
+    .map((r) => (imposee ? { ...r, categorie: imposee } : r));
   const achatsAnnee = filtrerParPeriode(achats, { annee }, 'dateReglement');
 
   const caCentimes = totalCentimes(duRegistre);

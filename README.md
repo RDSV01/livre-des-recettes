@@ -1,23 +1,22 @@
 # Livre des recettes
 
 > Le livre des recettes des micro-entrepreneurs français, sans tableur et sans prise de tête :
-> une application **100 % locale**, ultra légère, qui fait une seule chose et la fait bien.
+> une application **100 % locale**, légère, qui fait une seule chose et la fait bien.
 
 ![Licence MIT](https://img.shields.io/badge/licence-MIT-green)
 ![Node.js ≥ 18](https://img.shields.io/badge/node-%E2%89%A5%2018-brightgreen)
 ![100 % local](https://img.shields.io/badge/donn%C3%A9es-100%25%20locales-blue)
 
-**[Site de présentation et téléchargement](https://rdsv01.github.io/livre-des-recettes/)**
+**[Télécharger l'application](https://github.com/RDSV01/livre-des-recettes/releases/latest)**
 
-En tant que micro-entrepreneur, vous devez tenir un **livre des recettes** : le registre
-chronologique de tous vos encaissements, présentable en cas de contrôle. Beaucoup le
-tiennent dans Excel, cette application fait la même chose, en plus simple et plus sûr :
-saisie guidée, totaux automatiques, exports conformes, et vos données restent en local.
-Si vous vendez des marchandises, elle tient aussi votre **registre des achats**, le second
-registre exigible : les deux obligations sont couvertes au même endroit.
+En tant que micro-entrepreneur, vous devez tenir un livre des recettes : le registre
+chronologique de vos encaissements, à présenter en cas de contrôle. Beaucoup le tiennent
+dans Excel. Cette application fait la même chose, plus simplement et plus sûrement : saisie
+guidée, totaux automatiques, exports conformes, et vos données restent sur votre ordinateur.
+Si vous vendez des marchandises, elle tient aussi le registre des achats, le second registre
+exigible.
 
-**Ce que ce projet n'est pas** : un logiciel de comptabilité, de facturation ou de
-télédéclaration.
+Ce n'est ni un logiciel de comptabilité, ni de facturation, ni de télédéclaration.
 
 ## Aperçu
 
@@ -31,103 +30,121 @@ télédéclaration.
 
 ### Le livre des recettes
 
-- **Saisie des recettes** : six colonnes du registre légal : date d'encaissement,
-  client, libellé, numéro de facture, montant et mode de règlement (CB, virement, espèces,
-  chèque, PayPal, Stripe, autre, et vos modes de paiement personnalisés). Ajout, modification,
-  suppression.
-- **Saisie assistée** : auto-complétion des libellés déjà utilisés, suggestion du prochain
-  numéro de facture, duplication d'une recette en un clic pour les paiements récurrents,
-  et avertissement non bloquant si une recette très similaire existe déjà pour éviter les doublons.
-- **Carnet de clients** : créez vos clients une fois, puis choisissez-les à la saisie d'une
-  recette pour éviter les fautes de frappe. Un client professionnel peut être retrouvé automatiquement par
-  son **SIREN ou SIRET** grâce à l'annuaire public des entreprises connecté à ce projet (le nom exact est récupéré pour vous directement). Pour les clients de type particulier, un simple nom de client suffit. La liste affiche le nombre de recettes et le chiffre d'affaires par client.
-- **Tableau principal** : tri par colonne, sélection multiple (suppression ou reclassement groupé), recherche libre (client, libellé, facture, montant), filtres par année, mois, mode de règlement et catégorie.
-- **Numérotation des factures surveillée** : les doublons et les numéros manquants sont
-  signalés, quelle que soit votre convention (« F001 », « FAC2026-001 »,
-  « A-2026-0007 »…), sans jamais rien bloquer.
+- **Saisie des recettes** : les six colonnes du registre légal (date d'encaissement, client,
+  libellé, numéro de facture, montant, mode de règlement), en ajout, modification ou
+  suppression. Modes proposés : CB, virement, espèces, chèque, PayPal, Stripe, autre, et vos
+  propres modes.
+- **Saisie assistée**, dans un panneau latéral qui laisse la liste visible : le client se
+  retrouve en quelques lettres ou par son SIRET (annuaire des entreprises), et les libellés
+  déjà facturés à ce client passent en premier avec leur montant et leur catégorie.
+  L'application suggère aussi le prochain numéro de facture, duplique une recette en un clic
+  pour les paiements récurrents, et prévient, sans bloquer, si une recette très proche existe
+  déjà.
+- **Factures en PDF** : déposez la facture dans le panneau de saisie ou directement sur sa
+  ligne. Le trombone l'ouvre dans un aperçu (télécharger, remplacer, retirer), et un filtre
+  retrouve les recettes sans PDF.
+- **Carnet de clients** : créez un client une fois, puis choisissez-le à la saisie, sans faute
+  de frappe. Pour un professionnel, le SIREN ou le SIRET suffit : le nom exact vient de
+  l'annuaire public des entreprises. Pour un particulier, un nom suffit. Le carnet affiche,
+  pour chaque client, le nombre de recettes, le chiffre d'affaires et sa part du total ; il
+  se trie par chiffre d'affaires, par nom ou par dernier encaissement. La fiche d'un client
+  reprend ses encaissements et ses factures jointes.
+- **Tableau principal** : lecture mois par mois avec sous-totaux, tri par colonne, sélection
+  multiple (suppression ou reclassement groupés), recherche surlignée (client, libellé,
+  facture, montant), année choisie d'une flèche, filtres par mois, mode de règlement,
+  catégorie et pièce jointe. Titres et total restent visibles pendant le défilement. Chaque
+  geste répond sur place : « Ajoutée · Annuler » sur la ligne ajoutée, « Supprimée ·
+  Annuler » à la place d'une ligne supprimée, et Ctrl+Z / Ctrl+Y au clavier.
+- **Numérotation des factures surveillée** : doublons et numéros manquants sont signalés,
+  quelle que soit votre convention (« F001 », « FAC2026-001 », « A-2026-0007 »…), sans
+  jamais rien bloquer.
 
 ### Le registre des achats
 
-- **Saisie des achats** : les cinq colonnes du registre légal, dans l'ordre chronologique
-  des règlements : date du règlement, fournisseur, référence de la facture ou du
-  justificatif, mode de paiement et montant de l'achat. Ce registre est obligatoire pour
-  les activités d'achat et de revente de marchandises.
-- **Mêmes automatismes que les recettes** : auto-complétion des fournisseurs déjà saisis,
-  duplication d'un achat récurrent en un clic, tri par colonne, recherche libre
-  (fournisseur, référence, montant), filtres par année, mois et mode de paiement.
-- **Import CSV des achats**, sur le même principe que celui des recettes
-  (correspondance des colonnes, détection des doublons, rapport avant import).
-- **Exports du registre des achats** en PDF, Excel et CSV, avec les totaux mensuels et
-  annuel, comme pour le livre des recettes.
+- **Saisie des achats** : les cinq colonnes du registre légal, dans l'ordre des règlements
+  (date, fournisseur, référence de la facture ou du justificatif, mode de paiement,
+  montant). Ce registre est obligatoire pour l'achat-revente de marchandises.
+- **Mêmes automatismes que les recettes** : fournisseurs déjà saisis proposés, duplication
+  d'un achat récurrent, justificatif en PDF, tri, recherche (fournisseur, référence,
+  montant), filtres par année, mois, mode de paiement et pièce jointe.
+- **Import CSV et exports** (PDF, Excel, CSV, avec totaux mensuels et annuel), comme pour le
+  livre des recettes.
 
 ### Pilotage
 
-- **Tableau de bord** : CA du mois, CA de l'année, nombre d'encaissements, moyenne par
-  encaissement, **total des achats de l'année**, **graphique du CA mensuel** et dernières
-  recettes. Un sélecteur permet de sélectionner les années précédentes.
-- **Jeu de démonstration** : au premier lancement, un livre fictif à charger en un clic
-  pour découvrir l'application, effaçable d'un clic et jamais mêlé à vos vraies données.
-- **Suivi des seuils** : selon votre type d'activité (achat / revente, prestations
-  commerciales ou artisanales, activité libérale, ou mixte), le tableau de bord suit votre
-  progression vers le **plafond micro-entrepreneur** et le **seuil de franchise en base de
-  TVA** : montant restant, pourcentage atteint, et un avertissement à l'approche du seuil.
-- **Activité mixte** : chaque recette est classée vente ou prestation, et la distinction se
-  retrouve partout : colonne Catégorie dans le tableau des recettes, chiffre d'affaires du
-  mois et de l'année pour chacune des deux activités, graphique du CA mensuel, suivi de la part « prestations »
-  (qui a ses propres plafonds), bilan URSSAF ventilé comme la déclaration le demande, et
-  exports distinguant les deux (colonne Catégorie et sous-totaux « dont ventes / dont
-  prestations »).
-- **Déclaration URSSAF** : choisissez une année puis un mois, un trimestre ou l'année entière,
-  l'application calcule le chiffre d'affaires encaissé et le nombre d'encaissements de la période,
-  la **date limite** pour le déclarer, puis estime ce que l'URSSAF prélèvera (**cotisations
-  sociales**, **formation professionnelle** et, si vous l'avez choisi, **versement libératoire**)
-  et surtout **ce qu'il vous restera**. Une activité mixte voit chaque part calculée à
-  son propre taux, selon la nature de prestations déclarée dans les paramètres. Un rappel
-  s'affiche sur le tableau de bord quand une période à déclarer s'achève, avec le montant à
-  déclarer et la date limite.
-  _Aucune connexion à l'URSSAF : c'est un simple calcul local._
+- **Tableau de bord** : une salutation selon le moment de la journée (avec votre prénom si
+  vous l'avez donné), le chiffre d'affaires de l'année et du mois, la moyenne par
+  encaissement, le total des achats de l'année, le graphique du chiffre d'affaires mensuel
+  (total sur chaque colonne, ou en tableau), la déclaration URSSAF à faire avec son montant,
+  et les dernières recettes. Les années précédentes restent consultables.
+- **Accueil guidé** : au premier lancement, quelques questions (prénom, entreprise retrouvée
+  par son SIRET, activité, rythme de déclaration), et le livre est prêt. Rien n'est
+  obligatoire ; interrompu, l'accueil reprend au lancement suivant.
+- **Jeu de démonstration** : un livre fictif à charger d'un clic dès l'accueil, effaçable
+  d'un clic, jamais mêlé à vos vraies données.
+- **Suivi des seuils** : selon votre activité (achat-revente, prestations commerciales ou
+  artisanales, activité libérale, ou mixte), le tableau de bord suit votre progression vers
+  le plafond micro-entrepreneur et le seuil de franchise en base de TVA : montant restant,
+  pourcentage atteint, alerte à l'approche.
+- **Activité mixte** : chaque recette est classée vente ou prestation, et la distinction suit
+  partout : colonne Catégorie, chiffre d'affaires du mois et de l'année par activité,
+  graphique mensuel, suivi de la part prestations (qui a ses propres plafonds), bilan URSSAF
+  ventilé comme la déclaration, exports avec colonne Catégorie et sous-totaux « dont
+  ventes / dont prestations ».
+- **Déclaration URSSAF** : les mois ou les trimestres de l'année en onglets, selon votre
+  rythme, chacun avec son état (déclarée, en cours, à déclarer, en retard). Pour la période
+  choisie, l'application donne le chiffre d'affaires à déclarer et la date limite, puis
+  estime ce que l'URSSAF prélèvera (cotisations sociales, formation professionnelle et, si
+  vous l'avez choisi, versement libératoire) et ce qu'il vous restera. En activité mixte,
+  chaque part est calculée à son taux, selon la nature de prestations indiquée dans les
+  paramètres. Avec l'ACRE (option et date de début d'activité dans les paramètres), les
+  cotisations sociales passent au taux réduit jusqu'à la fin du 3e trimestre civil qui suit.
+  Le tableau de bord et le menu signalent la déclaration à faire ; « C'est fait » la marque
+  déclarée, et reste annulable.
+  _Aucune connexion à l'URSSAF : c'est un calcul local._
 
 ### Échanges et sécurité des données
 
-- **Exports conformes** des deux registres en **PDF**, **Excel (.xlsx)** et **CSV**, avec
-  les colonnes légales et les **totaux mensuels et annuel** ajoutés automatiquement.
-- **Vérification avant export** : avant chaque téléchargement, l'application repasse à
-  l'écran les points qu'un contrôleur regarderait (mentions obligatoires, continuité de la
-  numérotation, doublons). Elle vous informe, elle ne vous bloque jamais.
+- **Exports conformes** des deux registres en PDF, Excel (.xlsx) et CSV, avec les colonnes
+  légales et les totaux mensuels et annuel. En option, une archive .zip y ajoute les PDF
+  joints de la période (factures ou justificatifs), prête pour un comptable ou un contrôle.
+- **Vérification avant export** : avant chaque téléchargement, l'application passe en revue
+  ce qu'un contrôleur regarderait (mentions obligatoires, continuité de la numérotation,
+  doublons). Elle informe, sans jamais bloquer.
 - **Rapport annuel de gestion** en PDF, pour vous et non pour l'administration : chiffre
-  d'affaires et sa répartition, panier moyen, évolution mois par mois en graphique, moyens
-  de paiement, clients de l'année et meilleurs d'entre eux, comparaison avec l'année
+  d'affaires et répartition, panier moyen, évolution mensuelle en graphique, moyens de
+  paiement, clients de l'année et meilleurs d'entre eux, comparaison avec l'année
   précédente, puis le détail de chaque encaissement.
-- **Import CSV** des recettes **et des achats** : glissez-déposez votre historique Excel,
-  correspondance des colonnes assistée, détection des doublons, rapport d'analyse avant
-  tout import, et **sauvegarde automatique juste avant** pour pouvoir revenir en arrière.
-- **Sauvegardes gérables** : liste des sauvegardes automatiques (copie de secours,
-  quotidiennes, avant import, avant restauration) dans les paramètres, avec restauration en
-  un clic. Au démarrage, l'application vérifie le fichier de données : illisible, elle
-  propose de restaurer la dernière sauvegarde valide sans jamais rien écraser ; disparu,
-  elle propose de le reconstituer ou de repartir d'un livre vide.
-- **Paramètres** : identité de l'entreprise (reprise en tête des exports), type d'activité,
+- **Import CSV** des recettes et des achats : glissez votre historique Excel, associez les
+  colonnes avec l'aide de l'application, repérez les doublons, lisez le rapport d'analyse
+  avant tout import. Une sauvegarde automatique est faite juste avant, pour pouvoir revenir
+  en arrière.
+- **Sauvegardes** : les sauvegardes automatiques (copie de secours, quotidiennes, avant
+  import, avant restauration) sont listées dans les paramètres et se restaurent en un clic.
+  Au démarrage, l'application vérifie le fichier de données. S'il est illisible, elle propose
+  de restaurer la dernière sauvegarde valide sans rien écraser ; s'il a disparu, de le
+  reconstituer ou de repartir d'un livre vide.
+- **Paramètres** : prénom, identité de l'entreprise (en tête des exports), type d'activité,
   périodicité de déclaration, devise, format de date, modes de règlement personnalisés, et
-  des options pour activer ou désactiver chaque aide à la saisie.
+  une option pour chaque aide à la saisie.
 
 ## Installation
 
-### Le plus simple : l'exécutable (rien à installer)
+### Le plus simple : l'exécutable
 
-Téléchargez l'exécutable de votre système depuis la
-[page des versions](https://github.com/RDSV01/livre-des-recettes/releases), lancez-le, et
-l'application s'ouvre dans votre navigateur. Node.js
-n'est pas nécessaire.
-Vos données sont rangées dans **Documents / Livre des recettes**.
+Téléchargez l'exécutable de votre système sur la
+[page des versions](https://github.com/RDSV01/livre-des-recettes/releases) et lancez-le :
+l'application s'ouvre dans votre navigateur, sans installer Node.js. Vos données sont
+rangées dans Documents / Livre des recettes.
 
-Le fichier n'étant pas signé (le certificat est payant), Windows ou macOS peut afficher un
-avertissement au premier lancement : cliquez sur « Informations complémentaires » puis
-« Exécuter quand même », ou faites un clic droit puis « Ouvrir » sur Mac.
+Le fichier n'est pas signé (le certificat est payant) : Windows ou macOS peut afficher un
+avertissement au premier lancement. Cliquez sur « Informations complémentaires » puis
+« Exécuter quand même », ou, sur Mac, faites un clic droit puis « Ouvrir ».
 
 ### Depuis les sources
 
-**Prérequis** : [Node.js](https://nodejs.org) 18 ou plus récent (LTS recommandée).
-C'est tout : aucune base de données, aucun compte, aucune compilation.
+Prérequis : [Node.js](https://nodejs.org) 18 ou plus récent (LTS recommandée). Ni base de
+données, ni compte, ni compilation.
 
 ```bash
 git clone https://github.com/RDSV01/livre-des-recettes.git
@@ -136,50 +153,48 @@ npm install
 npm start
 ```
 
-L'application s'ouvre sur `http://localhost:3000` (uniquement accessible depuis
-votre machine).
+L'application s'ouvre sur `http://localhost:3000`, accessible uniquement depuis votre
+machine.
 
 ## Vos données : rien ne se perd
 
-C'est l'engagement central du projet :
-
-- **Tout tient dans un seul fichier** lisible :
-  `Documents/Livre des recettes/livre-des-recettes.json` (recettes, achats, clients et
-  paramètres). Pas de base de données cachée, pas de stockage dans le navigateur : vous
-  pouvez changer de navigateur (Firefox, Chrome, Edge…) sans rien perdre. Les paramètres
-  affichent le chemin exact du fichier.
-- **Sauvegardes automatiques rangées ailleurs que vos données** (dans le dossier applicatif
-  de votre système) : une sauvegarde par jour, conservée 14 jours, puis une par semaine
-  pendant 2 mois, puis une par mois pendant 1 an, plus une **copie de secours mise à jour à
-  chaque saisie**. Supprimer votre dossier de données n'efface donc rien : au démarrage
-  suivant, l'application le remarque et propose de tout reconstituer, sans perdre même la
-  dernière recette saisie. Écriture « atomique » : une coupure de courant ne corrompt jamais
-  le fichier.
-- **Une seule instance à la fois** : un verrou empêche deux lancements simultanés (deux
-  fenêtres, ou deux ordinateurs partageant un dossier synchronisé) de s'écraser mutuellement.
-  Un second lancement rouvre simplement la fenêtre de l'application en cours.
-- **Changer d'ordinateur** = copier le dossier « Livre des recettes » sur le nouveau poste.
+- **Un seul fichier lisible** : `Documents/Livre des recettes/livre-des-recettes.json`
+  (recettes, achats, clients et paramètres). Ni base cachée ni stockage dans le navigateur :
+  vous pouvez changer de navigateur (Firefox, Chrome, Edge…) sans rien perdre. Les
+  paramètres affichent le chemin exact. Les PDF joints sont rangés à côté, dans le dossier
+  `pieces`, et doublés dans le dossier des sauvegardes ; un PDF n'est effacé que lorsque ni
+  le livre ni aucune sauvegarde ne le cite.
+- **Des sauvegardes automatiques rangées ailleurs**, dans le dossier applicatif du système :
+  une par jour gardée 14 jours, puis une par semaine pendant 2 mois, puis une par mois
+  pendant 1 an, plus une copie de secours mise à jour à chaque saisie. Supprimer le dossier
+  de données n'efface donc rien : au démarrage suivant, l'application propose de tout
+  reconstituer, jusqu'à la dernière recette saisie. L'écriture est atomique : une coupure de
+  courant ne corrompt pas le fichier.
+- **Une seule instance à la fois** : un verrou empêche deux lancements (deux fenêtres, ou
+  deux ordinateurs sur un dossier synchronisé) de s'écraser l'un l'autre. Un second
+  lancement rouvre la fenêtre déjà ouverte.
+- **Changer d'ordinateur** : copiez le dossier « Livre des recettes » sur le nouveau poste.
   C'est tout.
-- **Dossier synchronisé** (Nextcloud, Drive, Dropbox…) : pointez la variable `LDR_DATA_DIR`
-  vers votre dossier synchronisé (voir Configuration), et vos données vous suivent.
-- **Copie manuelle à tout moment** : Paramètres puis « Télécharger une copie de mes
-  données (JSON) ». Pour restaurer, remplacez le fichier `livre-des-recettes.json` par
-  cette copie.
+- **Dossier synchronisé** (Nextcloud, Drive, Dropbox…) : pointez `LDR_DATA_DIR` vers ce
+  dossier (voir Configuration), et vos données vous suivent.
+- **Copie manuelle à tout moment** : Paramètres, puis « Télécharger une copie (JSON) » ou
+  « Copie complète avec les PDF (.zip) ». Pour restaurer, remplacez
+  `livre-des-recettes.json` par cette copie (pour l'archive, décompressez-la dans le
+  dossier de données).
 
 ## Vie privée et connexion Internet
 
-L'application fonctionne intégralement hors ligne. **Deux** points seulement contactent
-l'extérieur, et aucun n'envoie vos données :
+L'application fonctionne entièrement hors ligne. Deux fonctions seulement contactent
+l'extérieur, et aucune n'envoie vos données :
 
-- la **recherche d'un client par SIRET**, uniquement quand vous la déclenchez vous-même :
-  elle interroge l'API publique et gratuite [recherche-entreprises.api.gouv.fr](https://recherche-entreprises.api.gouv.fr)
-  pour récupérer le nom exact de l'entreprise. Aucune clé API, aucun compte, et vous pouvez
-  toujours saisir le nom d'un client manuellement sans jamais utiliser cette recherche (client particulier par exemple) ;
-- la **recherche d'une nouvelle version** au démarrage : l'application demande à GitHub le
-  numéro de la dernière version publiée, et rien d'autre. Décochez l'option dans les
-  paramètres et elle ne contacte plus rien du tout. Si vous installez une mise à jour, le
-  fichier téléchargé est vérifié par son empreinte SHA-256, calculée sur votre machine,
-  avant de remplacer quoi que ce soit.
+- la recherche d'un client par SIRET, uniquement quand vous la lancez : elle interroge l'API
+  publique et gratuite [recherche-entreprises.api.gouv.fr](https://recherche-entreprises.api.gouv.fr)
+  pour obtenir le nom exact de l'entreprise, sans clé ni compte. Vous pouvez toujours saisir
+  le nom à la main, pour un particulier par exemple ;
+- la recherche d'une nouvelle version au démarrage : l'application demande à GitHub le
+  numéro de la dernière version publiée, rien d'autre. Décochez l'option dans les paramètres
+  et elle ne contacte plus rien. Avant d'installer une mise à jour, elle vérifie le fichier
+  téléchargé par son empreinte SHA-256, calculée sur votre machine.
 
 ## Configuration
 
@@ -191,24 +206,22 @@ l'extérieur, et aucun n'envoie vos données :
 
 ## Cadre légal (en bref)
 
-Les micro-entrepreneurs doivent tenir un livre des recettes présentant, dans l'ordre
-chronologique des encaissements : le montant et l'origine des recettes (client), le mode
-de règlement et les références des pièces justificatives (numéro des factures). Ceux dont
-l'activité comporte de la vente de marchandises doivent en plus tenir un registre des
-achats, dans l'ordre chronologique des règlements : date, fournisseur, référence de la
-pièce, mode de paiement et montant. Les exports de l'application suivent ces colonnes.
-Conservez vos livres et justificatifs pendant 10 ans.
+Le livre des recettes présente, dans l'ordre chronologique des encaissements, le montant et
+l'origine de chaque recette (client), le mode de règlement et la référence des pièces
+justificatives (numéro de facture). Si votre activité comporte de la vente de marchandises,
+vous tenez en plus un registre des achats, dans l'ordre chronologique des règlements : date,
+fournisseur, référence de la pièce, mode de paiement et montant. Les exports de
+l'application suivent ces colonnes. Conservez livres et justificatifs pendant 10 ans.
 
-> Cet outil vous aide à **tenir** votre livre des recettes, il ne constitue ni un
-> conseil comptable ou juridique, ni un logiciel de caisse certifié. En cas de doute
-> sur vos obligations ou sur les seuils en vigueur, rapprochez-vous de l'URSSAF ou
-> d'un expert-comptable.
+> Cet outil vous aide à tenir votre livre des recettes. Ce n'est ni un conseil comptable ou
+> juridique, ni un logiciel de caisse certifié. En cas de doute sur vos obligations ou sur
+> les seuils en vigueur, adressez-vous à l'URSSAF ou à un expert-comptable.
 
 ## Développement
 
-Stack volontairement minimale : **Node.js + Express** côté serveur, **HTML / CSS / JS
-vanilla** côté navigateur (aucun framework, aucune étape de build), données en JSON.
-Trois dépendances : `express`, `exceljs`, `pdfkit`.
+Stack minimale : Node.js et Express côté serveur ; HTML, CSS et JavaScript sans framework ni
+étape de build côté navigateur ; données en JSON. Trois dépendances : `express`, `exceljs`,
+`pdfkit`.
 
 ```text
 server.js              Point d'entrée (npm start)
@@ -216,55 +229,67 @@ src/
   app.js               Assemblage Express
   lancement.js         Démarrage du serveur (verrou, écoute locale, navigateur)
   stockage.js          Persistance JSON (écriture atomique, sauvegardes, intégrité)
+  pieces.js            PDF joints aux lignes (rangement, double hors des données, ménage)
   validation.js        Validation des recettes, achats, clients et paramètres
   totaux.js            Calculs (totaux, CA mensuel, tableau de bord, bilan URSSAF)
   import-registre.js   Mécanique d'import en lot commune aux deux registres
   rapport-annuel.js    Agrégats du rapport annuel de gestion (hors registres légaux)
   controle-export.js   Contrôle d'un registre avant export (mentions, doublons)
-  cotisations.js       Estimation des cotisations sociales, au taux en vigueur le
-                       jour de chaque encaissement
+  cotisations.js       Estimation des prélèvements URSSAF (cotisations sociales, ACRE,
+                       formation professionnelle, versement libératoire), au taux en
+                       vigueur le jour de chaque encaissement
   demo.js              Jeu de démonstration (données fictives)
   entreprises.js       Recherche d'entreprise par SIREN / SIRET (API publique)
   maj.js               Nouvelle version publiée : détection, empreinte et installation
   emplacements.js      Où ranger les données, et les sauvegardes hors de celles-ci
   verrou.js            Verrou d'instance (un seul lancement à la fois)
   partage/             Modules communs serveur + navigateur (servis sous /partage) :
-                       constantes, dates, montants, texte, doublons, seuils, factures, filtres
+                       constantes, dates, montants, texte, doublons, seuils, factures,
+                       filtres, déclarations, salutations, acre
     bareme-seuils.js   Montants légaux : SEUL fichier à modifier quand la loi change.
-                       Seuils annuels (plafonds micro, TVA, abattements) et paliers
-                       de taux de cotisations, bornés au jour près
-  routes/              API REST (recettes, achats, clients, exports, urssaf, sauvegardes, parametres, maj)
-  exports/             Générateurs PDF, Excel, CSV des deux registres, et le rapport annuel
-public/                Interface (index.html, css, js/vues, icônes, historique)
+                       Seuils annuels (plafonds micro, TVA, abattements), paliers
+                       de taux de cotisations bornés au jour près, et fractions ACRE
+  routes/              API REST (recettes, achats, clients, exports, urssaf, sauvegardes,
+                       parametres, maj), et celles des deux registres : pièces jointes
+                       (pieces) et opérations groupées (lots)
+  exports/             Générateurs PDF, Excel, CSV des deux registres, rapport annuel,
+                       et archive .zip avec les PDF joints (zip.js, sans dépendance)
+public/                Interface (index.html, css, polices, js/vues, icônes, historique)
 assets/                Icône de l'exécutable Windows
-scripts/               Construction de l'exécutable (construire-exe) et vérification (verifier)
+scripts/               Construction de l'exécutable (construire-exe), vérification
+                       (verifier) et livre d'essai temporaire (essai)
 tests/                 Tests node:test (npm test)
 ```
 
 ```bash
+npm run essai         # l'application sur un livre vide et temporaire (accueil guidé compris),
+                      # sans toucher au vrai livre ; « npm run essai -- --garder » le conserve
 npm test              # unités + API en conditions réelles
 npm run verifier      # parcours de bout en bout de l'application assemblée
 npm run construire:exe # exécutable autonome dans dist/ (esbuild + Node SEA)
 ```
 
-La construction de l'exécutable est le seul point qui demande des dépendances
-supplémentaires (`esbuild`, `postject` et `resedit`), installées en développement
-uniquement : l'application, elle, garde ses trois dépendances.
+Seule la construction de l'exécutable demande des dépendances supplémentaires (`esbuild`,
+`postject` et `resedit`), installées en développement uniquement : l'application garde ses
+trois dépendances.
 
 ## Crédits
 
-Icônes : [Lucide](https://lucide.dev), sous licence ISC, dont les tracés sont intégrés
-directement dans `public/js/icones.js` (aucune ressource chargée depuis Internet).
+Icônes : [Lucide](https://lucide.dev), sous licence ISC, avec des tracés intégrés
+directement dans `public/js/icones.js` (rien n'est chargé depuis Internet).
+
+Police : [Commissioner](https://github.com/kosbarts/Commissioner), sous licence SIL Open
+Font License 1.1, livrée avec l'application (`public/polices`, licence jointe dans
+`OFL.txt`).
 
 ## Contribuer
 
-Les contributions sont bienvenues, dans le périmètre du projet : lisez
+Les contributions sont bienvenues dans le périmètre du projet : lisez
 [CONTRIBUTING.md](CONTRIBUTING.md) avant d'ouvrir une issue ou une pull request.
 
 ## Roadmap
 
-Les évolutions faites et envisagées sont dans
-[ROADMAP.md](ROADMAP.md).
+Ce qui a été fait et ce qui est envisagé : [ROADMAP.md](ROADMAP.md).
 
 ## Licence
 

@@ -15,6 +15,9 @@ export const NOMS_MOIS = [
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
 ];
 
+/** Noms abrégés, distincts deux à deux (« juin » / « juil »), pour les graphiques. */
+export const MOIS_ABREGES = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+
 /** Vérifie qu'une chaîne est une date ISO `AAAA-MM-JJ` réelle (30 février refusé). */
 export function estDateIso(texte) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texte);

@@ -10,11 +10,11 @@
  */
 const etats = {
   recettes: {
-    filtres: { q: '', annee: '', mois: '', mode: '', categorie: '' },
+    filtres: { q: '', annee: '', mois: '', mode: '', categorie: '', piece: '' },
     tri: { colonne: 'date', sens: 'desc' }
   },
   achats: {
-    filtres: { q: '', annee: '', mois: '', mode: '' },
+    filtres: { q: '', annee: '', mois: '', mode: '', piece: '' },
     tri: { colonne: 'date', sens: 'desc' }
   }
 };

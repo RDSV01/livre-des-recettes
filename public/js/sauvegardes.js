@@ -5,26 +5,37 @@
  */
 
 import { api } from './api.js';
-import { echapperHtml, toast, confirmer } from './ui.js';
+import { echapperHtml, confirmer, poidsLisible, toast } from './ui.js';
+import { patienter } from './retours.js';
 import { icone } from './icones.js';
 
-/** Une ligne par sauvegarde : nom, date, taille et bouton « Restaurer ». */
+/** Ce qu'est une sauvegarde, d'après son nom de fichier. */
+function nature(fichier) {
+  if (fichier.endsWith('-copie-de-secours.json')) return ['Copie de secours', 'mise à jour à chaque saisie', 'bouclier'];
+  if (fichier.endsWith('-avant-import.json')) return ['Avant un import CSV', '', 'historique'];
+  if (fichier.endsWith('-avant-restauration.json')) return ['Avant une restauration', '', 'historique'];
+  if (fichier.endsWith('-avant-remise-a-zero.json')) return ['Avant la remise à zéro', '', 'historique'];
+  return ['Sauvegarde du jour', '', 'historique'];
+}
+
+/** Une ligne par sauvegarde : nature, date, poids et bouton « Restaurer ». */
 export function listeSauvegardes(sauvegardes) {
-  return sauvegardes.map((s) => `
-    <div class="ligne-gestion">
-      <span class="libelle-gestion">${echapperHtml(s.fichier)}</span>
-      <span class="details-gestion">${echapperHtml(new Date(s.date).toLocaleString('fr-FR'))} (${Math.max(1, Math.round(s.taille / 1024))} Ko)</span>
-      <button type="button" class="btn btn-secondaire" data-fichier="${echapperHtml(s.fichier)}">
-        ${icone('reinitialiser', { taille: 16 })}<span>Restaurer</span>
-      </button>
-    </div>`).join('');
+  return sauvegardes.map((s) => {
+    const [quoi, precision, nomIcone] = nature(s.fichier);
+    const quand = new Date(s.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    return `<div class="ligne-gestion">
+      ${icone(nomIcone, { taille: 17 })}
+      <span class="quoi" title="${echapperHtml(s.fichier)}"><strong>${quoi}</strong> <span class="attenue">· ${precision || poidsLisible(s.taille)}</span></span>
+      <span class="quand">${echapperHtml(quand)}</span>
+      <button type="button" class="btn btn-petit" data-fichier="${echapperHtml(s.fichier)}">${icone('restaurer', { taille: 15 })}Restaurer</button>
+    </div>`;
+  }).join('');
 }
 
 /**
- * Branche les boutons « Restaurer » d'une zone, par délégation : la liste
- * peut être redessinée sans rien rebrancher. Après confirmation, la
- * sauvegarde est restaurée puis la page rechargée, l'application repartant
- * alors des données restaurées.
+ * Branche les boutons « Restaurer » d'une zone, par délégation. Après
+ * confirmation, la sauvegarde est restaurée puis la page rechargée,
+ * l'application repartant alors des données restaurées.
  */
 export function brancherRestauration(zone) {
   zone.addEventListener('click', async (evenement) => {
@@ -35,13 +46,17 @@ export function brancherRestauration(zone) {
       titre: 'Restaurer cette sauvegarde ?',
       message: `Les données reviendront à l’état de « ${fichier} ». ` +
         'Le fichier actuel est d’abord mis de côté : rien n’est effacé.',
-      boutonOk: 'Restaurer'
+      boutonOk: 'Restaurer',
+      danger: false,
+      iconeOk: 'restaurer'
     });
     if (!accord) return;
+    const reprendre = patienter(bouton, 'Restauration…');
     try {
       await api.restaurerSauvegarde(fichier);
       window.location.reload();
     } catch (erreur) {
+      reprendre();
       toast(erreur.message, 'erreur');
     }
   });
