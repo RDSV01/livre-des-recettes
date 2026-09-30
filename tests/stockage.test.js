@@ -45,7 +45,7 @@ test('un dossier de sauvegardes inaccessible n’empêche pas d’enregistrer', 
   const donnees = dossierTemporaire();
   const sauvegardes = path.join(dossierTemporaire(), 'occupe');
   fs.writeFileSync(sauvegardes, 'un fichier, pas un dossier');
-  t.after(() => fs.rmSync(donnees, { recursive: true, force: true }));
+  t.after(() => [donnees, path.dirname(sauvegardes)].forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
 
   const stockage = creerStockage(donnees, { dossierSauvegardes: sauvegardes });
   stockage.ajouterRecette(CHAMPS);
@@ -322,7 +322,7 @@ test('un dossier de sauvegardes inaccessible se signale sans bloquer', (t) => {
   const donnees = dossierTemporaire();
   const sauvegardes = path.join(dossierTemporaire(), 'occupe');
   fs.writeFileSync(sauvegardes, 'un fichier, pas un dossier');
-  t.after(() => fs.rmSync(donnees, { recursive: true, force: true }));
+  t.after(() => [donnees, path.dirname(sauvegardes)].forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
 
   const stockage = creerStockage(donnees, { dossierSauvegardes: sauvegardes });
   assert.equal(stockage.sauvegardesEnEchec(), false, 'aucune écriture encore tentée');

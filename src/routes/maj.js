@@ -33,10 +33,10 @@ export function routesMaj(stockage, arreter) {
     try {
       // Le remplacement d'abord : en cas d'échec, rien n'est perturbé et
       // l'erreur part au navigateur normalement.
-      await appliquerMiseAJour();
+      const version = await appliquerMiseAJour();
       // Le redémarrage seulement une fois la réponse partie, sinon le
       // navigateur ne saurait jamais si la mise à jour a abouti.
-      res.on('finish', () => redemarrer({ arreter }));
+      res.on('finish', () => redemarrer({ arreter, version }));
       res.json({ redemarrage: true });
     } catch (erreur) {
       // Le message compte ici (fichier absent de la version publiée,

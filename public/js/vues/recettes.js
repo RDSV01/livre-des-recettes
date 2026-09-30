@@ -116,8 +116,7 @@ export async function vueRecettes(conteneur, params) {
       { cle: 'date', titre: 'Encaissé le', cellule: (r) => `<td class="date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>` },
       { cle: 'client', titre: 'Client', cellule: (r) => `<td class="client">${echapperHtml(r.client)}</td>` },
       { cle: 'libelle', titre: 'Libellé', cellule: (r) => `<td class="libelle">${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">Sans libellé</span>'}</td>` },
-      { cle: 'facture', titre: 'Facture', cellule: (r) => `<td>${r.numeroFacture ? `<span class="ref">${echapperHtml(r.numeroFacture)}</span>` : '<span class="attenue">Sans facture</span>'}</td>` },
-      { cle: 'piece' },
+      { cle: 'facture', titre: 'Facture', avecPiece: true, cellule: (r) => `<td class="col-piece-hote">${r.numeroFacture ? `<span class="ref">${echapperHtml(r.numeroFacture)}</span>` : '<span class="attenue">Sans facture</span>'}</td>` },
       { cle: 'mode', titre: 'Paiement', cellule: (r) => `<td class="mode">${echapperHtml(libelleMode(r.modeReglement, modesPersonnalises))}</td>` },
       ...(estMixte ? [{ cle: 'categorie', titre: 'Catégorie', cellule: (r) => `<td>${pastilleCategorie(r.categorie)}</td>` }] : []),
       { cle: 'montant', titre: 'Montant', classe: 'montant', cellule: (r) => `<td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td>` }
@@ -299,13 +298,24 @@ export async function vueRecettes(conteneur, params) {
   // ---- Panneau de saisie ------------------------------------------------------------
   conteneur.querySelector('#nouvelle-recette').addEventListener('click', () => ouvrirFormulaire());
 
+  /** Catégorie proposée à une nouvelle recette : celle de la dernière saisie, sinon la première. */
+  const categorieParDefaut = () => [...registre.toutes()]
+    .filter((r) => r.categorie)
+    .sort((a, b) => String(b.creeLe ?? '').localeCompare(String(a.creeLe ?? '')))[0]?.categorie ??
+    CATEGORIES_RECETTE[0].code;
+
   /**
    * Ouvre le panneau : vide (ajout), prérempli pour modification, ou prérempli
    * depuis un `modele` (duplication, datée d'aujourd'hui, sans facture ni PDF).
    */
   function ouvrirFormulaire(recette = null, modele = null) {
     const source = recette ?? modele;
-    let categorie = source?.categorie ?? '';
+    // En activité mixte, une nouvelle recette part d'une catégorie déjà
+    // choisie (celle de la dernière saisie), ce qui montre d'emblée que le
+    // choix existe. Tant que l'utilisateur n'y a pas touché, un libellé
+    // suggéré peut encore la changer.
+    let categorie = source?.categorie ?? (estMixte ? categorieParDefaut() : '');
+    let categorieChoisie = Boolean(source?.categorie);
     let piece = recette?.pieceJointe ?? null;
     let siretResolu = null;    // { nom, siret } trouvé dans l'annuaire pour la saisie en cours
     let saisieAvertie = '';    // saisie pour laquelle « recette similaire » a été montré
@@ -404,6 +414,7 @@ export async function vueRecettes(conteneur, params) {
       choisirCategorie(categorie);
       const champCategorie = f.querySelector('[data-champ="categorie"]');
       racine.querySelectorAll('[data-categorie]').forEach((b) => b.addEventListener('click', () => {
+        categorieChoisie = true;
         choisirCategorie(b.dataset.categorie);
         champCategorie.classList.remove('invalide');
         champCategorie.querySelector('.erreur-champ').textContent = '';
@@ -500,7 +511,7 @@ export async function vueRecettes(conteneur, params) {
         <span class="sugg-meta">${echapperHtml(formaterMontant(l.recette.montant, devise))}${estMixte && l.recette.categorie ? `<small>${echapperHtml(libelleCategorieCourt(l.recette.categorie))}</small>` : ''}</span>`,
       surChoix: (l) => {
         proposer(f.montant, formaterChampMontant(l.recette.montant));
-        if (estMixte && l.recette.categorie && !categorie) choisirCategorie(l.recette.categorie);
+        if (estMixte && l.recette.categorie && !categorieChoisie) choisirCategorie(l.recette.categorie);
         f.montant.focus();
         f.montant.select();
       }

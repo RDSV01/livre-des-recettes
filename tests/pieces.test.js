@@ -88,6 +88,17 @@ describe('module des pièces', () => {
     assert.equal(pieces.chemin(orpheline.id), null);
     assert.equal(fs.existsSync(path.join(copies, 'pieces', `${orpheline.id}.pdf`)), false);
   });
+
+  test('le double perdu d’une pièce est refait', () => {
+    const pieces = creerPieces(donnees, copies);
+    const fiche = pieces.enregistrer(pdf('d'), 'd.pdf');
+    fs.rmSync(path.join(copies, 'pieces', `${fiche.id}.pdf`));
+    assert.equal(pieces.redoubler(new Set([fiche.id])), 1);
+    assert.ok(fs.existsSync(path.join(copies, 'pieces', `${fiche.id}.pdf`)));
+    fs.rmSync(path.join(donnees, 'pieces', `${fiche.id}.pdf`));
+    assert.equal(pieces.redoubler(new Set([fiche.id])), 1);
+    assert.ok(fs.existsSync(path.join(donnees, 'pieces', `${fiche.id}.pdf`)));
+  });
 });
 
 describe('pièces citées par le livre et ses sauvegardes', () => {
@@ -136,7 +147,7 @@ describe('pièces citées par le livre et ses sauvegardes', () => {
       // Jointe après la dernière sauvegarde : seul le livre la cite.
       const piece = creerPieces(donnees, copies).enregistrer(pdf(), 'a.pdf');
       stockage.joindrePiece('recettes', recette.id, piece);
-      fs.rmSync(path.join(donnees, 'livre-des-recettes.json'));
+      fs.rmSync(stockage.cheminFichier);
       fs.rmSync(path.join(copies, 'livre-des-recettes-copie-de-secours.json'), { force: true });
 
       creerApp({ dossierDonnees: donnees, dossierSauvegardes: copies });
@@ -319,10 +330,11 @@ describe('routes des pièces jointes', () => {
     assert.match(perdues, /F-5/);
   });
 
-  test('copie complète : le livre et ses PDF', async () => {
-    const reponse = await fetch(`${base}/api/sauvegarde/complete`);
+  test('sauvegarde complète : le livre et ses PDF', async () => {
+    const reponse = await fetch(`${base}/api/sauvegarde`);
     assert.equal(reponse.status, 200);
     const zip = await JSZip.loadAsync(Buffer.from(await reponse.arrayBuffer()));
+    assert.ok(zip.file('LISEZ-MOI.txt'), 'un mot explique comment la reprendre');
     const livre = JSON.parse(await zip.file('livre-des-recettes.json').async('string'));
     const citees = [...livre.recettes, ...livre.achats].filter((l) => l.pieceJointe).map((l) => l.pieceJointe.id);
     const presentes = Object.keys(zip.files).filter((n) => n.startsWith('pieces/'));

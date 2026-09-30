@@ -10,9 +10,10 @@
  * par le suivant.
  */
 
+import fs from 'node:fs';
 import { creerApp, VERSION } from './app.js';
 import { acquerirVerrou } from './verrou.js';
-import { nettoyerAncienneVersion } from './maj.js';
+import { nettoyerAncienneVersion, TEMOIN_MAJ } from './maj.js';
 import { ouvrirDansLeSysteme } from './emplacements.js';
 
 /** Nombre de ports essayés avant d'abandonner (3000, 3001, 3002…). */
@@ -62,11 +63,16 @@ export function demarrerServeur({ dossierDonnees, port = 3000, actifs, surEchec 
     serveur.close();
     serveur.closeAllConnections?.();
   };
-  const app = creerApp({ dossierDonnees, actifs, arreter });
+  const app = creerApp({ dossierDonnees, actifs, arreter, taches: true });
 
   const ecouter = (portEssai, restants) => {
     serveur = app.listen(portEssai, '127.0.0.1', () => {
       verrou.noterPort(portEssai);
+      // Nouvelle version lancée par une mise à jour : l'ancienne attend ce
+      // signe pour s'effacer ; sans lui, elle reprend la main (voir `maj.js`).
+      if (process.env[TEMOIN_MAJ]) {
+        try { fs.writeFileSync(process.env[TEMOIN_MAJ], String(process.pid), 'utf8'); } catch { /* l'ancienne rétablira sa version */ }
+      }
       const adresse = `http://localhost:${portEssai}`;
       console.log('');
       console.log(`  Livre des recettes v${VERSION}`);

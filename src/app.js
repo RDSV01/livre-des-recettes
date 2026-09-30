@@ -16,7 +16,6 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { creerStockage } from './stockage.js';
 import { creerPieces } from './pieces.js';
-import { creerZip } from './exports/zip.js';
 import { routesRecettes } from './routes/recettes.js';
 import { routesAchats } from './routes/achats.js';
 import { routesMaj } from './routes/maj.js';
@@ -25,10 +24,18 @@ import { routesParametres } from './routes/parametres.js';
 import { routesExports } from './routes/exports.js';
 import { routesUrssaf } from './routes/urssaf.js';
 import { routesSauvegardes } from './routes/sauvegardes.js';
+import { routesSecurite } from './routes/securite.js';
+import { routesFichierSauvegarde } from './routes/fichier-sauvegarde.js';
 import { statistiquesTableauDeBord } from './totaux.js';
 import { construireJeuDemo } from './demo.js';
-import { aujourdHuiIso } from './partage/dates.js';
 import { dossierDonneesParDefaut } from './emplacements.js';
+import { creerFichierSauvegarde } from './fichier-sauvegarde.js';
+import { creerArchives } from './archives.js';
+import { creerCopieExterne } from './copie-externe.js';
+import { constaterEchecMaj } from './maj.js';
+
+/** Délai avant de refaire les archives après une écriture (une rafale de saisies n'en fait qu'une). */
+const DELAI_ARCHIVES_MS = 60_000;
 
 /**
  * Racine du projet. Dans l'exécutable autonome, les fichiers du dépôt
@@ -115,21 +122,45 @@ function refuserRequetesExterieures(req, res, suite) {
  *   automatiques (par défaut hors du dossier de données).
  * @param {() => void} [options.arreter] ferme le serveur et retire le verrou
  *   d'instance : appelé juste avant le redémarrage qui suit une mise à jour.
+ * @param {boolean} [options.taches] lance les tâches de fond (copie externe,
+ *   archives annuelles) : seulement pour l'application lancée pour de vrai,
+ *   pas pour les tests.
  */
 export function creerApp({
-  dossierDonnees, dossierSauvegardes, actifs, arreter
+  dossierDonnees, dossierSauvegardes, actifs, arreter, taches = false
 } = {}) {
   const dossier = dossierDonnees ?? DOSSIER_DONNEES_DEFAUT;
   const stockage = creerStockage(dossier, dossierSauvegardes ? { dossierSauvegardes } : {});
   const pieces = creerPieces(dossier, stockage.dossierSauvegardes);
+  const archives = creerArchives({ dossier: path.join(stockage.dossierSauvegardes, 'archives'), stockage, pieces });
+  const copieExterne = creerCopieExterne({ stockage, pieces, archives });
+  // Une mise à jour qui n'a pas pu démarrer : la version rétablie le dit une fois.
+  let majEchouee = taches ? constaterEchecMaj() : null;
 
-  // Ménage des PDF que plus rien ne cite (ni le livre, ni une sauvegarde). Il
-  // n'a lieu que sur un livre sain : un fichier corrompu ou disparu (il peut
-  // reparaître) ne dit pas quelles pièces il citait, et une sauvegarde
-  // illisible fait tout garder.
-  if (!stockage.corruption() && !stockage.donneesAbsentes()) {
+  // Au démarrage, sur un livre sain : la copie de secours et le double de
+  // chaque PDF sont refaits s'ils manquent, et les sauvegardes récentes relues.
+  const sain = !stockage.corruption() && !stockage.donneesAbsentes() && !stockage.indisponible();
+  if (sain) {
+    stockage.assurerCopieDeSecours();
     const citees = stockage.piecesCitees();
+    pieces.redoubler(citees ?? new Set());
+    // Ménage des PDF que plus rien ne cite (ni le livre, ni une sauvegarde).
+    // Un fichier corrompu ou disparu (il peut reparaître) ne dit pas quelles
+    // pièces il citait, et une sauvegarde illisible fait tout garder.
     if (citees) pieces.nettoyer(citees);
+  }
+  stockage.verifierSauvegardes();
+
+  if (taches) {
+    let minuterieArchives = null;
+    stockage.surEcriture(() => {
+      copieExterne.planifier();
+      clearTimeout(minuterieArchives);
+      minuterieArchives = setTimeout(() => archives.archiver().then(() => copieExterne.planifier()), DELAI_ARCHIVES_MS);
+      minuterieArchives.unref();
+    });
+    setTimeout(() => archives.archiver().then(() => copieExterne.planifier()), 3000).unref();
+    copieExterne.demarrer();
   }
 
   const app = express();
@@ -140,6 +171,12 @@ export function creerApp({
   app.use(express.json({ limit: '20mb' }));
 
   // ---- API -----------------------------------------------------------------
+  // Un livre momentanément inaccessible (resté dans le nuage…) est relu avant
+  // de répondre : l'interface le retrouve dès qu'il redevient lisible.
+  app.use('/api', (req, res, suite) => {
+    stockage.rafraichir();
+    suite();
+  });
   app.use('/api/recettes', routesRecettes(stockage, pieces));
   app.use('/api/achats', routesAchats(stockage, pieces));
   app.use('/api/clients', routesClients(stockage));
@@ -147,7 +184,15 @@ export function creerApp({
   app.use('/api/exports', routesExports(stockage, pieces));
   app.use('/api/urssaf', routesUrssaf(stockage));
   app.use('/api/sauvegardes', routesSauvegardes(stockage));
+  // Le livre et ses PDF dans un seul fichier, et sa reprise (clé, autre ordinateur).
+  app.use('/api/sauvegarde', routesFichierSauvegarde(creerFichierSauvegarde({ stockage, pieces, copieExterne })));
+  app.use('/api/securite', routesSecurite({ stockage, copieExterne, archives }));
   app.use('/api/maj', routesMaj(stockage, arreter));
+  // L'échec d'une mise à jour a été montré à l'utilisateur : il ne l'est plus.
+  app.post('/api/maj/echec-vu', (req, res) => {
+    majEchouee = null;
+    res.status(204).end();
+  });
 
   // GET /api/tableau-de-bord?annee=2025 (année courante par défaut)
   app.get('/api/tableau-de-bord', (req, res) => {
@@ -172,6 +217,11 @@ export function creerApp({
       // Fichier de données disparu alors que des sauvegardes subsistent :
       // l'interface propose de le reconstituer avant toute saisie.
       donneesAbsentes: stockage.donneesAbsentes(),
+      // Livre présent mais momentanément illisible (resté dans le nuage…).
+      indisponible: stockage.indisponible(),
+      // Copie sur clé ou disque : l'indication discrète du menu en dépend.
+      copieExterne: copieExterne.etat(),
+      majEchouee,
       // Le registre des achats reste visible tant qu'il contient quelque
       // chose, même si l'activité déclarée ne l'exige plus.
       aDesAchats: nombre.achats > 0,
@@ -195,36 +245,6 @@ export function creerApp({
     }
     stockage.chargerDemo(construireJeuDemo());
     res.json({ charge: true });
-  });
-
-  // Sauvegarde complète téléchargeable (le fichier de données, tel quel).
-  app.get('/api/sauvegarde', (req, res) => {
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="sauvegarde-livre-des-recettes-${aujourdHuiIso()}.json"`
-    );
-    res.json(stockage.exporterDonnees());
-  });
-
-  /**
-   * Copie complète téléchargeable : le fichier de données ET les PDF joints,
-   * rangés comme dans le dossier de données. Décompressée dans un dossier
-   * vide, elle forme un dossier de données prêt à servir.
-   */
-  app.get('/api/sauvegarde/complete', (req, res) => {
-    const donnees = stockage.exporterDonnees();
-    const fiches = [...donnees.recettes, ...donnees.achats].map((l) => l.pieceJointe).filter(Boolean);
-    const vus = new Set();
-    const fichiers = [{ nom: 'livre-des-recettes.json', contenu: JSON.stringify(donnees, null, 2) }];
-    for (const { id } of fiches) {
-      if (vus.has(id)) continue;
-      vus.add(id);
-      const chemin = pieces.chemin(id);
-      if (chemin) fichiers.push({ nom: `pieces/${id}.pdf`, contenu: fs.readFileSync(chemin) });
-    }
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="copie-livre-des-recettes-${aujourdHuiIso()}.zip"`);
-    res.send(creerZip(fichiers));
   });
 
   app.use('/api', (req, res) => {
@@ -260,7 +280,7 @@ export function creerApp({
         erreur: req.is('application/pdf') ? 'Ce PDF dépasse 10 Mo.' : 'Envoi trop volumineux.'
       });
     }
-    if (erreur.code === 'CORROMPU') {
+    if (erreur.code === 'CORROMPU' || erreur.code === 'INDISPONIBLE') {
       return res.status(503).json({ erreur: erreur.message });
     }
     console.error(erreur);

@@ -46,7 +46,7 @@ const json = (chemin, options) => appel(chemin, options).then((r) => r.json());
 for (const chemin of [
   '/api/systeme', '/api/tableau-de-bord', '/api/recettes', '/api/recettes/annees',
   '/api/achats', '/api/achats/annees', '/api/clients', '/api/parametres', '/api/sauvegardes',
-  '/api/urssaf?annee=2026&type=annee', '/api/urssaf/periodes?annee=2026&type=trimestre'
+  '/api/securite', '/api/urssaf?annee=2026&type=annee', '/api/urssaf/periodes?annee=2026&type=trimestre'
 ]) {
   await verifier(`GET ${chemin}`, 200, () => statut(chemin));
 }
@@ -55,6 +55,7 @@ for (const chemin of [
 for (const chemin of [
   '/', '/css/theme.css', '/css/style.css', '/polices/commissioner-latin.woff2',
   '/js/app.js', '/js/preferences-vues.js', '/js/panneau.js', '/js/pieces.js', '/js/accueil.js', '/js/calendrier.js',
+  '/js/fichier-sauvegarde.js',
   '/partage/doublons.js', '/partage/seuils.js', '/partage/bareme-seuils.js', '/partage/declarations.js',
   '/partage/salutations.js', '/partage/acre.js'
 ]) {
@@ -197,6 +198,26 @@ for (const nom of ['../secret.json', '..\\secret.json', '/etc/passwd', 'pas-une-
   await verifier(`restauration refusée : ${nom || '(vide)'}`, (s) => s === 400 || s === 404, () =>
     statut('/api/sauvegardes/restaurer', { method: 'POST', body: JSON.stringify({ fichier: nom }) }));
 }
+
+// ---- 10 bis. Sauvegarde à la demande et sa reprise --------------------------
+let fichierSauvegarde = null;
+await verifier('la sauvegarde à la demande est une archive ZIP', 'PK', async () => {
+  fichierSauvegarde = Buffer.from(await (await appel('/api/sauvegarde')).arrayBuffer());
+  return fichierSauvegarde.subarray(0, 2).toString('latin1');
+});
+const envoyerFichier = (octets, provenance = 'same-origin') => fetch(`${base}/api/sauvegarde/fichier`, {
+  method: 'POST', body: octets, headers: { 'Content-Type': 'application/octet-stream', 'Sec-Fetch-Site': provenance }
+});
+await verifier('un fichier qui n’est pas une sauvegarde est refusé', 400, async () => (await envoyerFichier(Buffer.from('rien'))).status);
+await verifier('l’envoi d’un fichier depuis un autre site est refusé', 403, async () => (await envoyerFichier(fichierSauvegarde, 'cross-site')).status);
+let jeton = null;
+await verifier('la sauvegarde relue montre son contenu', true, async () => {
+  const analyse = await (await envoyerFichier(fichierSauvegarde)).json();
+  jeton = analyse.jeton;
+  return analyse.sauvegarde.recettes === (await json('/api/recettes')).recettes.length;
+});
+await verifier('reprise refusée sans le bon jeton', 400, () => statut('/api/sauvegarde/reprendre', { method: 'POST', body: JSON.stringify({ jeton: 'inconnu' }) }));
+await verifier('reprise acceptée avec son jeton', 200, () => statut('/api/sauvegarde/reprendre', { method: 'POST', body: JSON.stringify({ jeton }) }));
 
 // ---- 11. Protection contre les requêtes extérieures ------------------------
 await verifier('POST cross-site refusé', 403, () => statut('/api/recettes', {

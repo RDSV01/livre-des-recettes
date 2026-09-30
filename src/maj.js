@@ -5,10 +5,13 @@
  * sans compte ni clé) et, si l'utilisateur le demande, télécharge la nouvelle
  * version et remplace son propre fichier.
  *
- * Deux garde-fous :
- *  - le fichier téléchargé doit provenir des releases du dépôt officiel ;
- *  - l'ancien exécutable est conservé jusqu'au démarrage suivant, donc un
- *    remplacement raté se répare en renommant un fichier.
+ * Trois garde-fous :
+ *  - le fichier téléchargé doit provenir des releases du dépôt officiel, et
+ *    son empreinte SHA-256 correspondre à celle publiée ;
+ *  - l'ancien exécutable est conservé jusqu'au démarrage suivant ;
+ *  - l'ancienne version attend que la nouvelle ait bien démarré. Sinon (elle
+ *    s'arrête net, ou ne répond pas dans la minute), l'ancienne remet son
+ *    exécutable en place, redémarre, et le signale à l'utilisateur.
  *
  * Le dossier de données n'est jamais touché : une mise à jour ne peut pas
  * faire perdre de recettes.
@@ -18,9 +21,21 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+
+/**
+ * Variable d'environnement transmise à la nouvelle version : le fichier
+ * qu'elle écrit une fois son serveur à l'écoute (voir `lancement.js`).
+ */
+export const TEMOIN_MAJ = 'LDR_MAJ_TEMOIN';
+/** Temps laissé à la nouvelle version pour démarrer. */
+const DELAI_DEMARRAGE_MS = 60_000;
+const SUFFIXE_ECHEC = '.echec';
+/** Mot laissé à la version rétablie : quelle version n'a pas pu démarrer. */
+const FICHIER_ECHEC = path.join(os.tmpdir(), 'livre-des-recettes-maj-echec.json');
 
 const DEPOT = 'RDSV01/livre-des-recettes';
 const API_VERSIONS = `https://api.github.com/repos/${DEPOT}/releases/latest`;
@@ -154,8 +169,10 @@ export async function appliquerMiseAJour() {
   const nouveau = `${executable}.nouveau`;
   const ancien = `${executable}${SUFFIXE_ANCIEN}`;
 
-  // L'empreinte est récupérée d'abord : inutile de télécharger 90 Mo si elle
-  // manque déjà.
+  // Le numéro de version et l'empreinte sont lus d'abord : inutile de
+  // télécharger 90 Mo si l'empreinte manque déjà, et plus rien à demander au
+  // réseau une fois l'exécutable remplacé.
+  const version = String((await lireVersionPubliee()).tag_name ?? '').replace(/^v/, '');
   const attendue = await empreinteAttendue();
   const reponse = await fetch(await adresseActif(ACTIF_ATTENDU), {
     headers: { 'User-Agent': 'livre-des-recettes' },
@@ -182,38 +199,119 @@ export async function appliquerMiseAJour() {
     fs.rmSync(nouveau, { force: true });
     throw new Error(`Remplacement impossible : ${erreur.message}`);
   }
+  return version;
 }
 
 /**
- * Relance l'application dans sa nouvelle version.
+ * Attend le signe de la nouvelle version (son témoin écrit) ; faux si elle
+ * s'arrête avant, ou ne l'écrit pas dans le délai.
+ */
+function attendreTemoin(temoin, enfant, delaiMs) {
+  return new Promise((resoudre) => {
+    let arretee = false;
+    enfant.on?.('exit', () => { arretee = true; });
+    const debut = Date.now();
+    const verifier = () => {
+      if (fs.existsSync(temoin)) return resoudre(true);
+      if (arretee || Date.now() - debut > delaiMs) return resoudre(false);
+      setTimeout(verifier, 300);
+    };
+    verifier();
+  });
+}
+
+/** Remet l'ancien exécutable à sa place ; la version fautive est gardée à côté. */
+function retablirAncienneVersion() {
+  const executable = process.execPath;
+  fs.rmSync(`${executable}${SUFFIXE_ECHEC}`, { force: true });
+  fs.renameSync(executable, `${executable}${SUFFIXE_ECHEC}`);
+  fs.renameSync(`${executable}${SUFFIXE_ANCIEN}`, executable);
+}
+
+function lancerExecutable(env) {
+  spawn(process.execPath, [], { detached: true, stdio: 'ignore', env }).on('error', () => {}).unref();
+}
+
+/**
+ * Surveille le démarrage de la nouvelle version et, s'il échoue, rétablit
+ * l'ancienne et la relance. Retourne `'reussi'` ou `'retabli'`. Les actions
+ * sur les fichiers et les processus sont injectables pour les tests.
+ */
+export async function surveillerDemarrage({
+  temoin, enfant, version = null, delaiMs = DELAI_DEMARRAGE_MS,
+  retablir = retablirAncienneVersion, relancer = () => lancerExecutable({ ...process.env, LDR_NO_OPEN: '1', [TEMOIN_MAJ]: '' })
+}) {
+  if (await attendreTemoin(temoin, enfant, delaiMs)) {
+    fs.rmSync(temoin, { force: true });
+    return 'reussi';
+  }
+  try { enfant.kill?.(); } catch { /* déjà arrêtée */ }
+  // Même si l'ancien exécutable ne peut pas être remis (fichier retenu), une
+  // version est relancée : l'utilisateur ne doit jamais rester sans application.
+  try { retablir(); } catch { /* la version en place est relancée telle quelle */ }
+  try {
+    fs.writeFileSync(FICHIER_ECHEC, JSON.stringify({ version, le: new Date().toISOString() }), 'utf8');
+  } catch { /* le rétablissement compte plus que le message */ }
+  relancer();
+  return 'retabli';
+}
+
+/**
+ * Relance l'application dans sa nouvelle version, et reste là le temps de
+ * vérifier qu'elle démarre (voir `surveillerDemarrage`).
  *
  * `arreter` ferme le serveur et retire le verrou : sans cela, la nouvelle
  * instance trouverait le port occupé et le dossier de données verrouillé.
  * L'appel se fait une fois la réponse envoyée au navigateur, qui attend
  * simplement que le serveur réponde de nouveau.
  */
-export function redemarrer({ arreter } = {}) {
+export function redemarrer({ arreter, version = null } = {}) {
   arreter?.();
   setTimeout(() => {
-    spawn(process.execPath, [], {
+    const temoin = path.join(os.tmpdir(), `livre-des-recettes-maj-${process.pid}-${Date.now()}.ok`);
+    const enfant = spawn(process.execPath, [], {
       detached: true,
       stdio: 'ignore',
       // La page de l'utilisateur se recharge d'elle-même : ouvrir le
       // navigateur lui donnerait un second onglet inutile.
-      env: { ...process.env, LDR_NO_OPEN: '1' }
-    }).unref();
-    process.exit(0);
+      env: { ...process.env, LDR_NO_OPEN: '1', [TEMOIN_MAJ]: temoin }
+    });
+    enfant.on('error', () => {});
+    enfant.unref();
+    surveillerDemarrage({ temoin, enfant, version })
+      .catch(() => {})
+      .finally(() => process.exit(0));
   }, 300);
 }
 
 /**
- * Efface l'exécutable remplacé lors d'une mise à jour précédente. Un antivirus
- * ou l'instance qui s'éteint peut le retenir quelques instants : dans ce cas
- * on n'insiste pas, le prochain démarrage s'en chargera.
+ * Une mise à jour a-t-elle échoué avant ce démarrage ? Retourne
+ * `{ version, le }` une seule fois (le mot est ensuite effacé), sinon `null`.
+ */
+export function constaterEchecMaj() {
+  try {
+    const echec = JSON.parse(fs.readFileSync(FICHIER_ECHEC, 'utf8'));
+    fs.rmSync(FICHIER_ECHEC, { force: true });
+    return echec;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Efface l'exécutable remplacé lors d'une mise à jour précédente (et celui
+ * d'une mise à jour qui a échoué). Un antivirus ou l'instance qui s'éteint
+ * peut le retenir quelques instants : dans ce cas on n'insiste pas, le
+ * prochain démarrage s'en chargera.
+ *
+ * Juste après une mise à jour, l'ancien exécutable doit rester : l'ancienne
+ * version pourrait encore avoir à le remettre en place.
  */
 export function nettoyerAncienneVersion() {
-  if (!estExecutable()) return;
-  try {
-    fs.rmSync(`${process.execPath}${SUFFIXE_ANCIEN}`, { force: true });
-  } catch { /* fichier encore verrouillé : sans conséquence */ }
+  if (!estExecutable() || process.env[TEMOIN_MAJ]) return;
+  for (const suffixe of [SUFFIXE_ANCIEN, SUFFIXE_ECHEC]) {
+    try {
+      fs.rmSync(`${process.execPath}${suffixe}`, { force: true });
+    } catch { /* fichier encore verrouillé : sans conséquence */ }
+  }
 }

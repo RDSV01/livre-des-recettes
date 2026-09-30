@@ -7,12 +7,11 @@
  */
 
 import fs from 'node:fs';
-import { PassThrough } from 'node:stream';
 import express from 'express';
 import { registreRecettes, registreAchats } from '../exports/registre.js';
 import { genererCsv } from '../exports/csv.js';
 import { genererXlsx } from '../exports/xlsx.js';
-import { genererPdf } from '../exports/pdf.js';
+import { genererPdf, genererPdfEnMemoire } from '../exports/pdf.js';
 import { genererRapportPdf } from '../exports/rapport-pdf.js';
 import { rapportAnnuel } from '../rapport-annuel.js';
 import { controlerRecettes, controlerAchats } from '../controle-export.js';
@@ -20,23 +19,11 @@ import { lireAnnee, lirePeriode } from './requetes.js';
 import { creerZip, nomsUniques } from '../exports/zip.js';
 import { filtrerParPeriode } from '../totaux.js';
 
-/** Le PDF d'un registre, en mémoire (pour l'archive ZIP). */
-function pdfEnMemoire(registre, parametres) {
-  return new Promise((resoudre, rejeter) => {
-    const flux = new PassThrough();
-    const morceaux = [];
-    flux.on('data', (morceau) => morceaux.push(morceau));
-    flux.on('end', () => resoudre(Buffer.concat(morceaux)));
-    flux.on('error', rejeter);
-    genererPdf(registre, parametres, flux);
-  });
-}
-
 /** Le registre dans le format demandé, en mémoire. */
 async function registreEnMemoire(format, registre, parametres) {
   if (format === 'csv') return Buffer.from(genererCsv(registre, parametres), 'utf8');
   if (format === 'xlsx') return Buffer.from(await (await genererXlsx(registre, parametres)).xlsx.writeBuffer());
-  return pdfEnMemoire(registre, parametres);
+  return genererPdfEnMemoire(registre, parametres);
 }
 
 /** En-têtes d'un fichier à télécharger, sous le nom donné. */

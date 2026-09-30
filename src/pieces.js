@@ -108,6 +108,23 @@ export function creerPieces(dossierDonnees, dossierSauvegardes) {
     },
 
     /**
+     * Range une pièce reprise d'une sauvegarde sous son identifiant d'origine,
+     * celui que cite sa ligne, et la double comme toute pièce. Une pièce déjà
+     * présente n'est pas réécrite. Retourne vrai si le fichier a été ajouté.
+     */
+    deposer(id, octets) {
+      if (!MOTIF_ID.test(String(id)) || !Buffer.isBuffer(octets) || !estPdf(octets)) return false;
+      if (fs.existsSync(principal(id))) return false;
+      fs.mkdirSync(dossier, { recursive: true });
+      ecrireDurablement(principal(id), octets);
+      try {
+        fs.mkdirSync(copies, { recursive: true });
+        fs.copyFileSync(principal(id), copie(id));
+      } catch { /* refaite au prochain démarrage (voir `redoubler`) */ }
+      return true;
+    },
+
+    /**
      * Chemin du fichier d'une pièce, ou `null` s'il est perdu. Un fichier
      * disparu du dossier de données (supprimé, dossier recopié sans lui) est
      * remis en place depuis sa copie.
@@ -123,6 +140,33 @@ export function creerPieces(dossierDonnees, dossierSauvegardes) {
       } catch {
         return copie(id);
       }
+    },
+
+    /**
+     * Rétablit le double de chaque pièce citée : une copie perdue (dossier des
+     * sauvegardes effacé) est refaite depuis le fichier, un fichier perdu est
+     * remis depuis sa copie. Retourne le nombre de fichiers refaits.
+     * @param {Set<string>} citees identifiants cités par le livre.
+     */
+    redoubler(citees) {
+      let refaits = 0;
+      for (const id of citees) {
+        if (!MOTIF_ID.test(id)) continue;
+        try {
+          const aPrincipal = fs.existsSync(principal(id));
+          const aCopie = fs.existsSync(copie(id));
+          if (aPrincipal && !aCopie) {
+            fs.mkdirSync(copies, { recursive: true });
+            fs.copyFileSync(principal(id), copie(id));
+            refaits += 1;
+          } else if (!aPrincipal && aCopie) {
+            fs.mkdirSync(dossier, { recursive: true });
+            fs.copyFileSync(copie(id), principal(id));
+            refaits += 1;
+          }
+        } catch { /* dossier inaccessible : réessayé au prochain démarrage */ }
+      }
+      return refaits;
     },
 
     /**

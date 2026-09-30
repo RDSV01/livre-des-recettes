@@ -15,6 +15,7 @@ function nature(fichier) {
   if (fichier.endsWith('-avant-import.json')) return ['Avant un import CSV', '', 'historique'];
   if (fichier.endsWith('-avant-restauration.json')) return ['Avant une restauration', '', 'historique'];
   if (fichier.endsWith('-avant-remise-a-zero.json')) return ['Avant la remise à zéro', '', 'historique'];
+  if (fichier.endsWith('-avant-reprise.json')) return ['Avant la reprise d’une sauvegarde', '', 'historique'];
   return ['Sauvegarde du jour', '', 'historique'];
 }
 

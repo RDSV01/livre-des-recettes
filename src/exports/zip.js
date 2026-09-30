@@ -6,7 +6,12 @@
  * Noms en UTF-8 (drapeau 11 du format), lus correctement par l'explorateur
  * de Windows, le Finder et les outils usuels. Pas de ZIP64 : l'archive reste
  * sous 4 Go, ce qu'un livre de micro-entreprise ne dépasse pas.
+ *
+ * `lireZip` relit une sauvegarde : celles de l'application, mais aussi une
+ * archive refaite par l'explorateur de fichiers (compressée).
  */
+
+import zlib from 'node:zlib';
 
 /** Table du CRC-32 (polynôme 0xEDB88320), calculée une fois. */
 const TABLE_CRC = Array.from({ length: 256 }, (_, n) => {
@@ -86,6 +91,56 @@ export function creerZip(fichiers, date = new Date()) {
   fin.writeUInt32LE(tailleCentral, 12);
   fin.writeUInt32LE(position, 16);
   return Buffer.concat([...locaux, ...central, fin]);
+}
+
+/**
+ * Relit une archive ZIP : `[{ nom, contenu }]`, dossiers exclus. Fichiers
+ * stockés ou compressés (méthode « deflate », celle de l'explorateur de
+ * Windows et du Finder) ; chaque contenu est contrôlé par son CRC-32. Lève
+ * une erreur si l'archive est illisible ou abîmée.
+ * @param {Buffer} octets
+ */
+export function lireZip(octets) {
+  const abimee = () => new Error('Archive ZIP illisible ou abîmée.');
+  // Fin du répertoire central : dans les derniers octets (commentaire compris).
+  let fin = -1;
+  for (let i = octets.length - 22; i >= Math.max(0, octets.length - 22 - 0xffff); i -= 1) {
+    if (octets.readUInt32LE(i) === 0x06054b50) { fin = i; break; }
+  }
+  if (fin < 0) throw abimee();
+  const nombre = octets.readUInt16LE(fin + 10);
+  let position = octets.readUInt32LE(fin + 16);
+
+  const fichiers = [];
+  for (let n = 0; n < nombre; n += 1) {
+    if (position + 46 > octets.length || octets.readUInt32LE(position) !== 0x02014b50) throw abimee();
+    const methode = octets.readUInt16LE(position + 10);
+    const crc = octets.readUInt32LE(position + 16);
+    const tailleCompressee = octets.readUInt32LE(position + 20);
+    const taille = octets.readUInt32LE(position + 24);
+    const longueurNom = octets.readUInt16LE(position + 28);
+    const longueurExtra = octets.readUInt16LE(position + 30);
+    const longueurCommentaire = octets.readUInt16LE(position + 32);
+    const local = octets.readUInt32LE(position + 42);
+    const nom = octets.subarray(position + 46, position + 46 + longueurNom).toString('utf8').replace(/\\/g, '/');
+    position += 46 + longueurNom + longueurExtra + longueurCommentaire;
+    if (nom.endsWith('/')) continue;
+
+    if (local + 30 > octets.length || octets.readUInt32LE(local) !== 0x04034b50) throw abimee();
+    const debut = local + 30 + octets.readUInt16LE(local + 26) + octets.readUInt16LE(local + 28);
+    const brut = octets.subarray(debut, debut + tailleCompressee);
+    if (brut.length !== tailleCompressee) throw abimee();
+    let contenu;
+    if (methode === 0) contenu = brut;
+    else if (methode === 8) {
+      try { contenu = zlib.inflateRawSync(brut, { maxOutputLength: Math.max(taille, 1) }); } catch { throw abimee(); }
+    } else {
+      throw new Error('Archive ZIP compressée d’une façon inconnue : refaites-la avec l’explorateur de fichiers.');
+    }
+    if (contenu.length !== taille || crc32(contenu) !== crc) throw abimee();
+    fichiers.push({ nom, contenu });
+  }
+  return fichiers;
 }
 
 /**

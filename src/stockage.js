@@ -13,17 +13,22 @@
  * clients (aide à la saisie) et les paramètres de l'entreprise.
  *
  * Garanties contre la perte de données :
- *  - écriture atomique (fichier temporaire puis renommage) : une coupure en
- *    pleine écriture ne corrompt jamais le fichier existant ;
- *  - une sauvegarde quotidienne automatique est conservée HORS du dossier de
- *    données (voir `emplacements.js`), plus une sauvegarde étiquetée avant
- *    chaque opération sensible (import, restauration). Supprimer le dossier
- *    de données ne détruit donc pas les copies ;
+ *  - écriture atomique (fichier temporaire vidé sur le disque, puis renommé),
+ *    réessayée quand Windows retient un instant le fichier (antivirus,
+ *    synchronisation) : une coupure en pleine écriture ne corrompt jamais le
+ *    fichier existant ;
+ *  - une copie de secours à chaque saisie et une sauvegarde par jour, HORS du
+ *    dossier de données (voir `emplacements.js`), plus une sauvegarde
+ *    étiquetée avant chaque opération sensible (import, restauration). Leur
+ *    empreinte est notée, et les plus récentes sont relues au démarrage.
+ *    Supprimer le dossier de données ne détruit donc pas les copies ;
  *  - toute écriture qui échoue est annulée en mémoire : mémoire et fichier ne
  *    divergent jamais ;
  *  - au démarrage, le fichier est vérifié : s'il est corrompu, l'application
  *    démarre en lecture seule et propose de restaurer une sauvegarde, sans
  *    JAMAIS écraser le fichier abîmé ;
+ *  - un fichier resté dans le nuage (iCloud, OneDrive hors ligne) est signalé
+ *    comme momentanément inaccessible, jamais pris pour une disparition ;
  *  - s'il a purement disparu alors que des sauvegardes existent, l'application
  *    le signale et propose de le reconstituer.
  */
@@ -31,6 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { PARAMETRES_DEFAUT } from './partage/constantes.js';
 import { aujourdHuiIso } from './partage/dates.js';
 import { normaliserTexte } from './partage/texte.js';
@@ -41,7 +47,12 @@ const NOM_FICHIER = 'livre-des-recettes.json';
 // suppression de celui-ci ne fait alors perdre aucune saisie, pas même
 // celles du jour (les autres copies sont quotidiennes).
 const NOM_COPIE_DE_SECOURS = 'livre-des-recettes-copie-de-secours.json';
+// Empreintes des sauvegardes, notées à leur création : une copie abîmée
+// ensuite (disque défaillant, copie interrompue) se repère au démarrage.
+const NOM_EMPREINTES = 'empreintes.json';
 const SAUVEGARDES_ETIQUETEES_CONSERVEES = 10;
+// Au démarrage, les sauvegardes les plus récentes sont relues pour de vrai.
+const SAUVEGARDES_VERIFIEES = 4;
 
 // Rotation des sauvegardes quotidiennes : tout est gardé 14 jours, puis une
 // par semaine pendant 2 mois, puis une par mois pendant 1 an.
@@ -49,8 +60,14 @@ const ROTATION_QUOTIDIENNE_JOURS = 14;
 const ROTATION_HEBDOMADAIRE_JOURS = 62;
 const ROTATION_MENSUELLE_JOURS = 366;
 
+// Un livre momentanément inaccessible est relu au plus toutes les deux
+// secondes (à l'occasion d'une requête de l'interface).
+const INTERVALLE_RELECTURE_MS = 2000;
+
 /** Nom de fichier accepté pour une sauvegarde (borne toute traversée de chemin). */
 const MOTIF_SAUVEGARDE = /^livre-des-recettes-[A-Za-z0-9-]+\.json$/;
+
+const sha256 = (contenu) => crypto.createHash('sha256').update(contenu).digest('hex');
 
 /**
  * Horodatage d'un nom de sauvegarde étiquetée, à l'heure LOCALE
@@ -65,6 +82,27 @@ function horodatageFichier(date = new Date()) {
   ].join('-');
 }
 
+const ATTENTE = new Int32Array(new SharedArrayBuffer(4));
+
+/**
+ * Réessaie une opération sur un fichier que le système retient un instant.
+ * Sous Windows, un antivirus ou un logiciel de synchronisation ouvre souvent
+ * le fichier juste après son écriture : le renommage suivant échoue alors
+ * (EPERM, EBUSY), sans que rien ne cloche vraiment. Quelques essais espacés
+ * suffisent ; une erreur qui persiste remonte telle quelle.
+ */
+export function reessayer(action, { essais = 12, pauseMs = 60 } = {}) {
+  const passageres = process.platform === 'win32' ? ['EPERM', 'EBUSY', 'EACCES'] : ['EBUSY'];
+  for (let essai = 1; ; essai += 1) {
+    try {
+      return action();
+    } catch (erreur) {
+      if (essai >= essais || !passageres.includes(erreur.code)) throw erreur;
+      Atomics.wait(ATTENTE, 0, 0, pauseMs);
+    }
+  }
+}
+
 /**
  * Écrit un fichier de façon durable : contenu dans un fichier temporaire,
  * vidé jusqu'au disque (`fsync`), puis renommé par-dessus la cible.
@@ -76,14 +114,14 @@ function horodatageFichier(date = new Date()) {
  */
 export function ecrireDurablement(chemin, contenu) {
   const temporaire = `${chemin}.tmp`;
-  const fd = fs.openSync(temporaire, 'w');
+  const fd = reessayer(() => fs.openSync(temporaire, 'w'));
   try {
-    fs.writeFileSync(fd, contenu, 'utf8');
+    fs.writeFileSync(fd, contenu, typeof contenu === 'string' ? 'utf8' : undefined);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
-  fs.renameSync(temporaire, chemin);
+  reessayer(() => fs.renameSync(temporaire, chemin));
   // Sous Linux et macOS, le renommage lui-même vit dans le dossier : on le
   // fige aussi. Windows ne sait pas ouvrir un dossier ainsi, et NTFS
   // journalise déjà l'opération.
@@ -140,6 +178,41 @@ function estDonneesValides(objet) {
 }
 
 /**
+ * Lit le fichier du livre. Distingue ce qui compte pour la suite :
+ *  - `ok` : contenu lu et valide ;
+ *  - `absent` : aucun fichier ;
+ *  - `nuage` : le fichier est resté dans iCloud (seul son marqueur est là) ;
+ *  - `inaccessible` : le système refuse de le lire (OneDrive hors ligne,
+ *    disque débranché) : ce n'est PAS un fichier abîmé ;
+ *  - `illisible` : le contenu est abîmé.
+ */
+function lireLivre(chemin) {
+  let texte;
+  try {
+    texte = fs.readFileSync(chemin, 'utf8');
+  } catch (erreur) {
+    if (erreur.code !== 'ENOENT') return { etat: 'inaccessible', erreur };
+    const marqueur = path.join(path.dirname(chemin), `.${path.basename(chemin)}.icloud`);
+    return { etat: fs.existsSync(marqueur) ? 'nuage' : 'absent' };
+  }
+  try {
+    const lu = JSON.parse(texte);
+    if (!estDonneesValides(lu)) throw new Error('structure inattendue');
+    return { etat: 'ok', contenu: lu };
+  } catch (erreur) {
+    return { etat: 'illisible', erreur };
+  }
+}
+
+/** Demande à iCloud de rapatrier un fichier resté dans le nuage (macOS). */
+function rapatrierDepuisICloud(chemin) {
+  if (process.platform !== 'darwin') return;
+  try {
+    spawn('brctl', ['download', chemin], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  } catch { /* commande absente : l'utilisateur ouvrira le fichier lui-même */ }
+}
+
+/**
  * Crée le stockage adossé au dossier donné (créé au besoin).
  * Le contenu est chargé en mémoire une fois : le volume d'un livre des
  * recettes (quelques milliers de lignes au plus) le permet largement.
@@ -153,19 +226,20 @@ function estDonneesValides(objet) {
 export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauvegardesParDefaut(dossierDonnees) } = {}) {
   const cheminFichier = path.join(dossierDonnees, NOM_FICHIER);
 
+  let donnees;
   /** Message d'erreur si le fichier est corrompu, sinon `null`. */
   let corruption = null;
+  /** Message si le fichier existe mais ne peut pas être lu pour l'instant (nuage, disque), sinon `null`. */
+  let indisponible = null;
+  let disparition = false;
 
   // Vrai si la dernière tentative de copie de secours a échoué : l'utilisateur
   // travaille alors sans filet (dossier de sauvegardes inaccessible) et
   // l'interface doit pouvoir l'en avertir, sans jamais bloquer la saisie.
   let copieDeSecoursEnEchec = false;
-
-  // Un fichier absent alors que des sauvegardes existent n'est pas une
-  // première utilisation : c'est une disparition, et elle se répare.
-  const fichierAbsent = !fs.existsSync(cheminFichier);
-  let donnees = charger();
-  let disparition = fichierAbsent && sauvegardes().length > 0;
+  let verification = null;
+  let dernierePasse = 0;
+  const ecouteursEcriture = [];
 
   /**
    * Sauvegardes présentes, de la plus récente à la plus ancienne.
@@ -214,23 +288,47 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     };
   }
 
+  const messageIndisponible = (lecture) => (lecture.etat === 'nuage'
+    ? `Le livre est encore dans iCloud Drive et n’est pas téléchargé sur cet ordinateur (${cheminFichier}). Vérifiez la connexion à Internet : il sera repris dès qu’il sera là.`
+    : `Le fichier « ${cheminFichier} » ne peut pas être lu pour l’instant (${lecture.erreur?.code ?? lecture.erreur?.message}). S’il est synchronisé (OneDrive…), vérifiez la connexion à Internet : il sera repris dès qu’il sera disponible.`);
+
+  /** Charge le livre depuis le disque, et dit ce qui l'en empêche. */
   function charger() {
-    if (!fs.existsSync(cheminFichier)) {
-      return normaliser({});
+    corruption = null;
+    indisponible = null;
+    disparition = false;
+    const lecture = lireLivre(cheminFichier);
+    if (lecture.etat === 'ok') {
+      donnees = normaliser(lecture.contenu);
+      return;
     }
-    try {
-      const lu = JSON.parse(fs.readFileSync(cheminFichier, 'utf8'));
-      if (!estDonneesValides(lu)) {
-        throw new Error('structure inattendue');
-      }
-      return normaliser(lu);
-    } catch (erreur) {
+    donnees = normaliser({});
+    if (lecture.etat === 'illisible') {
       // On ne repart JAMAIS de zéro en écrasant un fichier illisible : le
       // stockage passe en lecture seule et l'application proposera de
       // restaurer une sauvegarde.
-      corruption = `Le fichier de données « ${cheminFichier} » est illisible (${erreur.message}).`;
-      return normaliser({});
+      corruption = `Le fichier de données « ${cheminFichier} » est illisible (${lecture.erreur.message}).`;
+    } else if (lecture.etat === 'nuage' || lecture.etat === 'inaccessible') {
+      if (lecture.etat === 'nuage') rapatrierDepuisICloud(cheminFichier);
+      indisponible = messageIndisponible(lecture);
+    } else {
+      // Un fichier absent alors que des sauvegardes existent n'est pas une
+      // première utilisation : c'est une disparition, et elle se répare.
+      disparition = sauvegardes().length > 0;
     }
+  }
+
+  /**
+   * Un livre momentanément inaccessible est relu (au plus toutes les deux
+   * secondes, sauf `force`) jusqu'à ce qu'il revienne. Retourne vrai s'il
+   * vient de redevenir lisible.
+   */
+  function rafraichir({ force = false } = {}) {
+    if (!indisponible) return false;
+    if (!force && Date.now() - dernierePasse < INTERVALLE_RELECTURE_MS) return false;
+    dernierePasse = Date.now();
+    charger();
+    return !indisponible;
   }
 
   function sauvegarder() {
@@ -240,11 +338,49 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
         { code: 'CORROMPU' }
       );
     }
+    if (indisponible) {
+      throw Object.assign(new Error('Le livre n’est pas disponible pour l’instant : rien ne peut être modifié.'), { code: 'INDISPONIBLE' });
+    }
     fs.mkdirSync(dossierDonnees, { recursive: true });
     creerSauvegardeQuotidienne();
     const contenu = JSON.stringify(donnees, null, 2);
     ecrireDurablement(cheminFichier, contenu);
     rafraichirCopieDeSecours(contenu);
+    for (const ecouteur of ecouteursEcriture) {
+      try { ecouteur(); } catch { /* un suivi (copie externe, archives) ne bloque jamais l'écriture */ }
+    }
+  }
+
+  function lireEmpreintes() {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dossierSauvegardes, NOM_EMPREINTES), 'utf8')) ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Note l'empreinte d'une sauvegarde qui vient d'être écrite (sans jamais bloquer). */
+  function noterEmpreinte(fichier, contenu) {
+    try {
+      const empreintes = lireEmpreintes();
+      empreintes[fichier] = sha256(contenu);
+      // Les copies supprimées par la rotation n'ont plus d'empreinte à garder.
+      for (const nom of Object.keys(empreintes)) {
+        if (!fs.existsSync(path.join(dossierSauvegardes, nom))) delete empreintes[nom];
+      }
+      ecrireDurablement(path.join(dossierSauvegardes, NOM_EMPREINTES), JSON.stringify(empreintes, null, 1));
+    } catch { /* l'empreinte manquera : la copie reste relue, simplement sans comparaison */ }
+  }
+
+  /** Copie un fichier dans les sauvegardes sous un nom étiqueté, empreinte notée. */
+  function copierEnSauvegarde(source, etiquette) {
+    fs.mkdirSync(dossierSauvegardes, { recursive: true });
+    const nom = `livre-des-recettes-${horodatageFichier()}-${etiquette}.json`;
+    const octets = fs.readFileSync(source);
+    fs.writeFileSync(path.join(dossierSauvegardes, nom), octets);
+    noterEmpreinte(nom, octets);
+    purger(new RegExp(`^livre-des-recettes-.*-${etiquette}\\.json$`), SAUVEGARDES_ETIQUETEES_CONSERVEES);
+    return nom;
   }
 
   /**
@@ -259,6 +395,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     try {
       fs.mkdirSync(dossierSauvegardes, { recursive: true });
       ecrireDurablement(path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS), contenu);
+      noterEmpreinte(NOM_COPIE_DE_SECOURS, contenu);
       copieDeSecoursEnEchec = false;
     } catch {
       // Réessayé à la prochaine écriture ; l'interface signale l'absence de filet.
@@ -292,9 +429,12 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       // Jour LOCAL : entre minuit et 2 h en été, l'heure universelle datait
       // encore la sauvegarde de la veille.
       const jour = aujourdHuiIso();
-      const cible = path.join(dossierSauvegardes, `livre-des-recettes-${jour}.json`);
+      const nom = `livre-des-recettes-${jour}.json`;
+      const cible = path.join(dossierSauvegardes, nom);
       if (fs.existsSync(cible)) return;
-      fs.copyFileSync(cheminFichier, cible);
+      const octets = fs.readFileSync(cheminFichier);
+      fs.writeFileSync(cible, octets);
+      noterEmpreinte(nom, octets);
 
       // Rotation : quotidiennes 14 jours, hebdomadaires 2 mois, mensuelles 1 an.
       const motifQuotidien = /^livre-des-recettes-(\d{4}-\d{2}-\d{2})\.json$/;
@@ -306,6 +446,74 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       }
     } catch { /* réessayé à la prochaine écriture */ }
   }
+
+  const livreSain = () => !corruption && !indisponible;
+
+  /**
+   * Relit pour de vrai les sauvegardes les plus récentes : contenu valide, et
+   * identique à ce qui avait été écrit (empreinte). Une copie de secours
+   * abîmée se refait aussitôt depuis le livre, qui est sain.
+   */
+  function verifierSauvegardes() {
+    const empreintes = lireEmpreintes();
+    const liste = sauvegardes();
+    const problemes = [];
+    for (const { fichier } of liste.slice(0, SAUVEGARDES_VERIFIEES)) {
+      let saine = false;
+      try {
+        const octets = fs.readFileSync(path.join(dossierSauvegardes, fichier));
+        saine = (!empreintes[fichier] || sha256(octets) === empreintes[fichier]) &&
+          estDonneesValides(JSON.parse(octets.toString('utf8')));
+      } catch { saine = false; }
+      if (!saine) problemes.push(fichier);
+    }
+    let reparee = false;
+    if (problemes.includes(NOM_COPIE_DE_SECOURS) && livreSain() && fs.existsSync(cheminFichier)) {
+      rafraichirCopieDeSecours(fs.readFileSync(cheminFichier, 'utf8'));
+      if (!copieDeSecoursEnEchec) {
+        problemes.splice(problemes.indexOf(NOM_COPIE_DE_SECOURS), 1);
+        reparee = true;
+      }
+    }
+    verification = { le: new Date().toISOString(), nombre: liste.length, problemes, reparee };
+    return verification;
+  }
+
+  /** La copie de secours manque (dossier des sauvegardes vidé) : elle est refaite. */
+  function assurerCopieDeSecours() {
+    if (!livreSain() || !fs.existsSync(cheminFichier)) return;
+    if (fs.existsSync(path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS))) return;
+    try {
+      rafraichirCopieDeSecours(fs.readFileSync(cheminFichier, 'utf8'));
+    } catch { /* réessayé à la prochaine écriture */ }
+  }
+
+  /**
+   * Remplace tout le livre par un contenu déjà vérifié (restauration,
+   * reprise). Le fichier courant est d'abord mis de côté sous l'étiquette
+   * donnée (même corrompu : ce sont des octets) ; si l'écriture échoue, rien
+   * n'a changé, ni en mémoire ni sur le disque.
+   */
+  function remplacerPar(contenu, etiquette) {
+    if (indisponible) {
+      throw Object.assign(new Error('Le livre n’est pas disponible pour l’instant : rien ne peut être remplacé.'), { code: 'INDISPONIBLE' });
+    }
+    if (fs.existsSync(cheminFichier)) copierEnSauvegarde(cheminFichier, etiquette);
+    const avant = { donnees, corruption };
+    donnees = normaliser(contenu);
+    corruption = null;
+    try {
+      // Le dossier de données est recréé au besoin par l'écriture.
+      sauvegarder();
+    } catch (erreur) {
+      ({ donnees, corruption } = avant);
+      throw erreur;
+    }
+    disparition = false;
+    return { recettes: donnees.recettes.length, clients: donnees.clients.length };
+  }
+
+  charger();
 
   const horodatage = () => new Date().toISOString();
 
@@ -482,11 +690,25 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
 
   return {
     cheminFichier,
+    dossierDonnees,
     dossierSauvegardes,
 
     /** Message décrivant la corruption du fichier de données, ou `null`. */
     corruption() {
       return corruption;
+    },
+
+    /** Message si le livre existe mais ne peut pas être lu pour l'instant, ou `null`. */
+    indisponible() {
+      return indisponible;
+    },
+
+    /** Relit un livre momentanément inaccessible ; vrai s'il vient de revenir. */
+    rafraichir,
+
+    /** Réagit à chaque écriture réussie (copie externe, archives). */
+    surEcriture(ecouteur) {
+      ecouteursEcriture.push(ecouteur);
     },
 
     /**
@@ -516,11 +738,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
      */
     repartirDeZero() {
       const secours = path.join(dossierSauvegardes, NOM_COPIE_DE_SECOURS);
-      if (fs.existsSync(secours)) {
-        const horo = horodatageFichier();
-        fs.copyFileSync(secours, path.join(dossierSauvegardes, `livre-des-recettes-${horo}-avant-remise-a-zero.json`));
-        purger(/^livre-des-recettes-.*-avant-remise-a-zero\.json$/, SAUVEGARDES_ETIQUETEES_CONSERVEES);
-      }
+      if (fs.existsSync(secours)) copierEnSauvegarde(secours, 'avant-remise-a-zero');
       donnees = normaliser({});
       corruption = null;
       sauvegarder();
@@ -633,16 +851,30 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
      */
     creerSauvegarde(etiquette) {
       if (!fs.existsSync(cheminFichier)) return null;
-      fs.mkdirSync(dossierSauvegardes, { recursive: true });
-      const horo = horodatageFichier();
-      const nom = `livre-des-recettes-${horo}-${etiquette}.json`;
-      fs.copyFileSync(cheminFichier, path.join(dossierSauvegardes, nom));
-      purger(new RegExp(`^livre-des-recettes-.*-${etiquette}\\.json$`), SAUVEGARDES_ETIQUETEES_CONSERVEES);
-      return nom;
+      return copierEnSauvegarde(cheminFichier, etiquette);
     },
 
     /** Sauvegardes disponibles, de la plus récente à la plus ancienne. */
     listerSauvegardes: sauvegardes,
+
+    /** Relit les sauvegardes récentes ; retourne le bilan (voir `verification`). */
+    verifierSauvegardes,
+    /** Dernier bilan de vérification des sauvegardes, ou `null`. */
+    verification: () => verification,
+    /** La copie de secours manque : elle est refaite depuis le livre. */
+    assurerCopieDeSecours,
+
+    /**
+     * Remplace le livre par une sauvegarde reprise d'ailleurs (fichier, clé
+     * USB), déjà lue et vérifiée. Le livre courant est d'abord mis de côté
+     * (étiquette « avant-reprise ») : une reprise n'efface jamais rien.
+     */
+    reprendre(contenu) {
+      if (!estDonneesValides(contenu)) {
+        throw new Error('Cette sauvegarde n’a pas la structure attendue.');
+      }
+      return remplacerPar(contenu, 'avant-reprise');
+    },
 
     /**
      * Remplace les données courantes par le contenu d'une sauvegarde.
@@ -666,21 +898,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
       if (!estDonneesValides(lu)) {
         throw new Error('Cette sauvegarde n’a pas la structure attendue : choisissez-en une autre.');
       }
-
-      // Mise de côté du fichier courant (même corrompu : ce sont des octets).
-      if (fs.existsSync(cheminFichier)) {
-        fs.mkdirSync(dossierSauvegardes, { recursive: true });
-        const horo = horodatageFichier();
-        fs.copyFileSync(cheminFichier, path.join(dossierSauvegardes, `livre-des-recettes-${horo}-avant-restauration.json`));
-        purger(/^livre-des-recettes-.*-avant-restauration\.json$/, SAUVEGARDES_ETIQUETEES_CONSERVEES);
-      }
-
-      donnees = normaliser(lu);
-      corruption = null;
-      // Le dossier de données est recréé au besoin par l'écriture qui suit.
-      sauvegarder();
-      disparition = false;
-      return { recettes: donnees.recettes.length, clients: donnees.clients.length };
+      return remplacerPar(lu, 'avant-restauration');
     },
 
     /** Copie complète des données, pour la sauvegarde téléchargeable. */

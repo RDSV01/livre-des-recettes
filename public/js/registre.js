@@ -85,9 +85,9 @@ export function cadrePanneau({ titre, sousTitre, corps, libelleBouton }) {
  * @param {string} registre.placeholder texte d'exemple de la recherche.
  * @param {string} registre.titreDupliquer
  * @param {boolean} [registre.avecCategorie] filtre par catégorie (activité mixte).
- * @param {{ cle: string, titre?: string, classe?: string, tri?: boolean, cellule?: (ligne: object) => string }[]} registre.colonnes
- *   dans l'ordre d'affichage ; `{ cle: 'piece' }` place la colonne du PDF, la
- *   dernière colonne doit être le montant.
+ * @param {{ cle: string, titre?: string, classe?: string, tri?: boolean, avecPiece?: boolean, cellule?: (ligne: object) => string }[]} registre.colonnes
+ *   dans l'ordre d'affichage ; `avecPiece` glisse le bouton du PDF joint en
+ *   tête de la cellule (facture, référence) ; la dernière colonne est le montant.
  * @param {(lignes: object[], filtres: object) => object[]} registre.filtrer
  * @param {Object<string, Function>} registre.clesTri valeur de tri par colonne.
  * @param {() => Promise<object[]>} registre.lister
@@ -158,9 +158,6 @@ export function installerRegistre(carte, registre) {
     const filtre = (cle, etiquette, options) => `<div class="champ-filtre">
         <label class="etiquette-champ" for="filtre-${cle}">${etiquette}</label>${selecteur({ id: `filtre-${cle}`, options })}</div>`;
     const entete = (col) => {
-      if (col.cle === 'piece') {
-        return '<th class="col-piece" title="PDF joint">PDF</th>';
-      }
       if (col.tri === false) return `<th class="${col.classe ?? ''}">${col.titre}</th>`;
       return `<th class="${col.classe ?? ''}" data-tri="${col.cle}" aria-sort="none">
         <button type="button" class="tri">${col.titre}<span class="indicateur-tri"></span></button></th>`;
@@ -310,19 +307,24 @@ export function installerRegistre(carte, registre) {
       ${retour.action ? `<button type="button" class="lien-bouton" data-annuler-retour="${l.id}">Annuler${minuteur(DUREE_RETOUR, retour.debut)}</button>` : ''}</span></span>`;
   };
 
-  const cellulePiece = (l) => (l.pieceJointe
-    ? `<td class="col-piece"><button type="button" class="btn-icone piece-oui" data-action="voir-piece"
-        aria-label="Voir ${registre.quoiPiece} (PDF ${echapperHtml(l.pieceJointe.nom)})" title="${echapperHtml(l.pieceJointe.nom)}">${icone('trombone', { taille: 16 })}</button></td>`
-    : `<td class="col-piece"><button type="button" class="btn-icone piece-non" data-action="joindre"
-        aria-label="Joindre ${registre.quoiPiece} en PDF" title="Joindre un PDF, ou déposez-le sur la ligne">${icone('fichier-depot', { taille: 16 })}</button></td>`);
+  // Le PDF joint se lit avec la facture (ou la référence) : son bouton se
+  // colle devant, dans la même cellule. Un trombone quand un PDF est là, une
+  // icône de dépôt (discrète, révélée au survol) pour en joindre un.
+  const boutonPiece = (l) => (l.pieceJointe
+    ? `<button type="button" class="btn-icone piece-oui" data-action="voir-piece"
+        aria-label="Voir ${registre.quoiPiece} (PDF ${echapperHtml(l.pieceJointe.nom)})" title="${echapperHtml(l.pieceJointe.nom)}">${icone('trombone', { taille: 16 })}</button>`
+    : `<button type="button" class="btn-icone piece-non" data-action="joindre"
+        aria-label="Joindre ${registre.quoiPiece} en PDF" title="Joindre un PDF, ou déposez-le sur la ligne">${icone('fichier-depot', { taille: 16 })}</button>`);
 
   const ligneHtml = (l) => `<tr data-id="${l.id}" class="${l.id === idNouveau ? 'nouvelle' : ''}${selection.has(l.id) ? ' choisie' : ''}">
       <td class="col-case"><input type="checkbox" class="case" data-cocher="${l.id}" ${selection.has(l.id) ? 'checked' : ''}
         aria-label="Sélectionner ${echapperHtml(`${nom.singulier} ${decrire(l)}`)}"></td>
       ${colonnes.map((col) => {
-        if (col.cle === 'piece') return cellulePiece(l);
-        const cellule = col.cellule(l);
-        return col.cle === registre.colonneRetour ? cellule.replace(/<\/td>\s*$/, `${pastilleRetour(l)}</td>`) : cellule;
+        let cellule = col.cellule(l);
+        // Le bouton du PDF joint se glisse en tête de sa cellule hôte (facture, référence).
+        if (col.avecPiece) cellule = cellule.replace(/^(\s*<td[^>]*>)/, `$1${boutonPiece(l)}`);
+        if (col.cle === registre.colonneRetour) cellule = cellule.replace(/<\/td>\s*$/, `${pastilleRetour(l)}</td>`);
+        return cellule;
       }).join('')}
       <td class="col-actions"><button type="button" class="btn-icone bouton-menu" data-action="menu"
         aria-label="Actions sur ${echapperHtml(`${nom.singulier} ${decrire(l)}`)}" aria-haspopup="menu" aria-expanded="false">${icone('points', { taille: 18 })}</button></td>

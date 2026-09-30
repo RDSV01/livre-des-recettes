@@ -16,7 +16,8 @@ import {
 import { icone } from './icones.js';
 import { annuler, retablir } from './historique.js';
 import { listeSauvegardes, brancherRestauration } from './sauvegardes.js';
-import { basculerTheme, themeCourant } from './theme.js';
+import { ouvrirReprise } from './fichier-sauvegarde.js';
+import { basculerTheme, themeCourant, themeChoisi, appliquerThemeEphemere, revenirAuThemeParDefaut } from './theme.js';
 import { fermerPanneauOuvert } from './panneau.js';
 import { lancerAccueil } from './accueil.js';
 import { alerteUrssaf } from '/partage/declarations.js';
@@ -71,6 +72,9 @@ function construireRail() {
     <span class="indicateur-nav" aria-hidden="true"></span>
     <div class="nav-principale">${groupe(1)}${groupe(2)}</div>
     <div class="pied-rail">
+      <a class="etat-copie" id="etat-copie" href="#/parametres?section=securite" hidden>
+        ${icone('disque', { taille: 16 })}<span class="texte-etat-copie"></span>
+      </a>
       <button type="button" class="bascule-theme" id="bouton-theme"></button>
       ${liens(3)}
       <p class="mention-locale"><span id="version-app">${etat.systeme ? `Version ${echapperHtml(etat.systeme.version)}` : ''}</span>100 % local, vos données restent chez vous</p>
@@ -109,10 +113,36 @@ function majRail({ anime = true } = {}) {
   }
   nav.querySelector('#nom-entreprise').textContent = etat.parametres?.nomEntreprise ?? '';
 
+  // Pas de copie hors de l'ordinateur, ou plus récente depuis une semaine : dit
+  // discrètement en tête du pied de menu, avec ce qu'il faut faire.
+  const copie = nav.querySelector('#etat-copie');
+  const avis = modeRestauration ? null : avisCopie(etat.systeme?.copieExterne);
+  copie.hidden = !avis;
+  copie.querySelector('.texte-etat-copie').innerHTML = avis ? `<strong>${avis.titre}</strong>${avis.conseil}` : '';
+
   const bouton = nav.querySelector('#bouton-theme');
   const sombre = themeCourant() === 'dark';
   bouton.innerHTML = `${icone(sombre ? 'soleil' : 'lune', { taille: 17 })}<span>Thème ${sombre ? 'clair' : 'sombre'}</span>`;
   bouton.setAttribute('aria-label', `Passer au thème ${sombre ? 'clair' : 'sombre'}`);
+}
+
+/**
+ * L'avis du pied de menu sur la copie externe (`{ titre, conseil }`), ou
+ * `null` quand tout va bien. L'absence de copie n'est plus rappelée si
+ * l'utilisateur l'a demandé (paramètres, section Sécurité) ; un retard, lui,
+ * l'est toujours.
+ */
+function avisCopie(copie) {
+  if (!copie) return null;
+  if (!copie.active) {
+    return etat.parametres?.signalerAbsenceCopie === false
+      ? null
+      : { titre: 'Aucune copie hors de cet ordinateur', conseil: 'Pensez à faire une sauvegarde.' };
+  }
+  if (!copie.enRetard) return null;
+  if (!copie.derniereCopie) return { titre: 'Copie hors de l’ordinateur pas encore faite', conseil: 'Branchez la clé ou le disque choisi.' };
+  const jours = Math.floor((Date.now() - Date.parse(copie.derniereCopie)) / 86_400_000);
+  return { titre: `Dernière copie il y a ${jours} jours`, conseil: 'Branchez la clé ou le disque pour la mettre à jour.' };
 }
 
 // Changer de type d'activité fait apparaître ou disparaître la page Achats ;
@@ -316,9 +346,13 @@ async function appliquerMiseAJour(evenement) {
   }
 }
 
-/** Attend que le serveur réponde de nouveau, après son redémarrage. */
+/**
+ * Attend que le serveur réponde de nouveau, après son redémarrage. Jusqu'à
+ * deux minutes : si la nouvelle version ne démarre pas, l'ancienne attend une
+ * minute avant de se remettre en place (voir `src/maj.js`).
+ */
 async function attendreRedemarrage() {
-  for (let essai = 0; essai < 60; essai += 1) {
+  for (let essai = 0; essai < 120; essai += 1) {
     await new Promise((suite) => setTimeout(suite, 1000));
     try {
       await api.systeme();
@@ -411,8 +445,10 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
         <div class="carte-corps restauration">
           <p>Choisissez une sauvegarde à restaurer (la plus récente d’abord). Le fichier actuel sera d’abord mis de côté : rien n’est effacé.</p>
           <div id="liste-restauration">${sauvegardes.length === 0
-            ? '<p class="attenue">Aucune sauvegarde disponible. Vous pouvez remplacer manuellement le fichier de données par une copie personnelle, puis relancer l’application.</p>'
+            ? '<p class="attenue">Aucune sauvegarde sur cet ordinateur.</p>'
             : listeSauvegardes(sauvegardes)}</div>
+          <p class="notes">Une sauvegarde sur une clé USB, un disque ou dans un fichier ? Elle se reprend aussi.</p>
+          <button type="button" class="btn" id="reprise-restauration">${icone('import', { taille: 16 })}Reprendre une sauvegarde</button>
           ${disparition ? `
             <p class="notes">Vous aviez supprimé ces données volontairement ? Repartez d’un livre vide : les sauvegardes ci-dessus resteront disponibles.</p>
             <button type="button" class="btn" id="repartir-de-zero">${icone('plus', { taille: 16 })}Repartir d’un livre vide</button>` : ''}
@@ -420,6 +456,9 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
       </section>
     </div>`;
 
+  conteneur.querySelector('#reprise-restauration').addEventListener('click', async () => {
+    if (await ouvrirReprise()) window.location.reload();
+  });
   conteneur.querySelector('#repartir-de-zero')?.addEventListener('click', async () => {
     const accord = await confirmer({
       titre: 'Repartir d’un livre vide ?',
@@ -442,6 +481,62 @@ async function afficherEcranRestauration({ titre, introduction, message, dispari
   reveler(conteneur);
 }
 
+// ---- Livre momentanément inaccessible -----------------------------------------------------
+
+/**
+ * Écran d'un livre présent mais illisible pour l'instant (resté dans iCloud,
+ * OneDrive hors connexion…). Il se recharge seul dès que le fichier revient.
+ */
+function afficherEcranIndisponible(message) {
+  modeRestauration = true;
+  majRail({ anime: false });
+  const conteneur = document.getElementById('vue');
+  conteneur.innerHTML = `
+    <div class="page">
+      <header class="entete-page">
+        <div>
+          <h1>Livre momentanément inaccessible</h1>
+          <p class="sous-titre">Le fichier du livre est bien là, mais il ne peut pas être lu pour l’instant. Rien n’y a été modifié.</p>
+        </div>
+      </header>
+      <p class="avis">${icone('cercle-alerte', { taille: 17 })}<span>${echapperHtml(message)}</span></p>
+      <section class="carte"><div class="carte-corps">
+        <p>Cette page se rouvre d’elle-même dès que le livre est de nouveau lisible.</p>
+        <div class="actions"><button type="button" class="btn" id="reessayer">${icone('restaurer', { taille: 16 })}Réessayer maintenant</button></div>
+      </div></section>
+    </div>`;
+  conteneur.querySelector('#reessayer').addEventListener('click', () => window.location.reload());
+  const attente = setInterval(async () => {
+    try {
+      if (!(await api.systeme()).indisponible) {
+        clearInterval(attente);
+        window.location.reload();
+      }
+    } catch { /* serveur arrêté : l'utilisateur relancera */ }
+  }, 5000);
+  reveler(conteneur);
+}
+
+/**
+ * Suit le livre pendant que la page est ouverte : l'indication de la copie
+ * externe reste à jour, et un livre devenu inaccessible (ou revenu) est relu.
+ */
+function surveillerLivre() {
+  setInterval(async () => {
+    if (document.visibilityState !== 'visible' || modeRestauration) return;
+    let systeme;
+    try {
+      systeme = await api.systeme();
+    } catch {
+      return;
+    }
+    const avant = etat.systeme;
+    etat.systeme = systeme;
+    majRail({ anime: false });
+    if (Boolean(systeme.indisponible) !== Boolean(avant.indisponible)) window.location.reload();
+  }, 15_000);
+}
+
 // ---- Démarrage ---------------------------------------------------------------------------
 
 construireRail();
@@ -452,10 +547,15 @@ const accueilAttendu = () => etat.parametres.accueil === 'en-cours' ||
   (etat.systeme.premierLancement && etat.parametres.accueil !== 'termine');
 
 function ouvrirAccueil() {
+  // L'accueil s'affiche toujours en clair, tant que l'utilisateur n'a pas
+  // choisi de thème : premier contact plus accueillant, quel que soit le
+  // réglage sombre du système.
+  if (!themeChoisi()) appliquerThemeEphemere('light');
   lancerAccueil({
     // L'accueil se referme sur une page : l'état est relu (paramètres, jeu de
     // démonstration éventuel), le menu refait, puis la page dessinée derrière lui.
     fermer: async (route) => {
+      revenirAuThemeParDefaut();
       await chargerEtat();
       construireRail();
       history.replaceState(null, '', `#/${route}`);
@@ -485,6 +585,8 @@ chargerEtat()
         introduction: 'Le fichier de données n’a pas pu être lu. Restaurez l’une de vos sauvegardes automatiques pour reprendre.',
         message: etat.systeme.corruption
       });
+    } else if (etat.systeme.indisponible) {
+      afficherEcranIndisponible(etat.systeme.indisponible);
     } else if (etat.systeme.donneesAbsentes) {
       afficherEcranRestauration({
         titre: 'Fichier de données introuvable',
@@ -498,6 +600,14 @@ chargerEtat()
     } else {
       afficherVue();
     }
+    // Une mise à jour qui n'a pas pu démarrer a été annulée : l'utilisateur le
+    // sait, une fois (pas à chaque rechargement de la page).
+    const echec = etat.systeme.majEchouee;
+    if (echec) {
+      toast(`La version ${echec.version ?? 'nouvelle'} n’a pas pu démarrer : la version précédente a été rétablie.`, 'erreur');
+      api.echecMajVu().catch(() => {});
+    }
+    surveillerLivre();
     // Recherche d'une nouvelle version, en arrière-plan : l'application est
     // utilisable immédiatement, et hors ligne rien ne se voit.
     api.miseAJour()

@@ -86,8 +86,7 @@ export async function vueAchats(conteneur, params) {
     colonnes: [
       { cle: 'date', titre: 'Réglé le', cellule: (a) => `<td class="date">${echapperHtml(formaterDate(a.dateReglement, formatDate))}</td>` },
       { cle: 'fournisseur', titre: 'Fournisseur', cellule: (a) => `<td class="client">${echapperHtml(a.fournisseur)}</td>` },
-      { cle: 'reference', titre: 'Justificatif', cellule: (a) => `<td>${a.referenceFacture ? `<span class="ref">${echapperHtml(a.referenceFacture)}</span>` : '<span class="attenue">Sans référence</span>'}</td>` },
-      { cle: 'piece' },
+      { cle: 'reference', titre: 'Justificatif', avecPiece: true, cellule: (a) => `<td class="col-piece-hote">${a.referenceFacture ? `<span class="ref">${echapperHtml(a.referenceFacture)}</span>` : '<span class="attenue">Sans référence</span>'}</td>` },
       { cle: 'mode', titre: 'Paiement', cellule: (a) => `<td class="mode">${echapperHtml(libelleMode(a.modeReglement, modesPersonnalises))}</td>` },
       { cle: 'montant', titre: 'Montant', classe: 'montant', cellule: (a) => `<td class="montant">${echapperHtml(formaterMontant(a.montant, devise))}</td>` }
     ],

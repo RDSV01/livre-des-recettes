@@ -18,6 +18,7 @@ import {
 } from './ui.js';
 import { halo, annoncer, patienter } from './retours.js';
 import { icone } from './icones.js';
+import { ouvrirReprise } from './fichier-sauvegarde.js';
 import { NATURES_PRESTATIONS, libelleActivite } from '/partage/seuils.js';
 import { majusculeInitiale } from '/partage/texte.js';
 import { dernierePeriodeEchue, periodeDepuisId, echeanceDeclaration, aujourdHuiIso } from '/partage/dates.js';
@@ -110,7 +111,9 @@ export function lancerAccueil({ fermer }) {
       })}
       ${actions(0)}
       <p class="etape-autre">Vous souhaitez d’abord voir l’application à l’œuvre ?
-        <button type="button" class="lien-bouton" data-demo>Découvrir avec un jeu de démonstration</button></p>`,
+        <button type="button" class="lien-bouton" data-demo>Découvrir avec un jeu de démonstration</button></p>
+      <p class="etape-autre">Vous avez changé d’ordinateur ?
+        <button type="button" class="lien-bouton" data-reprise>Reprendre une sauvegarde</button></p>`,
 
     () => `${surtitre(1)}
       <h1 id="titre-etape" tabindex="-1">Votre entreprise</h1>
@@ -374,6 +377,11 @@ export function lancerAccueil({ fermer }) {
       } finally {
         chercher.disabled = false;
       }
+      return;
+    }
+    // Un livre tenu ailleurs (autre ordinateur, clé USB) : il remplace l'accueil.
+    if (cible.closest('[data-reprise]')) {
+      if (await ouvrirReprise()) window.location.reload();
       return;
     }
     const demo = cible.closest('[data-demo]');

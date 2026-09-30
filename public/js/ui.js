@@ -82,10 +82,12 @@ export const teinteDe = (nom) => [...String(nom ?? '').toLowerCase()]
 /** SIRET groupé comme sur un avis de situation : 123 456 782 00010. */
 export const siretLisible = (s) => (s ? String(s).replace(/^(\d{3})(\d{3})(\d{3})(\d*)$/, '$1 $2 $3 $4').trim() : '');
 
-/** « 184 ko », « 1,2 Mo » : le poids d'un fichier. */
-export const poidsLisible = (octets) => (octets < 1024 * 1024
-  ? `${Math.max(1, Math.round(octets / 1024))} ko`
-  : `${(octets / 1024 / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`);
+/** « 184 ko », « 1,2 Mo », « 150,5 Go » : le poids d'un fichier, ou la place d'un disque. */
+export const poidsLisible = (octets) => {
+  if (octets < 1024 * 1024) return `${Math.max(1, Math.round(octets / 1024))} ko`;
+  if (octets < 1024 ** 3) return `${(octets / 1024 / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
+  return `${(octets / 1024 ** 3).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go`;
+};
 
 // ---- Listes déroulantes --------------------------------------------------------
 
@@ -275,23 +277,34 @@ function dialogueTemporaire(contenu, classe = '') {
  * corbeille) ; `danger: false` et `iconeOk` conviennent aux actions qui ne
  * suppriment rien, comme installer une mise à jour.
  *
+ * `caseACocher` demande une seconde validation : le bouton ne s'active
+ * qu'une fois la case cochée (choix lourd de conséquences).
+ *
  * @returns {Promise<boolean>} vrai si l'utilisateur confirme.
  */
 export function confirmer({
   titre = 'Confirmer', message, boutonOk = 'Supprimer',
-  danger = true, iconeOk = 'corbeille'
+  danger = true, iconeOk = 'corbeille', caseACocher = ''
 }) {
-  return dialogueTemporaire((idTitre) => `
+  const { dialogue, reponse } = dialogueTemporaire((idTitre) => `
     <form method="dialog" class="boite-corps">
       <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
       <p>${echapperHtml(message)}</p>
+      ${caseACocher ? `<label class="case-a-cocher"><input type="checkbox"><span>${echapperHtml(caseACocher)}</span></label>` : ''}
       <div class="boite-pied">
         <button type="button" class="btn btn-fantome" data-role="annuler">Annuler</button>
-        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-principal'}" data-role="ok">
+        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-principal'}" data-role="ok"${caseACocher ? ' disabled' : ''}>
           ${icone(iconeOk, { taille: 16 })}<span>${echapperHtml(boutonOk)}</span>
         </button>
       </div>
-    </form>`).reponse;
+    </form>`);
+  if (caseACocher) {
+    const ok = dialogue.querySelector('[data-role="ok"]');
+    dialogue.querySelector('.case-a-cocher input').addEventListener('change', (evenement) => {
+      ok.disabled = !evenement.target.checked;
+    });
+  }
+  return reponse;
 }
 
 /**

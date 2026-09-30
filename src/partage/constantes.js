@@ -97,6 +97,10 @@ export const PARAMETRES_DEFAUT = {
   numerosIgnores: [],
   alerteRecetteSimilaire: true,
   suiviSeuils: true,
+  // Le menu rappelle l'absence de copie sur une clé ou un disque, tant que
+  // l'utilisateur ne lui a pas demandé de ne plus le faire (paramètres,
+  // section Sécurité, avec double validation).
+  signalerAbsenceCopie: true,
   // Vrai tant que le livre contient le jeu de démonstration : un bandeau
   // propose alors de tout effacer. Retombe à faux dès que l'utilisateur
   // enregistre ses propres paramètres.

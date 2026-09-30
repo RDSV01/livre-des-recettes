@@ -16,6 +16,27 @@ const CLE_THEME = 'ldr-theme';
 /** Thème courant : « light » ou « dark ». */
 export const themeCourant = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
 
+/** Le thème que l'utilisateur a explicitement choisi, ou `null` s'il suit le système. */
+export const themeChoisi = () => {
+  try { return localStorage.getItem(CLE_THEME); } catch { return null; }
+};
+
+const themeSysteme = () => (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+/**
+ * Applique un thème sans le retenir : l'accueil guidé s'affiche toujours en
+ * clair, sans imposer ce choix pour la suite.
+ */
+export function appliquerThemeEphemere(theme) {
+  document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+  window.dispatchEvent(new Event('theme-modifie'));
+}
+
+/** Revient au thème choisi par l'utilisateur, ou à défaut à celui du système. */
+export function revenirAuThemeParDefaut() {
+  appliquerThemeEphemere(themeChoisi() ?? themeSysteme());
+}
+
 /** Applique un thème, le retient, et prévient l'interface (bouton du menu). */
 function appliquerTheme(theme) {
   const valide = theme === 'dark' ? 'dark' : 'light';

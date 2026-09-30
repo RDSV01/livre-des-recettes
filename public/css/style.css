@@ -1867,10 +1867,19 @@ th.montant .tri {
 
 /* Colonne du PDF joint : trombone pour voir, flèche pour joindre ; en-tête
    et boutons centrés sur le même axe. */
+/* Le PDF joint se lit avec la facture (ou la référence) : son bouton se colle
+   juste devant le numéro, dans la même cellule (« trombone FAC-018 »). */
+.tableau td.col-piece-hote {
+  white-space: nowrap;
+}
+.col-piece-hote > .btn-icone {
+  vertical-align: middle;
+  margin-left: -6px;
+  margin-right: -2px;
+}
+/* Fiche client : un tableau compact où le PDF garde sa propre colonne. */
 .tableau .col-piece {
   width: 44px;
-  padding-left: 0;
-  padding-right: 0;
   text-align: center;
 }
 .piece-oui {
@@ -1901,7 +1910,7 @@ th.montant .tri {
 .tableau tr.cible-depot td {
   background: var(--accent-doux);
 }
-.tableau tr.cible-depot td.col-piece .piece-non {
+.tableau tr.cible-depot .piece-non {
   opacity: 1;
   color: var(--accent-texte);
   animation: pop 400ms var(--sortie);
@@ -4849,4 +4858,247 @@ body:has(.barre-selection:not([hidden])) .toasts {
 }
 ::view-transition-old(menu) {
   display: none;
+}
+
+/* ---- Sécurité de vos données -------------------------------------------------------- */
+
+/* Avis du pied de menu : pas de copie hors de l'ordinateur, ou pas de copie
+   récente. Dans la teinte de « En retard », en tête du pied de menu ; un clic
+   mène à la section Sécurité des paramètres. */
+.etat-copie {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e3);
+  padding: 9px var(--e3);
+  border-radius: var(--rayon);
+  background: var(--rail-alerte-fond);
+  color: var(--rail-alerte-texte);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.etat-copie .icone {
+  flex: none;
+  margin-top: 1px;
+}
+.etat-copie strong {
+  display: block;
+  font-weight: 620;
+  text-wrap: balance;
+}
+/* Le conseil, un ton en dessous du titre. */
+.texte-etat-copie {
+  color: color-mix(in srgb, var(--rail-alerte-texte) 78%, var(--rail-texte));
+}
+.texte-etat-copie strong {
+  color: var(--rail-alerte-texte);
+}
+.etat-copie:hover strong,
+.etat-copie:focus-visible strong {
+  text-decoration: underline;
+}
+.etat-copie:focus-visible {
+  outline-color: var(--rail-icone-active);
+}
+.etat-copie[hidden] {
+  display: none;
+}
+
+/* Une protection par ligne : son état, ce qu'elle fait, ses actions. */
+.etat-securite {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--e4);
+  row-gap: var(--e3);
+  padding: var(--e4) 0;
+  border-top: 1px solid var(--bordure-douce);
+}
+.etat-securite:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.etat-securite:last-child {
+  padding-bottom: 0;
+}
+.pastille-securite {
+  display: flex;
+  margin-top: 1px;
+  color: var(--texte-3);
+}
+.etat-securite.ok .pastille-securite {
+  color: var(--succes);
+}
+.etat-securite.attention .pastille-securite {
+  color: var(--alerte);
+}
+.texte-securite strong {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+.texte-securite span {
+  font-size: 13px;
+  color: var(--texte-2);
+}
+.actions-securite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--e2);
+}
+.etat-securite > .choix-supports,
+.etat-securite > .chemin-securite,
+.etat-securite > .lien-securite {
+  grid-column: 2 / -1;
+}
+/* Action rare ou lourde de conséquences : un lien discret sous le texte,
+   petit et sans soulignement tant qu'on ne le survole pas. */
+.lien-securite {
+  margin: 0;
+}
+.lien-securite .lien-bouton {
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--texte-3);
+  text-decoration: none;
+}
+.lien-securite .lien-bouton:hover,
+.lien-securite .lien-bouton:focus-visible {
+  color: var(--texte-2);
+  text-decoration: underline;
+}
+.chemin-securite .chemin {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--texte-2);
+}
+.recherche-supports {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--e2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--texte-2);
+}
+.consigne-supports {
+  margin: 0 0 var(--e2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.supports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+/* Un support est un bouton : on le choisit d'un clic. */
+.support {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  min-width: 200px;
+  padding: var(--e3) var(--e4);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--carte);
+  color: var(--texte);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--moyen) var(--sortie), background var(--moyen) var(--sortie);
+}
+.support:hover:not(:disabled) {
+  border-color: var(--bordure-controle);
+  background: var(--carte-2);
+}
+.support.choisi {
+  border-color: var(--accent);
+}
+.support > svg {
+  flex: none;
+  color: var(--texte-3);
+}
+.support strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.support small {
+  display: block;
+  font-size: 12px;
+  color: var(--texte-3);
+}
+
+/* ---- Reprendre une sauvegarde ------------------------------------------------------------ */
+dialog.boite-reprise {
+  width: min(520px, calc(100vw - 32px));
+}
+.etape-reprise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+.boite-reprise .supports {
+  flex-direction: column;
+}
+.boite-reprise .support {
+  width: 100%;
+}
+/* Le fichier, second chemin : sous les copies trouvées, séparé d'un filet. */
+.fichier-reprise {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e2) var(--e3);
+  padding-top: var(--e3);
+  border-top: 1px solid var(--bordure-douce);
+}
+.fichier-reprise .note {
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+/* Ce que contient la sauvegarde : le nom de l'entreprise, puis le détail. */
+.apercu-reprise {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--e3);
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.apercu-reprise strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+.apercu-reprise span {
+  font-size: 13.5px;
+  color: var(--texte-2);
+}
+/* Case à cocher d'une boîte de dialogue : option de la reprise, seconde
+   validation d'un choix lourd (voir `confirmer`). */
+.case-a-cocher {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.case-a-cocher input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--accent);
+}
+.boite-corps p.reussite-reprise {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-weight: 600;
+  color: var(--texte);
+}
+.reussite-reprise .icone {
+  flex: none;
+  color: var(--succes);
 }

@@ -6,12 +6,13 @@
  * bas d'une longue page, et « Enregistré » s'affiche à côté du réglage.
  */
 
-import { api, telechargerFichier } from '../api.js';
+import { api } from '../api.js';
+import { sauvegarderMaintenant, ouvrirReprise } from '../fichier-sauvegarde.js';
 import { etat, definirParametres } from '../etat.js';
 import {
   toast, echapperHtml, infobulle, selecteur, afficherErreursFormulaire, effacerErreursFormulaire,
   accorder, poidsLisible, siretLisible, mouvementReduit, optionsCodes, interrupteur,
-  deplierHauteur, replierPuisRetirer
+  deplierHauteur, replierPuisRetirer, confirmer
 } from '../ui.js';
 import {
   annoncer, reussite, patienter, bandeauRetour, brancherSegmentes, copierDansPressePapiers
@@ -27,8 +28,22 @@ import { dateEnFrancaisLong, aujourdHuiIso } from '/partage/dates.js';
 
 const SECTIONS = [
   ['identite', 'Identité'], ['regime', 'Régime et déclaration'], ['affichage', 'Affichage'],
-  ['modes', 'Modes de règlement'], ['options', 'Options'], ['donnees', 'Vos données'], ['sauvegardes', 'Sauvegardes']
+  ['modes', 'Modes de règlement'], ['options', 'Options'], ['securite', 'Sécurité'], ['donnees', 'Vos données'],
+  ['sauvegardes', 'Sauvegardes']
 ];
+
+/** Quand, en clair : « aujourd’hui à 14 h 02 », « hier à 9 h 10 », « le 12 mars 2026 à 18 h 45 ». */
+function quandLisible(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const heure = `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`;
+  const jour = (d) => d.toDateString();
+  const hier = new Date();
+  hier.setDate(hier.getDate() - 1);
+  if (jour(date) === jour(new Date())) return `aujourd’hui à ${heure}`;
+  if (jour(date) === jour(hier)) return `hier à ${heure}`;
+  return `le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à ${heure}`;
+}
 
 const OPTIONS = [
   ['alertesNumerotation', 'Alertes de numérotation des factures', 'Doublons et numéros manquants, signalés dans le livre des recettes.'],
@@ -53,12 +68,14 @@ export async function vueParametres(conteneur, params) {
   const p = () => etat.parametres;
   // État système rafraîchi : l'échec des sauvegardes n'apparaît qu'après une
   // écriture, donc pas forcément au démarrage.
-  const [systeme, { sauvegardes }, { recettes }, { achats }] = await Promise.all([
+  const [systeme, { sauvegardes }, { recettes }, { achats }, securiteInitiale] = await Promise.all([
     api.systeme().catch(() => etat.systeme),
     api.listerSauvegardes(),
     api.listerRecettes(),
-    api.listerAchats()
+    api.listerAchats(),
+    api.securite()
   ]);
+  let securite = securiteInitiale;
   const usagesMode = (code) => recettes.filter((r) => r.modeReglement === code).length +
     achats.filter((a) => a.modeReglement === code).length;
   const sombre = document.documentElement.dataset.theme === 'dark';
@@ -110,6 +127,82 @@ export async function vueParametres(conteneur, params) {
   const chemin = (texte, quoi) => `<div class="chemin"><span>${echapperHtml(texte)}</span>
     <button type="button" class="btn-icone" data-copier="${echapperHtml(texte)}" aria-label="Copier le chemin ${quoi}" title="Copier le chemin">${icone('copier', { taille: 15 })}</button></div>`;
 
+  // ---- Sécurité de vos données ----------------------------------------------------------
+  /** Une protection : son état (ok, attention, neutre), ce qu'elle fait, ses actions. */
+  const ligneSecurite = ({ id, etat: niveau, titre, texte, actions = '', detail = '' }) => `
+    <div class="etat-securite ${niveau}" id="securite-${id}">
+      <span class="pastille-securite" aria-hidden="true">${icone(niveau === 'ok' ? 'cercle-valide' : niveau === 'attention' ? 'cercle-alerte' : 'info', { taille: 18 })}</span>
+      <div class="texte-securite"><strong>${titre}</strong><span>${texte}</span></div>
+      ${actions ? `<div class="actions-securite">${actions}</div>` : ''}
+      ${detail}
+    </div>`;
+
+  function blocSecurite(s) {
+    const { sauvegardes: sv, copieExterne: ce, archives: ar } = s;
+
+    const problemes = sv.verification?.problemes?.length ?? 0;
+    const sauvegardesLigne = ligneSecurite({
+      id: 'sauvegardes',
+      etat: sv.enEchec || problemes ? 'attention' : sv.nombre ? 'ok' : 'neutre',
+      titre: 'Sauvegardes automatiques',
+      texte: sv.enEchec
+        ? 'La dernière saisie n’a pas pu être copiée dans les sauvegardes : le dossier ci-dessous est peut-être inaccessible (disque plein, lecteur déconnecté).'
+        : problemes
+          ? `${accorder(problemes, 'sauvegarde récente est abîmée', 'sauvegardes récentes sont abîmées')} ; les autres restent utilisables, et une nouvelle copie se fait à chaque saisie.`
+          : sv.nombre
+            ? `Dernière sauvegarde ${quandLisible(sv.derniere)}, ${accorder(sv.nombre, 'copie', 'copies')} sur cet ordinateur, relues au démarrage.`
+            : 'La première sera faite à la prochaine saisie.'
+    });
+
+    const nomSupport = ce.libelle ? `«\u00a0${echapperHtml(ce.libelle)}\u00a0»` : 'le support choisi';
+    // Rappel dans le menu, que l'utilisateur peut faire taire (seconde
+    // validation), puis rétablir d'un clic.
+    const rappel = p().signalerAbsenceCopie !== false;
+    const copieLigne = !ce.active
+      ? ligneSecurite({
+        id: 'copie', etat: 'neutre', titre: 'Copie hors de l’ordinateur',
+        texte: `Aucune pour l’instant. Une clé USB ou un disque externe met le livre à l’abri d’une panne, d’un vol ou d’un virus de l’ordinateur. La copie se refait ensuite toute seule, à chaque changement, quand le support est branché.${rappel ? '' : ' Le menu ne rappelle plus son absence.'}`,
+        actions: `<button type="button" class="btn btn-petit" data-securite="choisir">${icone('disque', { taille: 15 })}Choisir une clé ou un disque</button>`,
+        detail: `<div class="choix-supports" hidden></div>
+          <p class="lien-securite"><button type="button" class="lien-bouton" data-securite="${rappel ? 'ne-plus-rappeler' : 'rappeler'}">${rappel
+            ? 'Ne plus me rappeler l’absence de copie'
+            : 'Rappeler de nouveau l’absence de copie dans le menu'}</button></p>`
+      })
+      : ligneSecurite({
+        id: 'copie',
+        etat: ce.echec || ce.enRetard ? 'attention' : 'ok',
+        titre: 'Copie hors de l’ordinateur',
+        texte: ce.echec
+          ? `${echapperHtml(ce.echec)}`
+          : ce.enRetard
+            ? (ce.derniereCopie
+              ? `Dernière copie ${quandLisible(ce.derniereCopie)} : branchez ${nomSupport} pour la mettre à jour.`
+              : `Aucune copie encore : branchez ${nomSupport} pour la faire.`)
+            : `Sur ${nomSupport}, dernière copie ${quandLisible(ce.derniereCopie)}. Elle se refait toute seule à chaque changement, quand le support est branché.`,
+        actions: `${ce.present ? `<button type="button" class="btn btn-petit" data-securite="copier">${icone('restaurer', { taille: 15 })}Copier maintenant</button>` : ''}
+          <button type="button" class="btn btn-petit" data-securite="choisir">${icone('disque', { taille: 15 })}Changer de support</button>`,
+        detail: `<div class="choix-supports" hidden></div>${ce.dossier ? `<div class="chemin-securite">${chemin(ce.dossier, 'de la copie')}</div>` : ''}
+          <p class="lien-securite"><button type="button" class="lien-bouton" data-securite="arreter">Ne plus faire de copie sur ce support</button></p>`
+      });
+
+    const fichierLigne = ligneSecurite({
+      id: 'fichier', etat: 'neutre', titre: 'Sauvegarde à la demande',
+      texte: 'Tout le livre et ses PDF dans un seul fichier, à ranger où vous voulez : clé USB, disque externe… Sur un autre ordinateur, «\u00a0Reprendre une sauvegarde\u00a0» remet tout en place.',
+      actions: `<button type="button" class="btn btn-petit" data-securite="sauvegarder">${icone('telecharger', { taille: 15 })}Sauvegarder maintenant</button>
+        <button type="button" class="btn btn-petit" data-securite="reprendre">${icone('import', { taille: 15 })}Reprendre une sauvegarde</button>`
+    });
+
+    const archivesLigne = ligneSecurite({
+      id: 'archives', etat: ar.annees.length ? 'ok' : 'neutre', titre: 'Archives annuelles',
+      texte: ar.annees.length
+        ? `${ar.annees.map((a) => a.annee).join(', ')} : ${ar.annees.length > 1 ? 'figées' : 'figée'} avec ${ar.annees.length > 1 ? 'leurs' : 'ses'} registres et PDF, et gardée${ar.annees.length > 1 ? 's' : ''} 10 ans, comme la loi le demande.`
+        : 'Chaque année close sera figée ici avec ses registres et ses PDF, et gardée 10 ans, comme la loi le demande.',
+      detail: ar.annees.length ? `<div class="chemin-securite">${chemin(ar.dossier, 'des archives')}</div>` : ''
+    });
+
+    return `<div class="etats-securite">${sauvegardesLigne}${copieLigne}${fichierLigne}${archivesLigne}</div>`;
+  }
+
   conteneur.innerHTML = `
     <div class="page">
       <header class="entete-page">
@@ -128,6 +221,7 @@ export async function vueParametres(conteneur, params) {
           <div class="actions">
             <button type="button" class="btn btn-principal" id="reprendre-accueil">${icone('etincelle', { taille: 16 })}Reprendre la configuration guidée</button>
             <button type="button" class="btn" id="charger-demo">Découvrir avec un jeu de démonstration</button>
+            <button type="button" class="btn" id="reprise-bienvenue">${icone('import', { taille: 16 })}Reprendre une sauvegarde</button>
           </div>
         </div>
       </section>` : ''}
@@ -209,25 +303,24 @@ export async function vueParametres(conteneur, params) {
             ${OPTIONS.map(([cle, titre, texte]) => `<div class="option">
               <div><strong>${titre}</strong><span>${texte}</span></div>${interrupteur(`o-${cle}`, p()[cle], titre)}</div>`).join('')}
             <div id="numeros-ignores"></div>
-          </div>`, '<span class="note">S’appliquent aussitôt</span>')}
+          </div>`)}
+
+          ${section('securite', 'Sécurité de vos données', `<div class="carte-corps" id="zone-securite">${blocSecurite(securite)}</div>`)}
 
           ${section('donnees', 'Vos données', `<div class="carte-corps">
             ${systeme.sauvegardesEnEchec ? `<p class="avis">${icone('cercle-alerte', { taille: 17 })}<span>Vos sauvegardes automatiques n’ont pas pu
               être écrites : le dossier ci-dessous est peut-être inaccessible (lecteur réseau déconnecté, disque plein). Vos saisies sont
-              bien enregistrées, mais sans filet pour l’instant : téléchargez une copie par précaution.</span></p>` : ''}
+              bien enregistrées, mais sans filet pour l’instant : «\u00a0Sauvegarder maintenant\u00a0», plus haut, par précaution.</span></p>` : ''}
             <p class="sous-titre">Tout le livre tient dans un seul fichier :</p>
             ${chemin(systeme.fichierDonnees, 'du fichier de données')}
-            <p class="sous-titre">Les factures et justificatifs PDF joints sont rangés à côté${pieces.nombre ? ` (${accorder(pieces.nombre, 'PDF')}, ${poidsLisible(pieces.taille)})` : ', dès le premier joint'} :</p>
+            <p class="sous-titre">Les factures et justificatifs PDF joints sont rangés à côté${pieces.nombre ? ` (${accorder(pieces.nombre, 'PDF', 'PDF')}, ${poidsLisible(pieces.taille)})` : ', dès le premier joint'} :</p>
             ${chemin(pieces.dossier, 'du dossier des pièces jointes')}
             <p class="sous-titre">Les sauvegardes vivent en dehors, pour survivre à la perte du dossier de données :</p>
             ${chemin(systeme.dossierSauvegardes, 'des sauvegardes')}
             <p class="notes">Une sauvegarde est créée chaque jour, avant chaque import et avant chaque restauration : tout pendant
             14 jours, puis une par semaine pendant 2 mois, puis une par mois pendant 1 an, plus une copie de secours mise à jour à
-            chaque saisie. Chaque PDF joint y est aussi doublé. Pour changer d’ordinateur, copiez simplement le dossier de données.</p>
-            <div class="actions">
-              <button type="button" class="btn" data-telecharger="/api/sauvegarde">${icone('telecharger', { taille: 16 })}Télécharger une copie (JSON)</button>
-              <button type="button" class="btn" data-telecharger="/api/sauvegarde/complete">${icone('telecharger', { taille: 16 })}Copie complète avec les PDF (.zip)</button>
-            </div>
+            chaque saisie. Chaque PDF joint y est aussi doublé. Pour changer d’ordinateur : «\u00a0Sauvegarder maintenant\u00a0» ici, puis
+            «\u00a0Reprendre une sauvegarde\u00a0» sur le nouveau.</p>
           </div>`)}
 
           ${section('sauvegardes', 'Sauvegardes disponibles', `<div class="carte-corps" id="liste-sauvegardes">
@@ -495,6 +588,126 @@ export async function vueParametres(conteneur, params) {
   }
   rendreNumerosIgnores();
 
+  // ---- Sécurité : copie hors de l’ordinateur ----------------------------------------------------
+  const zoneSecurite = page.querySelector('#zone-securite');
+
+  /** Relit l'état des protections, redessine la section et l'indication du menu. */
+  async function rafraichirSecurite() {
+    securite = await api.securite();
+    zoneSecurite.innerHTML = blocSecurite(securite);
+    etat.systeme = { ...etat.systeme, copieExterne: securite.copieExterne };
+    window.dispatchEvent(new Event('parametres-modifies'));
+  }
+
+  /** Les clés et disques branchés, à choisir d'un clic (la recherche prend quelques secondes). */
+  async function montrerSupports(bouton) {
+    const zone = bouton.closest('.etat-securite').querySelector('.choix-supports');
+    const deplier = zone.hidden;
+    zone.hidden = false;
+    zone.innerHTML = `<p class="recherche-supports">${icone('chargement', { taille: 15, classe: 'tourne' })}Recherche des clés et disques branchés…</p>`;
+    if (deplier) deplierHauteur(zone);
+    try {
+      const { supports } = await api.supportsCopie();
+      zone.innerHTML = supports.length === 0
+        ? `<p class="recherche-supports">Aucune clé ni aucun disque externe trouvé. Branchez-en un, puis
+          <button type="button" class="lien-bouton" data-securite="choisir">cherchez à nouveau</button>.</p>`
+        : `<p class="consigne-supports">Sur quel support faire la copie ?</p>
+          <div class="supports">${supports.map((s) => `
+            <button type="button" class="support${s.choisi ? ' choisi' : ''}" data-support="${echapperHtml(s.chemin)}">
+              ${icone('disque', { taille: 18 })}<span><strong>${echapperHtml(s.libelle)}</strong>
+              <small>${s.libre != null ? `${poidsLisible(s.libre)} libres` : 'Place libre inconnue'}${s.amovible ? ' · amovible' : ''}${s.choisi ? ' · support actuel' : ''}</small></span>
+            </button>`).join('')}</div>`;
+    } catch (erreur) {
+      zone.innerHTML = `<p class="message-erreur">${icone('cercle-alerte', { taille: 14 })}<span>${echapperHtml(erreur.message)}</span></p>`;
+    }
+  }
+
+  zoneSecurite.addEventListener('click', async (evenement) => {
+    const support = evenement.target.closest('[data-support]');
+    if (support) {
+      const tous = zoneSecurite.querySelectorAll('[data-support]');
+      tous.forEach((b) => { b.disabled = true; });
+      const retablir = patienter(support, 'Première copie en cours…');
+      try {
+        const { resultat, etat: copie } = await api.choisirSupport(support.dataset.support);
+        await rafraichirSecurite();
+        bandeauRetour(zoneSecurite, resultat.copie
+          ? `Livre copié sur «\u00a0${copie.libelle}\u00a0»`
+          : `Support choisi, mais la copie n’a pas pu se faire : ${resultat.message ?? 'elle reprendra au prochain branchement'}`,
+        null, { erreur: !resultat.copie });
+      } catch (erreur) {
+        retablir();
+        tous.forEach((b) => { b.disabled = false; });
+        toast(erreur.message, 'erreur');
+      }
+      return;
+    }
+
+    const action = evenement.target.closest('[data-securite]');
+    if (!action) return;
+    const bouton = action;
+    if (bouton.dataset.securite === 'choisir') {
+      await montrerSupports(bouton);
+    } else if (bouton.dataset.securite === 'copier') {
+      const retablir = patienter(bouton, 'Copie en cours…');
+      try {
+        const { resultat, etat: copie } = await api.copierMaintenant();
+        // La section est redessinée : le retour s'affiche en tête, pas sur le bouton qui disparaît.
+        await rafraichirSecurite();
+        bandeauRetour(zoneSecurite, resultat.copie
+          ? `Livre copié sur «\u00a0${copie.libelle}\u00a0»`
+          : resultat.message ?? 'La copie n’a pas pu se faire : le support est-il branché ?',
+        null, { erreur: !resultat.copie });
+      } catch (erreur) {
+        retablir();
+        toast(erreur.message, 'erreur');
+      }
+    } else if (bouton.dataset.securite === 'sauvegarder') {
+      await sauvegarderMaintenant(bouton);
+    } else if (bouton.dataset.securite === 'reprendre') {
+      if (await ouvrirReprise()) window.location.reload();
+    } else if (bouton.dataset.securite === 'arreter') {
+      const accord = await confirmer({
+        titre: 'Ne plus faire de copie sur ce support ?',
+        message: 'Ce qui est déjà sur le support y reste. Le livre n’y sera simplement plus recopié.',
+        boutonOk: 'Ne plus faire de copie',
+        danger: false,
+        iconeOk: 'croix'
+      });
+      if (!accord) return;
+      try {
+        await api.arreterCopie();
+        await rafraichirSecurite();
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
+    } else if (bouton.dataset.securite === 'ne-plus-rappeler') {
+      // Choix lourd : une boîte, et une case à cocher pour le confirmer.
+      const accord = await confirmer({
+        titre: 'Ne plus rappeler l’absence de copie ?',
+        message: 'Le menu n’affichera plus « Aucune copie hors de cet ordinateur ». Sans copie sur une clé ou un ' +
+          'disque, une panne, un vol ou un virus peut emporter le livre et toutes ses sauvegardes.',
+        caseACocher: 'Je comprends que mon livre ne sera pas protégé en cas de panne ou de vol de l’ordinateur.',
+        boutonOk: 'Ne plus me le rappeler',
+        iconeOk: 'croix'
+      });
+      if (!accord) return;
+      try {
+        await enregistrer({ signalerAbsenceCopie: false });
+        await rafraichirSecurite();
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
+    } else if (bouton.dataset.securite === 'rappeler') {
+      try {
+        await enregistrer({ signalerAbsenceCopie: true });
+        await rafraichirSecurite();
+      } catch (erreur) {
+        toast(erreur.message, 'erreur');
+      }
+    }
+  });
+
   // ---- Clics : interrupteurs, rythme, thème, copies, téléchargements ------------------------------
   page.addEventListener('click', async (evenement) => {
     const inter = evenement.target.closest('.interrupteur');
@@ -537,28 +750,14 @@ export async function vueParametres(conteneur, params) {
     }
 
     const copie = evenement.target.closest('[data-copier]');
-    if (copie) {
-      copierDansPressePapiers(copie.dataset.copier, copie);
-      return;
-    }
-
-    const telecharger = evenement.target.closest('[data-telecharger]');
-    if (telecharger && !telecharger.disabled) {
-      const reprendre = patienter(telecharger, 'Préparation…');
-      try {
-        await telechargerFichier(telecharger.dataset.telecharger);
-        reprendre();
-        reussite(telecharger, 'Copie téléchargée', { nomIcone: 'fichier-valide', duree: 2200 });
-      } catch (erreur) {
-        reprendre();
-        reussite(telecharger, 'Échec', { nomIcone: 'cercle-alerte', duree: 2600, echec: true });
-        annoncer(erreur.message);
-      }
-    }
+    if (copie) copierDansPressePapiers(copie.dataset.copier, copie);
   });
 
-  // ---- Première utilisation : accueil guidé ou jeu de démonstration --------------------------------
+  // ---- Première utilisation : accueil guidé, jeu de démonstration, ou livre repris d'ailleurs -----
   page.querySelector('#reprendre-accueil')?.addEventListener('click', () => window.dispatchEvent(new Event('ouvrir-accueil')));
+  page.querySelector('#reprise-bienvenue')?.addEventListener('click', async () => {
+    if (await ouvrirReprise()) window.location.reload();
+  });
   page.querySelector('#charger-demo')?.addEventListener('click', async (evenement) => {
     const bouton = evenement.currentTarget;
     const reprendre = patienter(bouton, 'Chargement…');

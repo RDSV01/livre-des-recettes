@@ -389,6 +389,7 @@ export function validerParametres(entree) {
     ...(ignores ? { numerosIgnores: ignores.valeurs } : {}),
     alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
     suiviSeuils: booleen(e.suiviSeuils, true),
+    signalerAbsenceCopie: booleen(e.signalerAbsenceCopie, true),
     verifierMisesAJour: booleen(e.verifierMisesAJour, true),
     // Le formulaire des paramètres renvoie ce drapeau à faux : enregistrer
     // ses propres paramètres sort du mode démonstration.

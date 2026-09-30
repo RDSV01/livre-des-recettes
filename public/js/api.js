@@ -63,6 +63,25 @@ export const api = {
   restaurerSauvegarde: (fichier) => requete('/api/sauvegardes/restaurer', { methode: 'POST', corps: { fichier } }),
   repartirDeZero: () => requete('/api/sauvegardes/repartir-de-zero', { methode: 'POST', corps: {} }),
 
+  // Fichier de sauvegarde (le livre et ses PDF) : sa reprise, depuis une
+  // copie de clé ou un fichier choisi, lu d'abord puis repris sur accord.
+  copiesSurSupports: () => requete('/api/sauvegarde/copies'),
+  lireCopieSurSupport: (chemin) => requete('/api/sauvegarde/copie', { methode: 'POST', corps: { chemin } }),
+  lireFichierSauvegarde: (fichier) => requete('/api/sauvegarde/fichier', {
+    methode: 'POST',
+    brut: fichier,
+    entetes: { 'Content-Type': 'application/octet-stream', 'X-Nom-Fichier': encodeURIComponent(fichier.name) }
+  }),
+  reprendreSauvegarde: (jeton, continuerCopie) =>
+    requete('/api/sauvegarde/reprendre', { methode: 'POST', corps: { jeton, continuerCopie } }),
+
+  // Sécurité des données : état des protections, copie sur clé ou disque.
+  securite: () => requete('/api/securite'),
+  supportsCopie: () => requete('/api/securite/supports'),
+  choisirSupport: (chemin) => requete('/api/securite/copie-externe', { methode: 'POST', corps: { chemin } }),
+  copierMaintenant: () => requete('/api/securite/copie-externe/copier', { methode: 'POST', corps: {} }),
+  arreterCopie: () => requete('/api/securite/copie-externe', { methode: 'DELETE' }),
+
   // Jeu de démonstration
   chargerDemo: () => requete('/api/demo', { methode: 'POST', corps: {} }),
 
@@ -100,7 +119,9 @@ export const api = {
 
   // Mise à jour de l'application
   miseAJour: () => requete('/api/maj'),
-  appliquerMiseAJour: () => requete('/api/maj/appliquer', { methode: 'POST', corps: {} })
+  appliquerMiseAJour: () => requete('/api/maj/appliquer', { methode: 'POST', corps: {} }),
+  // L'échec d'une mise à jour a été annoncé : il ne l'est plus aux chargements suivants.
+  echecMajVu: () => requete('/api/maj/echec-vu', { methode: 'POST', corps: {} })
 };
 
 /**

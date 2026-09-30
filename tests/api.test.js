@@ -13,6 +13,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { creerApp } from '../src/app.js';
+import { lireZip } from '../src/exports/zip.js';
 
 let dossier;
 let dossierSauvegardes;
@@ -645,11 +646,13 @@ test('GET /api/systeme signale la première utilisation, puis plus', async () =>
   assert.ok(systeme.version);
 });
 
-test('GET /api/sauvegarde renvoie le fichier de données complet', async () => {
+test('GET /api/sauvegarde renvoie tout le livre dans un seul fichier', async () => {
   const reponse = await appeler('/api/sauvegarde');
   assert.equal(reponse.status, 200);
-  assert.match(reponse.headers.get('content-disposition'), /sauvegarde-livre-des-recettes/);
-  const donnees = await reponse.json();
+  assert.equal(reponse.headers.get('content-type'), 'application/zip');
+  assert.match(reponse.headers.get('content-disposition'), /sauvegarde-livre-des-recettes-\d{4}-\d{2}-\d{2}\.zip/);
+  const fichiers = lireZip(Buffer.from(await reponse.arrayBuffer()));
+  const donnees = JSON.parse(fichiers.find((f) => f.nom === 'livre-des-recettes.json').contenu.toString('utf8'));
   assert.ok(Array.isArray(donnees.recettes));
   assert.ok(Array.isArray(donnees.clients));
   assert.ok(donnees.parametres);

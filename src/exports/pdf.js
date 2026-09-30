@@ -11,11 +11,24 @@
  * (voir `commun.js`, partagé avec le rapport annuel).
  */
 
+import { PassThrough } from 'node:stream';
 import { formaterDate, aujourdHuiIso } from '../partage/dates.js';
 import { formaterMontant } from '../partage/montants.js';
 import {
   texteSur, MARGE, COULEURS, identiteEntreprise, creerDocumentPdf, numeroterPages
 } from './commun.js';
+
+/** Le PDF d'un registre, en mémoire (archive ZIP, archives annuelles). */
+export function genererPdfEnMemoire(registre, parametres) {
+  return new Promise((resoudre, rejeter) => {
+    const flux = new PassThrough();
+    const morceaux = [];
+    flux.on('data', (morceau) => morceaux.push(morceau));
+    flux.on('end', () => resoudre(Buffer.concat(morceaux)));
+    flux.on('error', rejeter);
+    genererPdf(registre, parametres, flux);
+  });
+}
 
 const TAILLE_TEXTE = 9;
 const REMPLISSAGE_CELLULE = 5;
