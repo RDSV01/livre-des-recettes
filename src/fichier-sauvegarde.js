@@ -55,7 +55,7 @@ function estUnLivre(contenu) {
 function lireLivre(octets) {
   let contenu;
   try {
-    contenu = JSON.parse(octets.toString('utf8').replace(/^﻿/, ''));
+    contenu = JSON.parse(octets.toString('utf8').replace(/^\ufeff/, ''));
   } catch {
     throw erreurReprise('Ce fichier n’est pas une sauvegarde du Livre des recettes, ou il est abîmé.');
   }

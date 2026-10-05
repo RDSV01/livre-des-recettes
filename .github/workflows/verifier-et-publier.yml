@@ -1,0 +1,229 @@
+# Le seul workflow du projet : tout vérifier, et publier la version quand il y a lieu.
+#
+# À chaque envoi sur le dépôt et à chaque pull request, sous Windows, macOS et
+# Linux (les trois systèmes des exécutables publiés) :
+#   1. tests unitaires et de l'API, puis parcours de bout en bout ;
+#   2. l'interface, écran par écran, dans un vrai navigateur (Playwright) ;
+#   3. l'exécutable construit, lancé et vérifié (voir `scripts/verifier-exe.mjs`).
+#
+# Publication : sur `main`, quand le numéro de package.json n'a pas encore de
+# version publiée, un dernier travail vérifie que modules et actions sont à
+# leur dernière version, atteste la provenance des trois exécutables, puis
+# crée le tag et la version avec les exécutables et leurs empreintes. Il n'a
+# lieu que si TOUT ce qui précède a réussi, sur les trois systèmes : un seul
+# échec, et rien n'est publié. Sortir une version, c'est donc monter le numéro
+# dans package.json et pousser sur `main` ; aucun tag ne se pose à la main.
+#
+# Chaque action est épinglée par l'empreinte de son commit, sa version en
+# commentaire (tenue à jour par `npm run versions`) : un tag peut être déplacé
+# vers un autre code, une empreinte non.
+#
+# Les noms des fichiers publiés sont ceux que l'application attend pour se
+# mettre à jour toute seule (voir `src/maj.js`) : ne pas les changer sans
+# changer aussi `ACTIF_ATTENDU`.
+
+name: Vérifier et publier
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+# Lecture seule par défaut : seul le travail qui publie reçoit davantage.
+permissions:
+  contents: read
+
+# Une pull request mise à jour remplace sa vérification en cours. Sur une
+# branche, chaque envoi garde la sienne jusqu'au bout : un commit n'y reste
+# jamais « annulé », sans résultat.
+concurrency:
+  group: verifier-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verifier:
+    name: ${{ matrix.systeme }}
+    runs-on: ${{ matrix.systeme }}
+    # Garde-fou : un blocage éventuel échoue en quelques minutes plutôt que de
+    # laisser le travail tourner jusqu'au délai maximal (6 h) de GitHub.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - systeme: windows-latest
+            construit: dist/livre-des-recettes.exe
+            publie: livre-des-recettes-windows.exe
+          - systeme: macos-latest
+            construit: dist/livre-des-recettes
+            publie: livre-des-recettes-macos
+          - systeme: ubuntu-latest
+            construit: dist/livre-des-recettes
+            publie: livre-des-recettes-linux
+    env:
+      # Le serveur et le navigateur voient le même jour que l'utilisateur
+      # français, y compris autour de minuit.
+      TZ: Europe/Paris
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # La dernière LTS de Node, toujours : c'est aussi celle que l'exécutable embarque.
+          node-version: lts/*
+          cache: npm
+
+      # Les tests ouvrent des milliers de connexions locales, chacune sur un
+      # port éphémère. Windows n'en prévoit que 16 384 sur les machines de
+      # GitHub, contre 64 511 sur un poste ordinaire : épuisés, ils font
+      # échouer un chargement au hasard (« ERR_NO_BUFFER_SPACE »).
+      - name: Plage de ports d'un poste ordinaire (Windows)
+        if: runner.os == 'Windows'
+        run: netsh int ipv4 set dynamicport tcp start=1024 num=64511
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Installer Chromium pour les tests de l'interface
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests unitaires et de l'API
+        run: npm run test:unitaires
+
+      - name: Vérifier l'application de bout en bout
+        run: npm run verifier
+
+      - name: Tester l'interface dans le navigateur
+        run: npx playwright test
+
+      - name: Construire l'exécutable
+        run: npm run construire:exe
+
+      # L'exécutable tel que l'utilisateur le reçoit : il démarre, sert
+      # l'interface et produit chaque export.
+      - name: Vérifier l'exécutable
+        run: npm run verifier:exe
+
+      - name: Nommer le fichier publié
+        shell: bash
+        run: mv "${{ matrix.construit }}" "${{ matrix.publie }}"
+
+      # Empreinte SHA-256 jointe à la version : l'application la vérifie avant de
+      # se remplacer (voir `src/maj.js`). Calculée avec Node pour un résultat
+      # identique sur les trois systèmes, sans dépendre d'un outil du runner.
+      - name: Empreinte SHA-256
+        shell: bash
+        run: >
+          node -e "const fs=require('fs'),c=require('crypto');const f=process.argv[1];const h=c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');fs.writeFileSync(f+'.sha256',h+'  '+f+'\n');" "${{ matrix.publie }}"
+
+      # Gardé pour le travail qui publie, seulement sur `main`.
+      - name: Transmettre l'exécutable
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.publie }}
+          path: |
+            ${{ matrix.publie }}
+            ${{ matrix.publie }}.sha256
+          retention-days: 1
+
+      # Traces pas à pas des tests de l'interface en échec, téléchargeables
+      # une semaine depuis la page de l'exécution.
+      - name: Garder le rapport de l'interface
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rapport-interface-${{ matrix.systeme }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  publier:
+    name: Publier la version
+    needs: verifier
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write        # créer le tag et la version
+      id-token: write        # signer l'attestation de provenance
+      attestations: write    # l'enregistrer auprès du dépôt
+      artifact-metadata: write
+    # Deux envois rapprochés ne publient jamais en même temps : le second voit
+    # la version créée par le premier.
+    concurrency:
+      group: publication
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Le numéro vient de package.json, celui que l'exécutable embarque : la
+      # version publiée porte toujours le même, sans tag à poser à la main.
+      - name: Ce numéro est-il déjà publié ?
+        id: version
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "La version $version est déjà publiée : rien à publier."
+            echo "nouvelle=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "nouvelle=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.version.outputs.nouvelle == 'true'
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Installer les dépendances
+        if: steps.version.outputs.nouvelle == 'true'
+        run: npm ci
+
+      # Une version ne sort qu'avec des modules et des actions à leur dernière
+      # version, sans faille connue. Contrôlé ici seulement : la sortie d'un
+      # module ailleurs ne fait pas échouer les envois ordinaires.
+      - name: Tout est-il à jour et sans faille connue ?
+        if: steps.version.outputs.nouvelle == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run versions
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: steps.version.outputs.nouvelle == 'true'
+        with:
+          path: executables
+          merge-multiple: true
+
+      # Attestation de provenance (SLSA) : chacun peut vérifier qu'un
+      # exécutable a été construit ici, par ce workflow, à partir de ce
+      # commit (`gh attestation verify <fichier> --repo RDSV01/livre-des-recettes`).
+      - name: Attester la provenance des exécutables
+        if: steps.version.outputs.nouvelle == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            executables/livre-des-recettes-windows.exe
+            executables/livre-des-recettes-macos
+            executables/livre-des-recettes-linux
+
+      - name: Créer la version et y joindre les exécutables
+        if: steps.version.outputs.nouvelle == 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: executables/*
+          generate_release_notes: true

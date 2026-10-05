@@ -79,7 +79,7 @@ test('cycle complet : ajout, modification, suppression', (t) => {
 });
 
 test('les données survivent à une réouverture (persistance fichier)', (t) => {
-  const { donnees: dossier, ouvrir } = environnement(t);
+  const { ouvrir } = environnement(t);
 
   const premier = ouvrir();
   premier.ajouterRecette(CHAMPS);

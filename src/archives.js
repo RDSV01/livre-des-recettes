@@ -105,6 +105,9 @@ export function creerArchives({ dossier, stockage, pieces }) {
     const archivees = [];
     try {
       if (stockage.corruption() || stockage.indisponible()) return archivees;
+      // Un livre de démonstration ne se fige jamais : une archive ne s'efface
+      // pas, et ses lignes fictives resteraient à côté des vraies.
+      if (stockage.obtenirParametres().jeuDemo) return archivees;
       const recettes = stockage.listerRecettes();
       const achats = stockage.listerAchats();
       const courante = maintenant.getFullYear();

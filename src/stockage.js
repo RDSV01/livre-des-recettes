@@ -459,7 +459,7 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     const liste = sauvegardes();
     const problemes = [];
     for (const { fichier } of liste.slice(0, SAUVEGARDES_VERIFIEES)) {
-      let saine = false;
+      let saine;
       try {
         const octets = fs.readFileSync(path.join(dossierSauvegardes, fichier));
         saine = (!empreintes[fichier] || sha256(octets) === empreintes[fichier]) &&

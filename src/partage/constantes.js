@@ -95,8 +95,17 @@ export const PARAMETRES_DEFAUT = {
   // facture réglée en plusieurs fois) : ils ne sont plus signalés comme
   // manquants ou en double.
   numerosIgnores: [],
+  // Recettes récurrentes que le tableau de bord ne propose plus d'ajouter
+  // (clés « client|libellé|centimes », voir `partage/recurrences.js`).
+  recurrencesEcartees: [],
   alerteRecetteSimilaire: true,
   suiviSeuils: true,
+  // L'année d'avant à côté de l'année affichée (graphique du tableau de
+  // bord), et l'évolution d'une année sur l'autre dans le rapport annuel.
+  comparerAnneePrecedente: true,
+  // Le tableau de bord propose d'ajouter les recettes qui reviennent chaque
+  // mois (voir `partage/recurrences.js`).
+  proposerRenouvellements: true,
   // Le menu rappelle l'absence de copie sur une clé ou un disque, tant que
   // l'utilisateur ne lui a pas demandé de ne plus le faire (paramètres,
   // section Sécurité, avec double validation).

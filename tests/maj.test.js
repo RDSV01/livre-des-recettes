@@ -8,8 +8,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import {
-  comparerVersions, estExecutable, appliquerMiseAJour, redemarrer, nettoyerAncienneVersion
+  comparerVersions, estExecutable, appliquerMiseAJour, redemarrer, nettoyerAncienneVersion,
+  surveillerDemarrage, constaterEchecMaj
 } from '../src/maj.js';
 
 test('comparerVersions ordonne les versions, y compris à deux chiffres', () => {
@@ -46,12 +51,6 @@ test('le redémarrage libère d’abord le port et le verrou', () => {
 });
 
 // ---- Mise à jour qui ne démarre pas : l'ancienne version reprend la main ------------
-
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { EventEmitter } from 'node:events';
-import { surveillerDemarrage, constaterEchecMaj } from '../src/maj.js';
 
 /** Une nouvelle version simulée : un processus qu'on peut arrêter. */
 function enfantSimule() {

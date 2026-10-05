@@ -59,6 +59,7 @@ export const glisseDesFichiers = (evenement) => [...(evenement.dataTransfer?.typ
  * @param {string} options.quoi « la facture » ou « le justificatif ».
  * @param {() => object} options.apercu ce que l'aperçu doit montrer :
  *   `{ url, details }` pour la pièce déjà jointe à la ligne.
+ * @returns {{ vider: () => void }} `vider` remet la zone à zéro (saisie suivante).
  */
 export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
   let actuelle = piece;
@@ -66,7 +67,7 @@ export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
   const tailleDe = (p) => (p instanceof File ? p.size : p.taille);
 
   const dessiner = (nouvelle = false) => {
-    conteneur.innerHTML = (actuelle
+    conteneur.innerHTML = `${actuelle
       ? `<div class="piece-jointe${nouvelle ? ' arrive-piece' : ''}">
           <span class="piece-icone">${icone('fichier-texte', { taille: 18 })}<em>PDF</em></span>
           <span class="piece-infos"><strong>${echapperHtml(nomDe(actuelle))}</strong>
@@ -78,7 +79,7 @@ export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
       : `<button type="button" class="depot-piece" data-piece="choisir">
           <span class="tuile">${icone('fichier-depot', { taille: 18 })}</span>
           <span><strong>Déposez ${quoi} ici</strong><span>ou cliquez pour choisir un PDF, 10 Mo au plus</span></span>
-        </button>`) + '<p class="message-erreur" data-piece-erreur></p>';
+        </button>`}<p class="message-erreur" data-piece-erreur></p>`;
   };
   const erreur = (texte) => {
     conteneur.querySelector('[data-piece-erreur]').innerHTML = texte
@@ -130,6 +131,13 @@ export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
     const fichier = fichierDepose(evenement);
     if (fichier) joindre(fichier);
   });
+  return {
+    vider: () => {
+      actuelle = null;
+      dessiner();
+      surChange(null);
+    }
+  };
 }
 
 /**
@@ -160,7 +168,7 @@ export function apercuPiece({ nom, details, url, temporaire = false, remplacer, 
         ${retirer ? `<button type="button" class="btn btn-fantome danger-texte" data-retirer>${icone('corbeille', { taille: 16 })}Retirer</button>` : ''}
         ${remplacer ? `<button type="button" class="btn" data-remplacer>${icone('import', { taille: 16 })}Remplacer</button>` : ''}
       </div>` : ''}
-    </div>`, { classe: 'large', idTitre: 'titre-piece' });
+    </div>`, { classe: 'large', idTitre: 'titre-piece', empiler: true });
 
   if (temporaire) panneau.element.addEventListener('close', () => URL.revokeObjectURL(url));
   panneau.element.querySelector('[data-retirer]')?.addEventListener('click', async () => {

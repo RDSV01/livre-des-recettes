@@ -1,6 +1,6 @@
 {
   "name": "livre-des-recettes",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Tenez votre livre des recettes de micro-entrepreneur : simple, local et conforme aux obligations françaises.",
   "type": "module",
   "private": true,
@@ -8,12 +8,16 @@
   "scripts": {
     "start": "node server.js",
     "essai": "node scripts/essai.mjs",
-    "test": "node --test",
+    "test": "npm run versions && npm run test:unitaires && npm run verifier && npm run test:navigateur",
+    "versions": "node scripts/versions.mjs",
+    "test:unitaires": "node --test --test-force-exit",
+    "test:navigateur": "playwright install chromium && playwright test",
     "verifier": "node scripts/verifier.mjs",
-    "construire:exe": "node scripts/construire-exe.mjs"
+    "construire:exe": "node scripts/construire-exe.mjs",
+    "verifier:exe": "node scripts/verifier-exe.mjs"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=22.12"
   },
   "keywords": [
     "micro-entrepreneur",
@@ -23,18 +27,19 @@
     "france",
     "registre"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "exceljs": "^4.4.0",
-    "express": "^4.21.2",
-    "pdfkit": "^0.17.2"
+    "express": "^5.2.1",
+    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
+    "@playwright/test": "^1.63.0",
+    "esbuild": "^0.28.2",
     "postject": "^1.0.0-alpha.6",
-    "resedit": "^3.0.2"
+    "resedit": "^3.1.0"
   },
   "overrides": {
-    "uuid": "^11.1.1"
+    "uuid": "^14.0.2"
   }
 }

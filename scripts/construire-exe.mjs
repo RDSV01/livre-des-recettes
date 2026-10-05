@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { NtExecutable, NtExecutableResource, Data, Resource } from 'resedit';
+import { licencesEmbarquees } from './licences-exe.mjs';
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const RACINE = path.join(ICI, '..');
@@ -58,19 +59,19 @@ function listerFichiers(dossier, prefixe = '') {
 
 /**
  * Étape 1 : le module des actifs. Les fichiers sont encodés en base64 pour
- * traverser sans dommage l'empaquetage (et rester binaires si besoin).
+ * traverser sans dommage l'empaquetage (et rester binaires si besoin). Les
+ * licences de ce que l'exécutable embarque y sont jointes (`/licences.txt`).
  */
-function genererActifs() {
+async function genererActifs() {
   const fichiers = [
     ...listerFichiers(path.join(RACINE, 'public')),
     ...listerFichiers(path.join(RACINE, 'src', 'partage'), '/partage')
   ];
 
-  const entrees = fichiers.map(({ complet, url }) => {
-    const type = TYPES_MIME[path.extname(url).toLowerCase()] ?? 'application/octet-stream';
-    const base64 = fs.readFileSync(complet).toString('base64');
-    return `  '${url}': { type: '${type}', contenu: Buffer.from('${base64}', 'base64') }`;
-  });
+  const entree = (url, type, octets) => `  '${url}': { type: '${type}', contenu: Buffer.from('${octets.toString('base64')}', 'base64') }`;
+  const entrees = fichiers.map(({ complet, url }) =>
+    entree(url, TYPES_MIME[path.extname(url).toLowerCase()] ?? 'application/octet-stream', fs.readFileSync(complet)));
+  entrees.push(entree('/licences.txt', TYPES_MIME['.txt'], Buffer.from(await licencesEmbarquees(RACINE), 'utf8')));
 
   const module = `/**
  * Interface embarquée dans l'exécutable : fichier GÉNÉRÉ par
@@ -92,7 +93,8 @@ async function empaqueter() {
     bundle: true,
     platform: 'node',
     format: 'cjs',
-    target: 'node18',
+    // Le Node qui construit est celui que l'exécutable embarque.
+    target: `node${process.versions.node.split('.')[0]}`,
     outfile: path.join(DIST, 'livre-des-recettes.cjs'),
     define: {
       // La version n'est plus lisible dans package.json une fois embarquée.
@@ -102,9 +104,11 @@ async function empaqueter() {
       'import.meta.url': '""'
     },
     alias: {
-      // Cette variante de PDFKit embarque les polices standard du PDF,
-      // que la version habituelle lit dans ses fichiers .afm.
-      pdfkit: 'pdfkit/js/pdfkit.standalone.js'
+      // La variante de PDFKit qui embarque tout, polices standard comprises :
+      // la version habituelle les charge à la demande, d'une façon que
+      // l'empaquetage ne sait pas suivre. Désignée par son chemin, que la
+      // liste des exports du paquet ne mentionne pas.
+      pdfkit: path.join(RACINE, 'node_modules', 'pdfkit', 'js', 'pdfkit.standalone.js')
     },
     logLevel: 'warning'
   });
@@ -142,7 +146,7 @@ function habillerExecutable(executable) {
     ProductName: 'Livre des recettes',
     FileDescription: description,
     OriginalFilename: `${name}.exe`,
-    LegalCopyright: 'Licence MIT'
+    LegalCopyright: '© 2026 Raphael, licence PolyForm Noncommercial 1.0.0 (voir LICENSE)'
   });
   infos.outputToResourceEntries(ressources.entries);
 
@@ -228,7 +232,7 @@ function fabriquerExecutable() {
 
 console.log(`Construction de l'exécutable v${version}`);
 fs.mkdirSync(DIST, { recursive: true });
-genererActifs();
+await genererActifs();
 await empaqueter();
 fabriquerExecutable();
 console.log('Terminé.');

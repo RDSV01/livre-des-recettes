@@ -165,8 +165,8 @@ test('le détail reprend toutes les recettes de l’année, en ordre chronologiq
  * écrit les chaînes en hexadécimal : il faut défaire les deux pour relire ce
  * qui est réellement imprimé.
  */
-async function texteDuRapport(recettes, typeActivite) {
-  const parametres = { ...PARAMETRES, typeActivite };
+async function texteDuRapport(recettes, typeActivite, options = {}) {
+  const parametres = { ...PARAMETRES, typeActivite, ...options };
   const rapport = rapportAnnuel({ recettes, achats: [], parametres }, 2026);
 
   const morceaux = [];
@@ -284,4 +284,9 @@ test('le rapport se rend en PDF, même pour une année vide', async () => {
     assert.ok(pdf.length > 1000, 'un PDF non vide');
     assert.equal(pdf.subarray(0, 5).toString(), '%PDF-', 'un en-tête de PDF');
   }
+});
+
+test('le rapport ne compare à l’année précédente que si l’option le permet', async () => {
+  assert.ok((await texteDuRapport(RECETTES, 'mixte')).includes('Par rapport'), 'comparaison par défaut');
+  assert.ok(!(await texteDuRapport(RECETTES, 'mixte', { comparerAnneePrecedente: false })).includes('Par rapport'));
 });

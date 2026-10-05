@@ -8,11 +8,11 @@
 
 import { api } from '../api.js';
 import { sauvegarderMaintenant, ouvrirReprise } from '../fichier-sauvegarde.js';
-import { etat, definirParametres } from '../etat.js';
+import { etat, modifierParametres } from '../etat.js';
 import {
   toast, echapperHtml, infobulle, selecteur, afficherErreursFormulaire, effacerErreursFormulaire,
   accorder, poidsLisible, siretLisible, mouvementReduit, optionsCodes, interrupteur,
-  deplierHauteur, replierPuisRetirer, confirmer
+  deplierHauteur, replierPuisRetirer, confirmer, ecouterPourLaPage, heureLisible
 } from '../ui.js';
 import {
   annoncer, reussite, patienter, bandeauRetour, brancherSegmentes, copierDansPressePapiers
@@ -21,6 +21,7 @@ import { icone } from '../icones.js';
 import { listeSauvegardes, brancherRestauration } from '../sauvegardes.js';
 import { basculerTheme } from '../theme.js';
 import { champDate, brancherChampDate } from '../calendrier.js';
+import { listeRaccourcis } from '../raccourcis.js';
 import { DEVISES, FORMATS_DATE, MODES_REGLEMENT } from '/partage/constantes.js';
 import { TYPES_ACTIVITE, NATURES_PRESTATIONS } from '/partage/seuils.js';
 import { periodeAcre } from '/partage/acre.js';
@@ -28,15 +29,18 @@ import { dateEnFrancaisLong, aujourdHuiIso } from '/partage/dates.js';
 
 const SECTIONS = [
   ['identite', 'Identité'], ['regime', 'Régime et déclaration'], ['affichage', 'Affichage'],
-  ['modes', 'Modes de règlement'], ['options', 'Options'], ['securite', 'Sécurité'], ['donnees', 'Vos données'],
-  ['sauvegardes', 'Sauvegardes']
+  ['modes', 'Modes de règlement'], ['options', 'Options'], ['raccourcis', 'Raccourcis clavier'],
+  ['securite', 'Données et sécurité']
 ];
+
+/** Anciennes sections, réunies dans « Données et sécurité » : un lien vers elles y mène. */
+const SECTIONS_REUNIES = { donnees: 'securite', sauvegardes: 'securite' };
 
 /** Quand, en clair : « aujourd’hui à 14 h 02 », « hier à 9 h 10 », « le 12 mars 2026 à 18 h 45 ». */
 function quandLisible(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  const heure = `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`;
+  const heure = heureLisible(date);
   const jour = (d) => d.toDateString();
   const hier = new Date();
   hier.setDate(hier.getDate() - 1);
@@ -45,11 +49,20 @@ function quandLisible(iso) {
   return `le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à ${heure}`;
 }
 
+/** Les options, par ce qu'elles touchent : [titre du groupe, [[clé, titre, explication], …]]. */
 const OPTIONS = [
-  ['alertesNumerotation', 'Alertes de numérotation des factures', 'Doublons et numéros manquants, signalés dans le livre des recettes.'],
-  ['alerteRecetteSimilaire', 'Avertir d’une recette très similaire', 'Même date, même client, même montant qu’une recette existante.'],
-  ['suiviSeuils', 'Suivi des seuils sur le tableau de bord', 'Plafond micro-entrepreneur et franchise de TVA.'],
-  ['verifierMisesAJour', 'Signaler les nouvelles versions', 'Demande la dernière version publiée à GitHub, sans rien envoyer de vos données.']
+  ['Tableau de bord', [
+    ['suiviSeuils', 'Suivi des seuils', 'Plafond micro-entrepreneur et franchise de TVA.'],
+    ['comparerAnneePrecedente', 'Comparer avec l’année précédente', 'Une barre par mois pour l’année précédente dans le graphique, et l’évolution du chiffre d’affaires dans le rapport annuel.'],
+    ['proposerRenouvellements', 'Proposer les recettes qui reviennent chaque mois', 'Une recette encaissée trois mois de suite est proposée le mois suivant, à ajouter d’un clic.']
+  ]],
+  ['Saisie', [
+    ['alertesNumerotation', 'Alertes de numérotation des factures', 'Doublons et numéros manquants, signalés dans le livre des recettes.'],
+    ['alerteRecetteSimilaire', 'Avertir d’une recette très similaire', 'Même date, même client, même montant qu’une recette existante.']
+  ]],
+  ['Application', [
+    ['verifierMisesAJour', 'Signaler les nouvelles versions', 'Demande la dernière version publiée à GitHub, sans rien envoyer de vos données.']
+  ]]
 ];
 
 const CHAMPS_IDENTITE = [
@@ -83,7 +96,7 @@ export async function vueParametres(conteneur, params) {
 
   // ---- Gabarits ----------------------------------------------------------------------
   function identiteLue() {
-    const valeur = (v, format = (x) => x) => (v ? `<strong>${echapperHtml(format(v))}</strong>` : '<strong class="attenue">Non renseigné</strong>');
+    const valeur = (v, format = (x) => x) => (v ? `<strong>${echapperHtml(format(v))}</strong>` : '<span class="valeur-vide">Non renseigné</span>');
     return `<div class="carte-corps"><div class="identite">
         <div><span>Votre prénom</span>${valeur(p().prenom)}</div>
         <div class="large"><span>Nom de l’entreprise</span>${valeur(p().nomEntreprise)}</div>
@@ -290,6 +303,7 @@ export async function vueParametres(conteneur, params) {
                 <button type="button" data-theme-choix="dark" aria-pressed="${sombre}">${icone('lune', { taille: 15 })}Sombre</button>
               </div>
             </div>
+
           </div>`)}
 
           ${section('modes', 'Modes de règlement personnalisés', `<div class="carte-corps">
@@ -300,14 +314,20 @@ export async function vueParametres(conteneur, params) {
           </div>`)}
 
           ${section('options', 'Options', `<div class="carte-corps">
-            ${OPTIONS.map(([cle, titre, texte]) => `<div class="option">
-              <div><strong>${titre}</strong><span>${texte}</span></div>${interrupteur(`o-${cle}`, p()[cle], titre)}</div>`).join('')}
-            <div id="numeros-ignores"></div>
+            ${OPTIONS.map(([groupe, options]) => `<div class="groupe-options">
+              <h3 class="titre-sous-section">${groupe}</h3>
+              <div>${options.map(([cle, titre, texte]) => `<div class="option">
+                <div><strong>${titre}</strong><span>${texte}</span></div>${interrupteur(`o-${cle}`, p()[cle], titre)}</div>`).join('')}</div>
+              ${groupe === 'Saisie' ? '<div id="numeros-ignores"></div>' : ''}
+            </div>`).join('')}
           </div>`)}
 
-          ${section('securite', 'Sécurité de vos données', `<div class="carte-corps" id="zone-securite">${blocSecurite(securite)}</div>`)}
+          ${section('raccourcis', 'Raccourcis clavier', `<div class="carte-corps raccourcis">${listeRaccourcis()}</div>`,
+            '<span class="note">Touche <kbd>?</kbd> pour revenir ici</span>')}
 
-          ${section('donnees', 'Vos données', `<div class="carte-corps">
+          ${section('securite', 'Données et sécurité', `<div class="carte-corps" id="zone-securite">${blocSecurite(securite)}</div>
+          <div class="carte-corps sous-section">
+            <h3 class="titre-sous-section">Où sont vos données</h3>
             ${systeme.sauvegardesEnEchec ? `<p class="avis">${icone('cercle-alerte', { taille: 17 })}<span>Vos sauvegardes automatiques n’ont pas pu
               être écrites : le dossier ci-dessous est peut-être inaccessible (lecteur réseau déconnecté, disque plein). Vos saisies sont
               bien enregistrées, mais sans filet pour l’instant : «\u00a0Sauvegarder maintenant\u00a0», plus haut, par précaution.</span></p>` : ''}
@@ -321,13 +341,18 @@ export async function vueParametres(conteneur, params) {
             14 jours, puis une par semaine pendant 2 mois, puis une par mois pendant 1 an, plus une copie de secours mise à jour à
             chaque saisie. Chaque PDF joint y est aussi doublé. Pour changer d’ordinateur : «\u00a0Sauvegarder maintenant\u00a0» ici, puis
             «\u00a0Reprendre une sauvegarde\u00a0» sur le nouveau.</p>
-          </div>`)}
-
-          ${section('sauvegardes', 'Sauvegardes disponibles', `<div class="carte-corps" id="liste-sauvegardes">
+          </div>
+          <div class="sous-section">
+            <div class="tete-sous-section"><h3 class="titre-sous-section">Sauvegardes disponibles</h3>
+              <span class="note">De la plus récente à la plus ancienne</span></div>
+            <div class="carte-corps" id="liste-sauvegardes">
             ${sauvegardes.length === 0
               ? '<p class="sous-titre">Aucune sauvegarde pour l’instant : la première sera créée à la prochaine modification.</p>'
               : listeSauvegardes(sauvegardes)}
-          </div>`, '<span class="note">De la plus récente à la plus ancienne</span>')}
+            </div>
+          </div>`)}
+          <p class="note-soutien">Livre des recettes est gratuit et son code est ouvert. S’il vous rend service, vous pouvez
+            <a href="https://buymeacoffee.com/rdsv01" target="_blank" rel="noopener">offrir un café à son auteur</a>.</p>
         </div>
       </div>
     </div>`;
@@ -335,14 +360,16 @@ export async function vueParametres(conteneur, params) {
   const page = conteneur.querySelector('.page');
   brancherSegmentes(page);
 
-  // ---- Enregistrement ------------------------------------------------------------------
-  /** Enregistre des paramètres modifiés, tout le reste repris à l'identique. */
-  async function enregistrer(modification) {
-    const reponse = await api.enregistrerParametres({ ...p(), ...modification });
-    definirParametres(reponse.parametres);
-    return reponse.parametres;
-  }
+  // Le thème changé depuis le menu (son icône) se reflète ici aussi.
+  const suivreTheme = () => {
+    if (!page.isConnected) { window.removeEventListener('theme-modifie', suivreTheme); return; }
+    const sombreActuel = document.documentElement.dataset.theme === 'dark';
+    page.querySelectorAll('[data-theme-choix]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.themeChoix === 'dark') === sombreActuel)));
+  };
+  // Une seule page de paramètres à la fois : l'écouteur de la précédente laisse sa place.
+  ecouterPourLaPage('theme-modifie', suivreTheme);
 
+  // ---- Enregistrement ------------------------------------------------------------------
   /** « Enregistré » s'affiche un instant à côté du réglage qu'on vient de changer. */
   function enregistre(controle) {
     const option = controle.closest('.option, .option-champ');
@@ -387,7 +414,7 @@ export async function vueParametres(conteneur, params) {
   }));
   // Arrivée depuis un lien « Modifier » (écran URSSAF, tableau de bord).
   const demandee = params?.get('section');
-  if (demandee) requestAnimationFrame(() => allerA(demandee, false));
+  if (demandee) requestAnimationFrame(() => allerA(SECTIONS_REUNIES[demandee] ?? demandee, false));
 
   // ---- Identité ---------------------------------------------------------------------------
   const zoneIdentite = page.querySelector('#zone-identite');
@@ -411,7 +438,7 @@ export async function vueParametres(conteneur, params) {
       try {
         // Seule exception au « tout le reste à l'identique », voulue :
         // renseigner sa propre entreprise sort du mode démonstration.
-        await enregistrer({ ...saisie, jeuDemo: false });
+        await modifierParametres({ ...saisie, jeuDemo: false });
         // Fin de la première mise en route : la carte de bienvenue disparaît.
         etat.systeme.premierLancement = false;
         page.querySelector('#carte-bienvenue')?.remove();
@@ -469,7 +496,7 @@ export async function vueParametres(conteneur, params) {
     surChangement: async (iso) => {
       const saisie = champDebut.querySelector('.champ-texte');
       try {
-        await enregistrer({ debutActivite: iso });
+        await modifierParametres({ debutActivite: iso });
         enregistre(saisie);
         majAcre();
       } catch (erreur) {
@@ -485,7 +512,7 @@ export async function vueParametres(conteneur, params) {
     select.addEventListener('change', async () => {
       const avant = p()[cle];
       try {
-        await enregistrer({ [cle]: select.value });
+        await modifierParametres({ [cle]: select.value });
         enregistre(select);
         if (cle === 'typeActivite') majRegime();
       } catch (erreur) {
@@ -506,7 +533,7 @@ export async function vueParametres(conteneur, params) {
       .filter((m) => m.libelle);
     erreurModes.innerHTML = '';
     try {
-      const enregistres = await enregistrer({ modesPersonnalises: modes });
+      const enregistres = await modifierParametres({ modesPersonnalises: modes });
       listeModes.innerHTML = enregistres.modesPersonnalises.map(ligneMode).join('');
       if (controle) annoncer('Enregistré');
       return true;
@@ -534,7 +561,7 @@ export async function vueParametres(conteneur, params) {
     if (await enregistrerModes()) {
       bandeauRetour(listeModes, `« ${nom} » supprimé`, async () => {
         try {
-          const enregistres = await enregistrer({ modesPersonnalises: avant });
+          const enregistres = await modifierParametres({ modesPersonnalises: avant });
           // Les lignes sont refaites sans toucher au retour, qui se replie ;
           // celle qui revient se déplie à sa place.
           const presents = new Set([...listeModes.querySelectorAll('.ligne-gestion')].map((l) => l.dataset.code));
@@ -573,11 +600,11 @@ export async function vueParametres(conteneur, params) {
       const bouton = evenement.currentTarget;
       const avant = p().numerosIgnores;
       try {
-        await enregistrer({ numerosIgnores: [] });
+        await modifierParametres({ numerosIgnores: [] });
         // La liste se replie pendant que le retour se déplie.
         replierPuisRetirer(boite);
         bandeauRetour(zoneIgnores, 'Ces numéros seront de nouveau signalés', async () => {
-          await enregistrer({ numerosIgnores: avant }).catch((erreur) => toast(erreur.message, 'erreur'));
+          await modifierParametres({ numerosIgnores: avant }).catch((erreur) => toast(erreur.message, 'erreur'));
           rendreNumerosIgnores({ deplier: true });
         });
       } catch (erreur) {
@@ -693,14 +720,14 @@ export async function vueParametres(conteneur, params) {
       });
       if (!accord) return;
       try {
-        await enregistrer({ signalerAbsenceCopie: false });
+        await modifierParametres({ signalerAbsenceCopie: false });
         await rafraichirSecurite();
       } catch (erreur) {
         toast(erreur.message, 'erreur');
       }
     } else if (bouton.dataset.securite === 'rappeler') {
       try {
-        await enregistrer({ signalerAbsenceCopie: true });
+        await modifierParametres({ signalerAbsenceCopie: true });
         await rafraichirSecurite();
       } catch (erreur) {
         toast(erreur.message, 'erreur');
@@ -716,7 +743,7 @@ export async function vueParametres(conteneur, params) {
       const cle = inter.id.replace(/^[po]-/, '');
       inter.setAttribute('aria-checked', String(actif));
       try {
-        await enregistrer({ [cle]: actif });
+        await modifierParametres({ [cle]: actif });
         enregistre(inter);
         if (cle === 'acre') majAcre();
       } catch (erreur) {
@@ -733,7 +760,7 @@ export async function vueParametres(conteneur, params) {
       const avant = p().periodiciteUrssaf;
       boutons.forEach((b) => b.setAttribute('aria-pressed', String(b === periodicite)));
       try {
-        await enregistrer({ periodiciteUrssaf: periodicite.dataset.periodicite });
+        await modifierParametres({ periodiciteUrssaf: periodicite.dataset.periodicite });
         enregistre(groupe);
       } catch (erreur) {
         boutons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.periodicite === avant)));

@@ -77,19 +77,62 @@
 }
 
 /* L'indicateur de la page courante glisse d'un lien à l'autre, jusqu'à
-   Paramètres en bas du menu : il est placé par rapport au menu entier. */
+   Paramètres en bas du menu : il couvre le menu entier, et une découpe
+   (posée par app.js) n'en montre que la place du lien courant. */
 .indicateur-nav {
   position: absolute;
-  left: var(--e3);
-  right: var(--e3);
+  left: 0;
   top: 0;
   z-index: 0;
-  border-radius: var(--rayon);
+  width: 100%;
   background: var(--rail-actif);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   opacity: 0;
   pointer-events: none;
-  transition: transform 420ms var(--sortie), opacity 200ms, background-color 420ms var(--sortie);
+  clip-path: inset(0 100% 100% 0);
+  transition: clip-path var(--ressort-surbrillance-duree, 420ms) var(--ressort-surbrillance, var(--sortie)),
+    opacity 200ms, background-color 420ms var(--sortie);
+}
+/* Rechercher dans tout le livre (Ctrl+K), sous le nom de l'entreprise. */
+.recherche-rail {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  height: 36px;
+  margin: 0 0 var(--e3);
+  padding: 0 8px 0 var(--e3);
+  border: 1px solid var(--rail-filet);
+  border-radius: var(--rayon);
+  background: color-mix(in srgb, var(--rail-texte-fort) 5%, transparent);
+  color: var(--rail-texte);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  transition: background var(--rapide), color var(--rapide), border-color var(--rapide);
+}
+.recherche-rail:hover {
+  background: var(--rail-survol);
+  color: var(--rail-texte-fort);
+}
+.recherche-rail[hidden] {
+  display: none;
+}
+.recherche-rail:focus-visible {
+  outline-color: var(--rail-icone-active);
+}
+.recherche-rail > span:first-of-type {
+  flex: 1;
+}
+.recherche-rail .touches {
+  display: flex;
+  gap: 3px;
+}
+.recherche-rail kbd {
+  min-width: 0;
+  border-color: var(--rail-filet);
+  background: transparent;
+  color: var(--rail-texte);
+  font-size: 10.5px;
+  line-height: 16px;
 }
 /* La page ouverte prend l'encre de son domaine : surbrillance et icône. */
 .rail:has(.lien-nav[data-route='recettes'][aria-current='page']) .indicateur-nav {
@@ -182,22 +225,64 @@
   gap: var(--e3);
   padding-top: var(--e4);
 }
-.bascule-theme {
+/* Paramètres, et le thème à côté : une icône suffit à une action rare. */
+.ligne-reglages {
   display: flex;
   align-items: center;
-  gap: var(--e3);
+  gap: 4px;
+}
+.ligne-reglages .lien-nav {
+  flex: 1;
+  min-width: 0;
+}
+.bascule-theme {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
   height: 38px;
-  padding: 0 var(--e3);
-  border: 1px solid var(--rail-filet);
+  border: 0;
   border-radius: var(--rayon);
   background: transparent;
   color: var(--rail-texte);
-  font-size: 14px;
-  font-weight: 520;
+  transition: background var(--rapide), color var(--rapide);
 }
 .bascule-theme:hover {
   background: var(--rail-survol);
   color: var(--rail-texte-fort);
+}
+/* La version, et à sa place un instant après chaque écriture du livre,
+   « Enregistré à 14 h 32 » : les deux se superposent et passent de l'un à
+   l'autre en fondu. */
+.ligne-version {
+  display: grid;
+}
+.ligne-version > * {
+  grid-area: 1 / 1;
+  transition: opacity 240ms ease;
+}
+.etat-enregistrement {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  color: var(--rail-texte-fort);
+}
+.ligne-version.montre-heure #version-app {
+  opacity: 0;
+}
+.ligne-version.montre-heure .etat-enregistrement {
+  opacity: 1;
+}
+.etat-enregistrement .icone {
+  color: var(--rail-icone-active);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ligne-version > * {
+    transition: none;
+  }
 }
 .mention-locale {
   padding: 0 var(--e2);
@@ -211,6 +296,25 @@
   display: block;
   color: var(--rail-texte-fort);
   font-weight: 560;
+}
+/* Sous la version, à peine visible : de quoi soutenir le projet. */
+.lien-soutien {
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity var(--rapide);
+}
+.lien-soutien:hover,
+.lien-soutien:focus-visible {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lien-soutien:focus-visible {
+  outline-color: var(--rail-icone-active);
 }
 
 /* ---- Scène ------------------------------------------------------------------ */
@@ -265,6 +369,7 @@
   margin-top: 4px;
   color: var(--texte-2);
   font-size: 14.5px;
+  text-wrap: pretty;
 }
 .point {
   margin: 0 7px;
@@ -284,6 +389,10 @@
 .entete-page > .actions {
   margin-left: auto;
   justify-content: flex-end;
+}
+/* L'année choisie règle ce qui est affiché : un peu à l'écart des boutons d'ajout. */
+.entete-page > .actions > .choix-annee {
+  margin-right: var(--e2);
 }
 .actions.fin {
   justify-content: flex-end;
@@ -498,6 +607,40 @@ a.btn-petit {
 .tourne {
   animation: tourner 800ms linear infinite;
 }
+/* Marque d'état d'un bouton qui travaille (retours.js) : la roue tourne ; à
+   la fin, elle poursuit sa course en se refermant en anneau, puis une coche
+   ou une croix s'y trace. */
+.statut .anneau {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke-dasharray: 72 100;
+  animation: tourner 800ms linear infinite;
+}
+.statut-fin .anneau {
+  animation: refermer-anneau 320ms cubic-bezier(0.77, 0, 0.175, 1) both;
+}
+.statut-fin .marque {
+  stroke-dasharray: 1;
+  animation: tracer-marque 260ms cubic-bezier(0.22, 1, 0.36, 1) 220ms both;
+}
+@keyframes refermer-anneau {
+  from {
+    rotate: var(--angle);
+    stroke-dasharray: 72 100;
+  }
+  to {
+    rotate: calc(var(--angle) + 150deg);
+    stroke-dasharray: 100 100;
+  }
+}
+@keyframes tracer-marque {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 @keyframes tourner {
   to {
     rotate: 360deg;
@@ -681,6 +824,22 @@ a.btn-petit {
 .indicateurs.trois {
   grid-template-columns: minmax(0, 1.7fr) repeat(2, minmax(0, 1fr));
 }
+/* Place étroite (fenêtre de 1280 px) : la carte de l'année prend toute une
+   ligne, les autres se partagent la suivante sans couper leurs textes. */
+.cadre-indicateurs {
+  container-type: inline-size;
+}
+@container (max-width: 1040px) {
+  .indicateurs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .indicateurs.trois {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .indicateurs .principal {
+    grid-column: 1 / -1;
+  }
+}
 .indicateur {
   display: flex;
   flex-direction: column;
@@ -738,8 +897,13 @@ a.btn-petit {
   height: 28px;
   border-radius: var(--rayon-petit);
 }
+/* Le montant se centre dans la place libre de sa carte : la marge automatique
+   du dessus partage cette place, à parts égales, avec celle de ce qui ferme la
+   carte (détail, répartition, légende). Au repos, autant d'air au-dessus
+   qu'au-dessous. */
 .indicateur-valeur {
-  margin: 2px 0 var(--e3);
+  margin: auto 0 var(--e2);
+  padding-top: var(--e2);
   font-size: 25px;
   font-weight: 680;
   line-height: 1.1;
@@ -766,11 +930,27 @@ a.btn-petit {
   color: var(--texte-3);
 }
 
-/* Le chiffre de l'année : la carte qui compte, plus grande que les autres. */
+/* Le chiffre de l'année : la carte qui compte, plus grande que les autres et
+   seule pleine, en bleu nuit. Elle redéfinit pour elle les encres du texte
+   et des catégories : titre, centimes, légende, compteurs et répartition
+   suivent d'eux-mêmes. */
 .indicateur.principal {
-  background:
-    radial-gradient(120% 140% at 0% 0%, var(--sarcelle-doux) 0%, transparent 55%),
-    var(--carte);
+  --texte: var(--carte-forte-texte);
+  --texte-2: var(--carte-forte-texte-2);
+  --texte-3: color-mix(in srgb, var(--carte-forte-texte-2) 80%, transparent);
+  --bordure-douce: var(--carte-forte-filet);
+  --prestation: var(--carte-forte-prestation);
+  --vente: var(--carte-forte-vente);
+  --neutre: var(--carte-forte-neutre);
+  /* Le dégradé du menu, calé comme lui sur la fenêtre : à hauteur égale,
+     exactement le même bleu. */
+  background: linear-gradient(180deg, var(--carte-forte-haut), var(--carte-forte) 60%) fixed;
+  border-color: transparent;
+  color: var(--texte);
+}
+.indicateur.principal .tuile {
+  background: var(--carte-forte-filet);
+  color: var(--texte);
 }
 .indicateur.principal .indicateur-valeur {
   font-size: clamp(32px, 2.8vw, 38px);
@@ -933,6 +1113,17 @@ a.btn-petit {
   fill: transparent;
   transition: fill var(--rapide);
 }
+/* Le mois survolé (ou atteint au clavier) ressort : les autres pâlissent,
+   sans bouger. */
+.graphique :is(.barres, .barre-precedente) {
+  transition: opacity 180ms ease;
+}
+.graphique svg:has(.colonne:hover, .colonne:focus-visible) .colonne:not(:hover, :focus-visible) :is(.barres, .barre-precedente) {
+  opacity: 0.35;
+}
+.graphique svg:has(.colonne:hover, .colonne:focus-visible) .colonne:not(:hover, :focus-visible) .etiquette-valeur {
+  opacity: 0.45;
+}
 .graphique .colonne:hover .zone,
 .graphique .colonne:focus-visible .zone {
   fill: var(--survol);
@@ -940,8 +1131,14 @@ a.btn-petit {
 .graphique .colonne:focus {
   outline: none;
 }
+/* Le liseré couleur de carte (tracé sous le texte) le garde lisible quand il
+   passe sur la barre de l'année d'avant ; ailleurs, il ne se voit pas. */
 .graphique .etiquette-valeur {
   fill: var(--texte-2);
+  stroke: var(--carte);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
   font-size: 11px;
   font-weight: 600;
   font-family: var(--police);
@@ -959,6 +1156,37 @@ a.btn-petit {
 .barres {
   transform-box: fill-box;
   transform-origin: bottom;
+}
+/* L'année d'avant : une barre étroite et pâle à gauche de celle de l'année.
+   Légende et bulle la reprennent en pastille, comme les autres séries. */
+.barre-precedente {
+  fill: var(--precedente);
+}
+.cle-precedente i,
+.bulle-graphique .ligne i.seg-precedente {
+  background: var(--precedente);
+}
+.dessin .barre-precedente.anime {
+  animation: apparaitre 500ms ease backwards;
+  animation-delay: calc(var(--rang) * 40ms + 150ms);
+}
+.barre-precedente.fondu {
+  animation: apparaitre 400ms ease backwards;
+}
+/* Un mois écoulé mène à ses recettes. */
+.graphique svg.cliquable .colonne:not(.avenir) {
+  cursor: pointer;
+}
+.bulle-graphique .note-bulle {
+  color: var(--texte-3);
+}
+.bulle-graphique .precedente {
+  margin-top: 6px;
+  color: var(--texte-3);
+}
+.bulle-graphique .precedente span:last-child {
+  color: var(--texte-2);
+  font-weight: 500;
 }
 .dessin .barres.anime {
   animation: monter 700ms var(--sortie) both;
@@ -1027,6 +1255,7 @@ a.btn-petit {
   gap: var(--e4);
   color: var(--texte-2);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .bulle-graphique .ligne span:last-child {
   color: var(--texte);
@@ -1110,9 +1339,11 @@ a.btn-petit {
 .declaration .carte-tete {
   border-bottom: 1px solid var(--bordure-douce);
 }
+/* Sous le filet de l'en-tête, la période suit de près : un retrait plein
+   creusait un vide au-dessus d'elle. */
 .declaration-corps {
   flex: 1;
-  padding: var(--e5);
+  padding: var(--e4) var(--e5) var(--e5);
 }
 .declaration-corps.vide-carte {
   padding: var(--e5);
@@ -1239,6 +1470,77 @@ a.btn-petit {
     display: none;
   }
 }
+/* Chaque ligne ouvre sa recette dans le registre ; le lien porté par le
+   client garde l'apparence du texte, la ligne entière se signale au survol
+   comme au clavier. */
+.ligne-cliquable {
+  cursor: pointer;
+}
+.lien-ligne {
+  color: inherit;
+  text-decoration: none;
+}
+.lien-ligne:focus-visible {
+  outline: none;
+}
+.tableau tbody tr.ligne-cliquable:has(.lien-ligne:focus-visible) {
+  background: var(--survol);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* Recettes qui reviennent chaque mois, à ajouter : une bande pleine largeur
+   entre deux filets, en tête des dernières recettes. */
+.a-renouveler {
+  border-top: 1px solid var(--bordure-douce);
+  border-bottom: 1px solid var(--bordure-douce);
+  background: var(--carte-2);
+}
+.a-renouveler:not(:has(> *)) {
+  display: none;
+}
+.ligne-renouveler {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 10px var(--e5);
+  font-size: 13.5px;
+}
+.ligne-renouveler + .ligne-renouveler {
+  border-top: 1px solid var(--bordure-douce);
+}
+.texte-renouveler {
+  flex: 1;
+  min-width: 0;
+}
+.texte-renouveler strong {
+  font-weight: 620;
+}
+.texte-renouveler small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+/* « Ne plus proposer » : un lien gris, en retrait du bouton Ajouter. */
+.lien-ecarter {
+  flex: none;
+  border: 0;
+  padding: 2px 0;
+  background: none;
+  color: var(--texte-3);
+  font-size: 12.5px;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: color var(--rapide);
+}
+.lien-ecarter:hover,
+.lien-ecarter:focus-visible {
+  color: var(--texte-2);
+  text-decoration-line: underline;
+}
+.a-renouveler > .bandeau-retour {
+  margin: 0;
+  padding: 10px var(--e5);
+  border-radius: 0;
+}
 .lignes-ajustees {
   position: relative;
   flex: 1;
@@ -1275,11 +1577,6 @@ a.btn-petit {
   translate: 3px 0;
 }
 
-.activite-seuils {
-  margin: -6px var(--e5) var(--e3);
-  font-size: 13px;
-  color: var(--texte-3);
-}
 .regime {
   padding: 0 var(--e5) var(--e5);
 }
@@ -1299,8 +1596,36 @@ a.btn-petit {
   font-size: 12.5px;
   color: var(--texte-3);
 }
+/* Activité mixte : la règle commune aux deux régimes, dite une seule fois. */
+.explication-plafonds {
+  margin: calc(-1 * var(--e2)) 0 var(--e3);
+  padding: 0 var(--e5);
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
 .regle {
   margin-top: var(--e4);
+}
+/* La jauge et ce qu'il reste, sur la même ligne. */
+.regle-jauge {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  margin-top: 8px;
+}
+.regle-jauge .piste {
+  flex: 1;
+  margin-top: 0;
+}
+/* Largeur réservée : d'une jauge à l'autre, les pistes finissent au même endroit. */
+.regle-jauge .reste {
+  flex: none;
+  min-width: 9.5em;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--texte-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .regle-tete {
   display: flex;
@@ -1319,7 +1644,7 @@ a.btn-petit {
 }
 .piste {
   position: relative;
-  height: 6px;
+  height: 10px;
   margin-top: 8px;
   border-radius: 999px;
   background: var(--bordure-douce);
@@ -1438,6 +1763,27 @@ a.btn-petit {
 .tableau .libelle {
   color: var(--texte-2);
 }
+/* Registre et fiche client : le libellé prend la place que laissent les
+   autres colonnes, resserrées sur leur contenu, et tient sur une ligne (en
+   entier au survol). Le retour posé dessous garde toute la largeur de la cellule. */
+:is(.registre, .fiche-lignes) td.libelle {
+  width: 100%;
+  max-width: 0;
+}
+:is(.registre, .fiche-lignes) .texte-libelle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Fenêtre plus étroite : les colonnes se serrent un peu, le libellé garde de
+   quoi se lire en entier le plus souvent. */
+@media (max-width: 1365px) {
+  .registre :is(th, td):not(:first-child):not(:last-child) {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
 .tableau tfoot td {
   height: auto;
   padding-top: 14px;
@@ -1492,6 +1838,10 @@ p.vide {
 }
 /* Filtres des registres : l'année à portée de main, le reste derrière
    « Filtres », et ce qui agit en pastilles. */
+.choix-annee.actif {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
 .choix-annee.actif .annee-choisie {
   color: var(--accent-texte);
 }
@@ -1518,6 +1868,38 @@ p.vide {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* Au bout de la barre d'outils : un avis replié (« Numérotation : 1 numéro
+   manquant »), qui déplie son détail sous la barre. */
+.signal-registre {
+  margin-left: auto;
+}
+.signal-registre:empty {
+  display: none;
+}
+.pastille-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--alerte) 35%, transparent);
+  border-radius: 999px;
+  background: var(--alerte-doux);
+  color: var(--alerte-texte);
+  font-size: 13px;
+  font-weight: 560;
+  animation: apparaitre 200ms ease both;
+  transition: border-color var(--rapide);
+}
+.pastille-signal:hover {
+  border-color: var(--alerte);
+}
+.pastille-signal .chevron {
+  transition: rotate var(--moyen) var(--sortie);
+}
+.pastille-signal[aria-expanded='true'] .chevron {
+  rotate: 180deg;
 }
 .filtres-actifs:empty {
   display: none;
@@ -1546,7 +1928,7 @@ p.vide {
 .panneau-filtres {
   position: fixed;
   inset: auto;
-  width: 280px;
+  width: 340px;
   margin: 0;
   padding: var(--e4);
   border: 1px solid var(--bordure);
@@ -1569,6 +1951,13 @@ p.vide {
 }
 .panneau-filtres .lien-bouton {
   justify-self: start;
+}
+.panneau-filtres .segmente.filtre-segmente {
+  display: flex;
+}
+.panneau-filtres .segmente.filtre-segmente button {
+  flex: 1;
+  padding: 0 8px;
 }
 .recherche .icone {
   position: absolute;
@@ -1712,6 +2101,10 @@ p.vide {
 }
 .resume-registre:empty {
   display: none;
+}
+/* Le total défile après un geste : des chiffres de même largeur, rien ne bouge autour. */
+[data-total] {
+  font-variant-numeric: tabular-nums;
 }
 .resume-registre strong {
   color: var(--texte);
@@ -1865,22 +2258,23 @@ th.montant .tri {
   color: var(--texte);
 }
 
-/* Colonne du PDF joint : trombone pour voir, flèche pour joindre ; en-tête
-   et boutons centrés sur le même axe. */
 /* Le PDF joint se lit avec la facture (ou la référence) : son bouton se colle
-   juste devant le numéro, dans la même cellule (« trombone FAC-018 »). */
+   juste devant le numéro, dans la même cellule (« trombone FAC-018 »). Ses
+   marges négatives en hauteur le laissent hors du calcul de la ligne : le
+   numéro reste aligné sur le texte des autres colonnes. */
 .tableau td.col-piece-hote {
   white-space: nowrap;
 }
-.col-piece-hote > .btn-icone {
+.col-piece-hote > .btn-icone,
+.col-piece-hote > .place-piece {
   vertical-align: middle;
-  margin-left: -6px;
-  margin-right: -2px;
+  margin: -7px -2px -7px -6px;
 }
-/* Fiche client : un tableau compact où le PDF garde sa propre colonne. */
-.tableau .col-piece {
-  width: 44px;
-  text-align: center;
+/* Fiche client : la place du trombone est gardée, les numéros restent alignés. */
+.place-piece {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
 }
 .piece-oui {
   color: var(--accent-texte);
@@ -2038,13 +2432,17 @@ th.montant .tri {
   color: var(--barre-texte);
   box-shadow: var(--ombre-haute);
   translate: -50% 0;
-  transition: translate 300ms var(--sortie), opacity 180ms;
+  transition: translate 300ms var(--sortie), opacity 180ms, visibility 0s;
 }
+/* Cachée, elle glisse hors de l'écran puis disparaît pour de bon : ses
+   boutons ne se reçoivent plus au clavier ni ne se lisent. */
 .barre-selection[hidden] {
   display: flex !important;
   translate: -50% 150%;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
+  transition: translate 300ms var(--sortie), opacity 180ms, visibility 0s 300ms;
 }
 .barre-selection .compte {
   display: inline-flex;
@@ -2122,6 +2520,33 @@ th.montant .tri {
 .menu-contextuel.vers-le-haut {
   transform-origin: bottom right;
 }
+.menu-contextuel.a-gauche {
+  transform-origin: top left;
+}
+.menu-contextuel.a-gauche.vers-le-haut {
+  transform-origin: bottom left;
+}
+/* Liste de choix (l'année) : étroite, la valeur choisie cochée ; une longue
+   liste défile. */
+.menu-choix {
+  min-width: 130px;
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.menu-choix button {
+  font-variant-numeric: tabular-nums;
+}
+.menu-choix .marque-choix {
+  visibility: hidden;
+}
+.menu-choix [aria-checked='true'] {
+  font-weight: 650;
+}
+.menu-choix [aria-checked='true'] .marque-choix {
+  visibility: visible;
+  color: var(--accent-texte);
+}
 .menu-contextuel button {
   display: flex;
   align-items: center;
@@ -2151,6 +2576,40 @@ th.montant .tri {
 .menu-contextuel button.danger:focus-visible {
   background: var(--danger-doux);
 }
+/* Surlignage qui glisse d'une ligne à l'autre (glisseur.js) : un seul fond,
+   sous les lignes (la liste isole son empilement). */
+.avec-surlignage {
+  isolation: isolate;
+}
+.surlignage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  margin: 0;
+  padding: 0;
+  background: var(--survol);
+  opacity: 0;
+  pointer-events: none;
+}
+.surlignage.choix {
+  background: var(--accent-doux);
+}
+.surlignage.danger {
+  background: var(--danger-doux);
+}
+.surlignage.visible {
+  opacity: 1;
+}
+.menu-contextuel.avec-surlignage button:hover,
+.menu-contextuel.avec-surlignage button:focus-visible,
+.menu-contextuel.avec-surlignage button.danger:hover,
+.menu-contextuel.avec-surlignage button.danger:focus-visible,
+.avec-surlignage .sugg[aria-selected='true'],
+.avec-surlignage .resultat[aria-selected='true'] {
+  background: transparent;
+}
 .menu-contextuel hr {
   margin: 4px 6px;
   border: 0;
@@ -2167,7 +2626,7 @@ dialog.panneau {
   inset: 0 0 0 auto;
   display: flex;
   flex-direction: column;
-  width: min(480px, 100vw);
+  width: min(520px, 100vw);
   max-width: none;
   height: 100vh;
   max-height: none;
@@ -2271,6 +2730,34 @@ dialog.panneau.large {
   font-size: 12.5px;
   color: var(--texte-3);
   white-space: nowrap;
+}
+/* « Ajouter et en saisir une autre » : un lien discret, son raccourci dessous. */
+.lien-enchainer {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--texte-2);
+  font-weight: 560;
+  text-align: left;
+}
+.lien-enchainer:hover {
+  color: var(--accent-texte);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lien-enchainer .touches {
+  display: flex;
+  gap: 3px;
+  text-decoration: none;
+}
+.lien-enchainer kbd {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 15px;
+  color: var(--texte-3);
 }
 .panneau-pied .actions {
   flex-wrap: nowrap;
@@ -2555,7 +3042,8 @@ kbd {
   }
 }
 /* Champ rempli par une suggestion : un éclat bref. */
-.champ-texte.rempli {
+.champ-texte.rempli,
+.selecteur select.rempli {
   animation: eclat 700ms var(--sortie);
 }
 @keyframes eclat {
@@ -2610,6 +3098,31 @@ kbd {
 .case:checked::after {
   scale: 1;
 }
+/* Cochée d'un geste : la case se gonfle un instant, puis la coche se trace,
+   la petite branche d'abord (réglages du composant « Task List » de Rare UI). */
+.case.coche-anime:checked {
+  animation: gonfler-case 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.case.coche-anime:checked::after {
+  transition: none;
+  animation: tracer-case 220ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both;
+}
+@keyframes gonfler-case {
+  40% {
+    scale: 1.08;
+  }
+}
+@keyframes tracer-case {
+  0% {
+    clip-path: inset(calc(100% - 2px) 100% 0 0);
+  }
+  40% {
+    clip-path: inset(calc(100% - 2px) 0 0 0);
+  }
+  100% {
+    clip-path: inset(0);
+  }
+}
 .case:indeterminate {
   background: var(--accent);
   border-color: var(--accent);
@@ -2625,13 +3138,17 @@ kbd {
 
 /* ---- Groupes à bascule, avec leur curseur qui glisse --------------------------------- */
 
+/* Un champ comme ses voisins (recherche, choix de l'année) : fond blanc,
+   bordure fine qui ne change pas au survol ; l'option choisie se teinte du
+   bleu des sélections (client choisi, section du sommaire). */
 .segmente {
   position: relative;
   display: flex;
-  padding: 3px;
-  gap: 3px;
-  border-radius: var(--rayon-groupe);
-  background: var(--bordure-douce);
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--bordure-controle);
+  border-radius: var(--rayon);
+  background: var(--champ);
 }
 .segmente button {
   position: relative;
@@ -2653,12 +3170,12 @@ kbd {
   transition: background var(--rapide), color var(--rapide), box-shadow var(--rapide);
 }
 .segmente button:hover {
+  background: var(--survol);
   color: var(--texte);
 }
 .segmente button[aria-pressed='true'] {
-  background: var(--carte);
-  color: var(--texte);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--bordure);
+  background: var(--accent-doux);
+  color: var(--accent-texte);
 }
 .segmente i {
   width: 8px;
@@ -2673,35 +3190,40 @@ kbd {
   height: 30px;
   font-size: 13px;
 }
+/* Le curseur couvre le groupe ; retours.js le découpe à la place de l'option
+   choisie, et la découpe glisse de l'une à l'autre. */
 .segmente .curseur {
   position: absolute;
-  left: 3px;
-  top: 3px;
-  bottom: 3px;
-  border-radius: var(--rayon-petit);
-  background: var(--carte);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--bordure);
-  transition: transform 340ms var(--sortie);
+  inset: 2px;
+  background: var(--accent-doux);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 340ms var(--sortie);
 }
 .segmente.avec-curseur button[aria-pressed='true'] {
   background: transparent;
   box-shadow: none;
 }
-/* Choix de l'année, « ‹ 2026 › » : le même bac que les groupes à bascule,
-   l'année posée dans la pastille blanche de l'option choisie. */
+/* Choix de l'année, « ‹ 2026 › » : un champ comme ses voisins (recherche,
+   listes), les flèches de part et d'autre, l'année au milieu, qui ouvre la
+   liste de toutes au clic. */
 .choix-annee {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--rayon-groupe);
-  background: var(--bordure-douce);
+  gap: 1px;
+  height: 36px;
+  padding: 0 3px;
+  border: 1px solid var(--bordure-controle);
+  border-radius: var(--rayon);
+  background: var(--champ);
+  transition: border-color var(--rapide), background var(--rapide);
 }
+/* Au survol, seuls les boutons réagissent : le cadre garde sa bordure. */
 .choix-annee button {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 30px;
+  width: 26px;
+  height: 28px;
   border: 0;
   border-radius: var(--rayon-petit);
   background: transparent;
@@ -2718,16 +3240,24 @@ kbd {
   opacity: 0.45;
   cursor: default;
 }
-.annee-choisie {
-  display: grid;
-  place-items: center;
-  min-width: 56px;
-  height: 30px;
-  padding: 0 10px;
+.choix-annee .annee-choisie {
+  width: auto;
+  min-width: 58px;
+  padding: 0 8px;
   color: var(--texte);
   font-size: 13.5px;
   font-weight: 620;
   font-variant-numeric: tabular-nums;
+}
+.choix-annee .annee-choisie[aria-expanded='true'] {
+  background: var(--survol);
+}
+.choix-annee .annee-choisie:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.choix-annee .annee-choisie:disabled:hover {
+  background: transparent;
 }
 .champ.invalide .segmente {
   box-shadow: 0 0 0 2px var(--danger-doux), 0 0 0 1px var(--danger);
@@ -2803,7 +3333,8 @@ kbd {
   white-space: nowrap;
   font-weight: 600;
 }
-.sugg-texte strong mark {
+.sugg-texte strong mark,
+.resultat-texte strong mark {
   background: none;
   color: var(--accent-texte);
   text-decoration: underline;
@@ -4035,10 +4566,13 @@ p.option-pieces {
   bottom: 14px;
   background: var(--rail-filet);
 }
+/* Le fil rempli fait toute la longueur et se déroule depuis le haut. */
 .accueil-etapes::after {
-  height: calc((100% - 28px) * var(--avance));
+  bottom: 14px;
   background: var(--rail-icone-active);
-  transition: height 600ms var(--sortie);
+  transform: scaleY(var(--avance));
+  transform-origin: top;
+  transition: transform 600ms var(--sortie);
 }
 .accueil-etapes li {
   display: flex;
@@ -4089,6 +4623,16 @@ p.option-pieces {
 }
 .faite .accueil-repere .icone {
   display: block;
+}
+/* « C'est prêt » n'est pas une question : pas de numéro (l'accueil compte
+   « Étape 1 sur 4 »), la coche en attente, pâle. */
+.arrivee .accueil-repere .icone {
+  display: block;
+  opacity: 0.55;
+}
+.arrivee.courante .accueil-repere .icone,
+.arrivee.faite .accueil-repere .icone {
+  opacity: 1;
 }
 
 /* L'étape en cours. */
@@ -4397,6 +4941,89 @@ p.option-pieces {
 .section-param .carte-corps > .actions {
   margin-top: var(--e4);
 }
+/* Tout en bas des paramètres, à peine visible : de quoi soutenir le projet. */
+.note-soutien {
+  padding: var(--e2) var(--e1) 0;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.note-soutien a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}
+.note-soutien a:hover {
+  color: var(--texte-2);
+}
+/* « Données et sécurité » : une seule carte, ses parties séparées par un
+   filet pleine largeur (pas d'encadré dans la carte). */
+.sous-section {
+  border-top: 1px solid var(--bordure-douce);
+}
+.carte-corps.sous-section {
+  padding-top: var(--e5);
+}
+.tete-sous-section .note {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.titre-sous-section {
+  font-size: 14px;
+  font-weight: 650;
+}
+.carte-corps > .titre-sous-section {
+  margin-bottom: var(--e3);
+}
+.tete-sous-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e5) var(--e5) 0;
+}
+.tete-sous-section + .carte-corps {
+  padding-top: var(--e3);
+}
+/* Raccourcis clavier : par contexte, la touche à gauche, son effet à droite. */
+.raccourcis {
+  display: grid;
+  gap: var(--e4);
+}
+.groupe-raccourcis + .groupe-raccourcis {
+  padding-top: var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+}
+.groupe-raccourcis h3 {
+  margin-bottom: var(--e2);
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--texte-2);
+}
+.groupe-raccourcis dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.raccourci {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  align-items: center;
+  gap: var(--e3);
+  font-size: 14px;
+}
+.raccourci dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.raccourci dt .plus {
+  font-size: 12px;
+  color: var(--texte-3);
+}
+.raccourci dd {
+  margin: 0;
+  color: var(--texte-2);
+}
 .grille-champs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4423,6 +5050,11 @@ p.option-pieces {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+/* Une case vide se lit comme une absence, pas comme une donnée. */
+.identite .valeur-vide {
+  margin-bottom: 0;
+  font-size: inherit;
+}
 .option {
   position: relative;
   display: grid;
@@ -4443,6 +5075,18 @@ p.option-pieces {
   margin-top: var(--e4);
   padding-top: var(--e4);
   border-top: 1px solid var(--bordure-douce);
+}
+/* Options rangées par ce qu'elles touchent : un titre, ses lignes, puis
+   le groupe suivant après un filet (pas d'encadré dans la carte). La
+   dernière ligne garde son retrait bas : autant d'air au-dessus du filet
+   qu'en dessous. */
+.groupe-options + .groupe-options {
+  margin-top: var(--e2);
+  padding-top: var(--e5);
+  border-top: 1px solid var(--bordure-douce);
+}
+.groupe-options > .titre-sous-section {
+  margin-bottom: var(--e3);
 }
 .option strong {
   display: block;
@@ -4492,6 +5136,7 @@ p.option-pieces {
 .interrupteur[aria-checked='true']::after {
   translate: 16px 0;
 }
+
 /* « Enregistré » à côté du réglage modifié. */
 .enregistre {
   position: absolute;
@@ -4600,6 +5245,11 @@ dialog.boite {
   box-shadow: var(--ombre-haute);
   animation: ouvrir-boite 220ms var(--sortie);
 }
+/* Centrées sur le contenu, à droite du menu, et non sur la fenêtre : sinon
+   elles paraissent décalées vers la gauche. L'accueil, lui, occupe tout l'écran. */
+:root:not(:has(.accueil:not(.ferme))) dialog.boite:modal {
+  left: var(--largeur-rail);
+}
 dialog.boite::backdrop {
   background: var(--voile);
   backdrop-filter: blur(1.5px);
@@ -4616,6 +5266,107 @@ dialog.boite::backdrop {
   flex-direction: column;
   gap: var(--e3);
   padding: var(--e5);
+}
+
+/* Recherche dans tout le livre (Ctrl+K) : en haut de l'écran, comme une barre
+   de recherche, les résultats groupés dessous. */
+dialog.boite-recherche {
+  width: min(640px, calc(100vw - 32px));
+  margin: 12vh auto auto;
+  overflow: hidden;
+}
+.champ-recherche-globale {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 0 var(--e4);
+  border-bottom: 1px solid var(--bordure-douce);
+  color: var(--texte-3);
+}
+.champ-recherche-globale input {
+  flex: 1;
+  height: 54px;
+  border: 0;
+  background: transparent;
+  color: var(--texte);
+  font-size: 16px;
+  outline: none;
+}
+.champ-recherche-globale input::placeholder {
+  color: var(--texte-3);
+}
+.champ-recherche-globale input::-webkit-search-cancel-button {
+  display: none;
+}
+.resultats-recherche {
+  position: relative;
+  max-height: min(420px, 56vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+.titre-groupe {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--texte-3);
+}
+.resultat {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: 8px 10px;
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+}
+.resultat > .icone {
+  flex: none;
+  color: var(--texte-3);
+}
+.resultat[aria-selected='true'] {
+  background: var(--accent-doux);
+}
+.resultat[aria-selected='true'] > .icone {
+  color: var(--accent-texte);
+}
+.resultat-texte {
+  flex: 1;
+  min-width: 0;
+}
+.resultat-texte strong {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resultat-texte span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--texte-3);
+  font-variant-numeric: tabular-nums;
+}
+.aucun-resultat {
+  padding: var(--e5) var(--e4);
+  color: var(--texte-2);
+  font-size: 14px;
+  text-align: center;
+}
+.pied-recherche {
+  display: flex;
+  gap: var(--e4);
+  padding: 8px var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+  background: var(--carte-2);
+  font-size: 12px;
+  color: var(--texte-3);
+}
+.pied-recherche kbd + kbd {
+  margin-left: 3px;
+}
+.pied-recherche kbd {
+  margin-right: 5px;
 }
 .boite-corps h2 {
   font-size: 17px;
@@ -4701,6 +5452,28 @@ body:has(.barre-selection:not([hidden])) .toasts {
 .toast span {
   flex: 1;
 }
+/* La mèche : le temps qui reste avant que le message s'efface. */
+.toast {
+  position: relative;
+  overflow: hidden;
+}
+.meche {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--succes);
+  opacity: 0.55;
+  transform-origin: left;
+}
+.toast.erreur .meche {
+  background: var(--danger);
+}
+.toast.part {
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
 @keyframes arriver {
   from {
     opacity: 0;
@@ -4751,14 +5524,21 @@ body:has(.barre-selection:not([hidden])) .toasts {
   box-shadow: var(--ombre-haute);
   visibility: hidden;
   opacity: 0;
-  translate: 0 -4px;
-  transition: opacity 140ms ease, translate 200ms var(--sortie), visibility 0s linear 140ms;
+  scale: 0.96;
+  /* Elle ne fait que se lire : le pointeur passe à travers, jusqu'à l'icône voisine qu'elle recouvre. */
+  pointer-events: none;
+  transition: opacity 140ms ease, scale 200ms var(--sortie), visibility 0s linear 140ms;
 }
+/* Elle naît de son icône (origine posée par ui.js) ; ouverte juste après une
+   autre, elle apparaît d'emblée. */
 .bulle-aide.visible {
   visibility: visible;
   opacity: 1;
-  translate: 0 0;
-  transition: opacity 140ms ease, translate 200ms var(--sortie), visibility 0s;
+  scale: 1;
+  transition: opacity 140ms ease, scale 200ms var(--sortie), visibility 0s;
+}
+.bulle-aide.visible.sans-apparition {
+  transition: none;
 }
 
 /* ---- Squelette de chargement --------------------------------------------------------- */
@@ -4863,39 +5643,29 @@ body:has(.barre-selection:not([hidden])) .toasts {
 /* ---- Sécurité de vos données -------------------------------------------------------- */
 
 /* Avis du pied de menu : pas de copie hors de l'ordinateur, ou pas de copie
-   récente. Dans la teinte de « En retard », en tête du pied de menu ; un clic
-   mène à la section Sécurité des paramètres. */
+   récente. Une ligne dans la teinte de « En retard », sans fond, en tête du
+   pied de menu ; le conseil au survol, un clic mène à la section Sécurité des
+   paramètres. */
 .etat-copie {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--e3);
-  padding: 9px var(--e3);
+  padding: 4px var(--e3);
   border-radius: var(--rayon);
-  background: var(--rail-alerte-fond);
   color: var(--rail-alerte-texte);
-  font-size: 12.5px;
+  font-size: 12px;
+  font-weight: 560;
   line-height: 1.4;
   text-decoration: none;
+  text-wrap: balance;
 }
 .etat-copie .icone {
   flex: none;
-  margin-top: 1px;
 }
-.etat-copie strong {
-  display: block;
-  font-weight: 620;
-  text-wrap: balance;
-}
-/* Le conseil, un ton en dessous du titre. */
-.texte-etat-copie {
-  color: color-mix(in srgb, var(--rail-alerte-texte) 78%, var(--rail-texte));
-}
-.texte-etat-copie strong {
-  color: var(--rail-alerte-texte);
-}
-.etat-copie:hover strong,
-.etat-copie:focus-visible strong {
+.etat-copie:hover .texte-etat-copie,
+.etat-copie:focus-visible .texte-etat-copie {
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .etat-copie:focus-visible {
   outline-color: var(--rail-icone-active);

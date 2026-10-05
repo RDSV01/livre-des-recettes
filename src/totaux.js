@@ -161,6 +161,8 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
     nombreParMois: Array.from({ length: 12 }, (_, i) => recettesAnnee.filter((r) => moisDe(r.dateEncaissement) === i + 1).length),
     caParMoisVentes: parMois(deCategorie(recettes, 'ventes')),
     caParMoisPrestations: parMois(deCategorie(recettes, 'prestations')),
+    // L'année d'avant, mois par mois : le graphique la montre en retrait, pour comparer.
+    caParMoisAnneePrecedente: caMensuel(recettes, { maintenant: new Date(anneeChoisie - 1, 11, 15) }),
     // Assez de lignes pour remplir la carte, qui n'en montre que ce qui tient.
     dernieresRecettes: recettesAnnee.sort(parDateDesc('dateEncaissement')).slice(0, 12),
     achatsAnnee: totalMontants(achatsAnnee),

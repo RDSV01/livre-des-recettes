@@ -116,10 +116,10 @@ export function controlerRecettes(recettes, periode, parametres = {}) {
     etat: doublons.length === 0 && trous === 0 ? 'ok' : 'attention',
     detail: doublons.length === 0 && trous === 0
       ? 'Aucun numéro en double ni manquant.'
-      : [
+      : `${[
         doublons.length > 0 && `${pluriel(doublons.length, 'numéro', 's')} en double`,
         trous > 0 && `${pluriel(trous, 'numéro', 's')} manquant${trous > 1 ? 's' : ''} dans la série`
-      ].filter(Boolean).join(', ') + '.'
+      ].filter(Boolean).join(', ')}.`
   });
 
   points.push(controleDoublons(selection, compterDoublonsRecettes, 'recette'));

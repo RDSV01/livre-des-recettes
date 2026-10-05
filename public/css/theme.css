@@ -55,9 +55,20 @@
   --logo-haut: #3b82f6;
   --logo-bas: #2563eb;
 
+  /* La carte du chiffre de l'année, seule pleine : la couleur du menu, dans
+     les deux thèmes, chiffre en blanc. Ventes et prestations s'y
+     éclaircissent pour rester lisibles. */
+  --carte-forte: var(--rail);
+  --carte-forte-haut: var(--rail-haut);
+  --carte-forte-texte: var(--rail-texte-fort);
+  --carte-forte-texte-2: var(--rail-texte);
+  --carte-forte-filet: rgba(255, 255, 255, 0.14);
+  --carte-forte-vente: #93c5fd;
+  --carte-forte-prestation: #4ade80;
+  --carte-forte-neutre: rgba(255, 255, 255, 0.45);
+
   /* Agir */
   --accent: #2563eb;
-  --accent-fort: #1d4ed8;
   --accent-survol: #1d4ed8;
   --accent-doux: #eef3ff;
   --accent-texte: #1d4ed8;
@@ -74,6 +85,8 @@
   --prestation-doux: #e8f7ee;
   --prestation-texte: #15803d;
   --neutre: #a8a196;
+  /* L'année d'avant, en barres étroites sur le graphique : présente, en retrait. */
+  --precedente: #d5cec2;
   --achat: #7c3aed;
   --achat-doux: #f3eefe;
   --achat-texte: #6d28d9;
@@ -183,7 +196,6 @@
   --rail-filet: rgba(255, 255, 255, 0.07);
 
   --accent: #3b82f6;
-  --accent-fort: #60a5fa;
   --accent-survol: #2563eb;
   --accent-doux: rgba(59, 130, 246, 0.14);
   --accent-texte: #93c5fd;
@@ -197,6 +209,7 @@
   --prestation-doux: rgba(34, 197, 94, 0.14);
   --prestation-texte: #86efac;
   --neutre: #6b6760;
+  --precedente: #47484e;
   --achat: #a78bfa;
   --achat-doux: rgba(167, 139, 250, 0.15);
   --achat-texte: #c4b5fd;

@@ -24,9 +24,9 @@ import {
 const TAILLE_CLASSEMENT = 5;
 
 /** Part d'un montant dans un total, en pourcentage à une décimale. */
-function part(centimes, totalCentimes) {
-  if (totalCentimes === 0) return 0;
-  return Math.round((centimes / totalCentimes) * 1000) / 10;
+function part(centimes, total) {
+  if (total === 0) return 0;
+  return Math.round((centimes / total) * 1000) / 10;
 }
 
 /**

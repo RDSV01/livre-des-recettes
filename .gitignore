@@ -12,6 +12,10 @@ data/
 dist/
 scripts/actifs-generes.mjs
 
+# Résultats des tests de l'interface (npm run test:navigateur)
+test-results/
+playwright-report/
+
 # Journaux et fichiers temporaires
 *.log
 npm-debug.log*

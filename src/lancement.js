@@ -20,6 +20,34 @@ import { ouvrirDansLeSysteme } from './emplacements.js';
 const PORTS_ESSAYES = 10;
 
 /**
+ * Ports que les navigateurs refusent d'ouvrir (protocoles sensibles :
+ * courrier, X11, IRC…), liste de Chromium et de Firefox. L'application n'y
+ * écoute jamais : la page s'ouvrirait sur une erreur.
+ */
+export const PORTS_REFUSES_PAR_LES_NAVIGATEURS = new Set([
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103,
+  104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513,
+  514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720,
+  1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080
+]);
+
+/**
+ * Fait écouter `app` sur un port libre choisi par le système, en écartant
+ * ceux que navigateurs et `fetch` refusent : certains systèmes les attribuent
+ * aussi (Windows peut le faire dès le port 1024). Pour les tests et les
+ * vérifications, qui démarrent l'application sur un port quelconque.
+ *
+ * @returns {Promise<import('node:http').Server>}
+ */
+export async function ecouterSurUnPortLibre(app) {
+  for (;;) {
+    const serveur = await new Promise((pret) => { const s = app.listen(0, '127.0.0.1', () => pret(s)); });
+    if (!PORTS_REFUSES_PAR_LES_NAVIGATEURS.has(serveur.address().port)) return serveur;
+    await new Promise((fin) => { serveur.close(fin); });
+  }
+}
+
+/**
  * Lance l'application.
  *
  * @param {object} options
@@ -66,7 +94,11 @@ export function demarrerServeur({ dossierDonnees, port = 3000, actifs, surEchec 
   const app = creerApp({ dossierDonnees, actifs, arreter, taches: true });
 
   const ecouter = (portEssai, restants) => {
-    serveur = app.listen(portEssai, '127.0.0.1', () => {
+    if (PORTS_REFUSES_PAR_LES_NAVIGATEURS.has(portEssai)) return ecouter(portEssai + 1, restants);
+    serveur = app.listen(portEssai, '127.0.0.1', (erreur) => {
+      // Express rappelle aussi en cas d'échec (port occupé) : l'écouteur
+      // `error` ci-dessous s'en charge, rien n'est annoncé ni ouvert.
+      if (erreur) return;
       verrou.noterPort(portEssai);
       // Nouvelle version lancée par une mise à jour : l'ancienne attend ce
       // signe pour s'effacer ; sans lui, elle reprend la main (voir `maj.js`).

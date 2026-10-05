@@ -28,8 +28,10 @@ let choisi = null;
 let ordre = 'ca';
 const ORDRES = [['ca', 'Chiffre d’affaires'], ['nom', 'Nom'], ['recent', 'Récents']];
 
-export async function vueClients(conteneur) {
+export async function vueClients(conteneur, params) {
   const { devise, formatDate } = etat.parametres;
+  // Arrivée depuis la recherche dans tout le livre : la fiche de ce client.
+  if (params?.get('client')) choisi = params.get('client');
   let clients = [];
   let recettes = [];
   let recherche = '';
@@ -75,7 +77,7 @@ export async function vueClients(conteneur) {
     const avecSiret = clients.filter((c) => c.siret).length;
     page.querySelector('#resume-clients').innerHTML = clients.length === 0
       ? 'Votre carnet de clients.'
-      : `${accorder(clients.length, 'client')}<span class="point">·</span>${avecSiret} avec SIRET`;
+      : `${accorder(clients.length, 'client')}${avecSiret ? `<span class="point">·</span>${avecSiret} avec SIRET` : ''}`;
   }
 
   /** Dernier encaissement de chaque client (date ISO), pour l'ordre « Récents ». */
@@ -123,7 +125,7 @@ export async function vueClients(conteneur) {
       return `<li>
       <button type="button" class="client-ligne" data-client="${c.id}" aria-pressed="${c.id === choisi}">
         <span class="monogramme" data-teinte="${teinteDe(c.nom)}" aria-hidden="true">${echapperHtml(initiales(c.nom))}</span>
-        <span><span class="nom">${echapperHtml(c.nom)}</span><span class="details">${c.siret ? `SIRET ${siretLisible(c.siret)}` : 'Sans SIRET'}</span>
+        <span><span class="nom">${echapperHtml(c.nom)}</span>${c.siret ? `<span class="details">SIRET ${siretLisible(c.siret)}</span>` : ''}
           ${part > 0 ? `<span class="part-ca" title="${String(part).replace('.', ',')} % du chiffre d’affaires"><i style="width:${part}%"></i></span>
           <span class="hors-ecran">, ${String(part).replace('.', ',')} % du chiffre d’affaires</span>` : ''}</span>
         <span class="ca">${c.nombreRecettes > 0 ? echapperHtml(formaterMontantEntier(c.totalRecettes, devise)) : '<span class="attenue">-</span>'}
@@ -149,7 +151,7 @@ export async function vueClients(conteneur) {
         <span class="monogramme" data-teinte="${teinteDe(client.nom)}" aria-hidden="true">${echapperHtml(initiales(client.nom))}</span>
         <div class="fiche-titre">
           <h2 id="titre-fiche">${echapperHtml(client.nom)}</h2>
-          <p class="sous-titre">${client.siret ? `SIRET ${siretLisible(client.siret)}` : 'Sans SIRET'}</p>
+          ${client.siret ? `<p class="sous-titre">SIRET ${siretLisible(client.siret)}</p>` : ''}
         </div>
         <div class="actions">
           <button type="button" class="btn-icone" id="modifier-client" aria-label="Modifier le client" title="Modifier">${icone('crayon', { taille: 17 })}</button>
@@ -161,10 +163,14 @@ export async function vueClients(conteneur) {
         <div><span>Dernier encaissement</span><strong>${lignes[0] ? echapperHtml(formaterDate(lignes[0].dateEncaissement, formatDate)) : 'Aucun'}</strong></div>
       </div>
       ${lignes.length ? `<div class="fiche-lignes"><table class="tableau">
-        <thead><tr><th>Date</th><th>Libellé</th><th class="col-piece" title="Facture en PDF">PDF</th><th class="montant">Montant</th></tr></thead>
+        <thead><tr><th>Encaissé le</th><th>Libellé</th><th>Facture</th><th class="montant">Montant</th></tr></thead>
         <tbody>${lignes.map((r) => `<tr><td class="date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
-          <td class="libelle">${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">Sans libellé</span>'}</td>
-          <td class="col-piece">${r.pieceJointe ? `<button type="button" class="btn-icone piece-oui" data-piece="${r.id}" aria-label="Voir la facture ${echapperHtml(r.pieceJointe.nom)}" title="${echapperHtml(r.pieceJointe.nom)}">${icone('trombone', { taille: 15 })}</button>` : ''}</td>
+          <td class="libelle">${r.libelle
+            ? `<span class="texte-libelle" title="${echapperHtml(r.libelle)}">${echapperHtml(r.libelle)}</span>`
+            : '<span class="attenue">Sans libellé</span>'}</td>
+          <td class="col-piece-hote">${r.pieceJointe
+            ? `<button type="button" class="btn-icone piece-oui" data-piece="${r.id}" aria-label="Voir la facture ${echapperHtml(r.pieceJointe.nom)}" title="${echapperHtml(r.pieceJointe.nom)}">${icone('trombone', { taille: 15 })}</button>`
+            : '<span class="place-piece" aria-hidden="true"></span>'}${r.numeroFacture ? `<span class="ref">${echapperHtml(r.numeroFacture)}</span>` : '<span class="hors-ecran">Sans facture</span>'}</td>
           <td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="3">${accorder(lignes.length, 'encaissement')}</td><td class="montant">${echapperHtml(formaterMontant(total, devise))}</td></tr></tfoot>
       </table></div>` : '<p class="vide">Aucun encaissement enregistré pour ce client.</p>'}`;
@@ -360,4 +366,5 @@ export async function vueClients(conteneur) {
   });
 
   await charger();
+  if (params?.get('client')) zoneListe.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest' });
 }

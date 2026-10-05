@@ -8,6 +8,7 @@
  */
 
 import { icone } from './icones.js';
+import { surlignageGlissant } from './glisseur.js';
 import { analyserMontant, formaterMontant } from '/partage/montants.js';
 import { NOMS_MOIS } from '/partage/dates.js';
 import { majusculeInitiale, normaliserTexte } from '/partage/texte.js';
@@ -91,45 +92,144 @@ export const poidsLisible = (octets) => {
 
 // ---- Listes déroulantes --------------------------------------------------------
 
-/** Options d'un sélecteur d'années, dans l'ordre reçu. */
-export const optionsAnnees = (annees, choisie = null) => annees
-  .map((a) => `<option value="${a}"${String(a) === String(choisie) ? ' selected' : ''}>${a}</option>`).join('');
-
 /** Interrupteur marche / arrêt ; la vue qui l'emploie bascule `aria-checked` au clic. */
 export const interrupteur = (id, actif, libelle) =>
   `<button type="button" class="interrupteur" role="switch" id="${id}" aria-checked="${Boolean(actif)}" aria-label="${echapperHtml(libelle)}"></button>`;
 
+// ---- Menus --------------------------------------------------------------------
+
+/**
+ * Petit menu sous un bouton : les actions d'une ligne (« … »), ou une liste
+ * de choix (l'année). Flèches pour parcourir, Échap, un clic ailleurs ou un
+ * défilement de la page pour fermer ; le focus revient au bouton.
+ *
+ * @param {HTMLElement} bouton
+ * @param {Array<{libelle: string, icone?: string, action: () => void, danger?: boolean, coche?: boolean}|'separateur'>} entrees
+ *   avec `coche`, le menu devient une liste de choix : l'entrée choisie porte
+ *   une coche et prend le focus à l'ouverture.
+ * @param {{ alignement?: 'gauche'|'droite' }} [options] bord du bouton sur
+ *   lequel le menu s'aligne.
+ */
+export function menuContextuel(bouton, entrees, { alignement = 'droite' } = {}) {
+  fermerMenu();
+  const choix = entrees.some((e) => e !== 'separateur' && 'coche' in e);
+  const menu = document.createElement('div');
+  menu.className = `menu-contextuel${choix ? ' menu-choix' : ''}${alignement === 'gauche' ? ' a-gauche' : ''}`;
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = entrees.map((e, i) => {
+    if (e === 'separateur') return '<hr>';
+    const role = choix ? `menuitemradio" aria-checked="${Boolean(e.coche)}` : 'menuitem';
+    const marque = choix ? icone('coche', { taille: 15, classe: 'marque-choix' }) : icone(e.icone, { taille: 16 });
+    return `<button type="button" role="${role}" data-i="${i}" class="${e.danger ? 'danger' : ''}">${marque}${echapperHtml(e.libelle)}</button>`;
+  }).join('');
+  document.body.append(menu);
+  const r = bouton.getBoundingClientRect();
+  const haut = r.bottom + 6 + menu.offsetHeight > innerHeight ? r.top - menu.offsetHeight - 6 : r.bottom + 6;
+  menu.style.top = `${Math.max(8, haut)}px`;
+  menu.style.left = `${alignement === 'gauche'
+    ? Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8))
+    : Math.max(8, r.right - menu.offsetWidth)}px`;
+  menu.classList.toggle('vers-le-haut', haut < r.top);
+  bouton.setAttribute('aria-expanded', 'true');
+  const items = [...menu.querySelectorAll('button[data-i]')];
+  // Un seul surlignage, qui glisse d'une entrée à l'autre : sous le pointeur,
+  // ou sur l'entrée atteinte au clavier.
+  const surlignage = surlignageGlissant(menu);
+  const viser = (entree) => surlignage.placer(entree, { ton: entree?.classList.contains('danger') ? 'danger' : '' });
+  menu.addEventListener('pointerover', (evenement) => {
+    const entree = evenement.target.closest('button[data-i]');
+    if (entree) viser(entree);
+  });
+  menu.addEventListener('pointerleave', () => viser(menu.querySelector('button[data-i]:focus-visible')));
+  menu.addEventListener('focusin', (evenement) => {
+    const entree = evenement.target.closest('button[data-i]');
+    if (entree?.matches(':focus-visible')) viser(entree);
+  });
+  (items.find((b) => b.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
+
+  const fermer = (rendreFocus = true) => {
+    if (menuActif?.menu === menu) menuActif = null;
+    if (!menu.isConnected) return;
+    menu.remove();
+    bouton.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', dehors, true);
+    window.removeEventListener('scroll', auDefilement, true);
+    if (rendreFocus && bouton.isConnected) bouton.focus();
+  };
+  menuActif = { menu, bouton, fermer };
+  const dehors = (evenement) => {
+    if (!menu.contains(evenement.target) && !bouton.contains(evenement.target)) fermer(false);
+  };
+  // Une longue liste défile dans le menu sans le fermer.
+  const auDefilement = (evenement) => { if (!menu.contains(evenement.target)) fermer(false); };
+  document.addEventListener('pointerdown', dehors, true);
+  window.addEventListener('scroll', auDefilement, true);
+  menu.addEventListener('keydown', (evenement) => {
+    const i = items.indexOf(document.activeElement);
+    const aller = (j) => { evenement.preventDefault(); items[(j + items.length) % items.length].focus(); };
+    if (evenement.key === 'ArrowDown') aller(i + 1);
+    if (evenement.key === 'ArrowUp') aller(i - 1);
+    if (evenement.key === 'Home') aller(0);
+    if (evenement.key === 'End') aller(items.length - 1);
+    if (evenement.key === 'Escape' || evenement.key === 'Tab') {
+      evenement.preventDefault();
+      evenement.stopPropagation();
+      fermer();
+    }
+  });
+  menu.addEventListener('click', (evenement) => {
+    const entree = evenement.target.closest('[data-i]');
+    if (!entree) return;
+    // Un choix rend le focus au bouton, qui affiche la nouvelle valeur.
+    fermer(choix);
+    entrees[Number(entree.dataset.i)].action();
+  });
+}
+
+/** Le menu ouvert, s'il y en a un : `{ menu, bouton, fermer }`. */
+let menuActif = null;
+
+/** Referme le menu ouvert (changement de page), sans rendre le focus. */
+export function fermerMenu() {
+  menuActif?.fermer(false);
+}
+
 // ---- Choix de l'année --------------------------------------------------------
 
 /**
- * Choix de l'année par flèches, « ‹ 2026 › », dans le style des groupes à
- * bascule qui l'entourent : pas de liste déroulante du système, qui détonne
- * avec le thème. Le contenu vient au branchement (`brancherChoixAnnee`), qui
- * accepte aussi une valeur hors année (« Toutes », dans les registres) avec
- * `libelle` et `nom`.
+ * Choix de l'année, « ‹ 2026 › » : les flèches passent d'une année à la
+ * voisine, un clic sur l'année ouvre la liste de toutes. Pas de liste
+ * déroulante du système, qui détonne avec le thème. Le contenu vient au
+ * branchement (`brancherChoixAnnee`), qui accepte aussi une valeur hors année
+ * (« Toutes », dans les registres) avec `libelle` et `nom`.
  */
 export const choixAnnee = ({ id, etiquette = 'Année' }) => `<div class="choix-annee" role="group" id="${id}" aria-label="${echapperHtml(etiquette)}">
     <button type="button" data-pas="-1">${icone('chevron-gauche', { taille: 16 })}</button>
-    <span class="annee-choisie" aria-live="polite"></span>
+    <button type="button" class="annee-choisie" aria-haspopup="menu" aria-expanded="false"></button>
     <button type="button" data-pas="1">${icone('chevron-droite', { taille: 16 })}</button>
   </div>`;
 
 /**
  * Branche le choix de l'année. Les flèches mènent à l'année voisine de la
  * liste (qui peut sauter une année vide) et s'éteignent aux bornes, sans
- * perdre le focus du clavier.
+ * perdre le focus du clavier ; l'année elle-même ouvre la liste complète.
  *
  * @param {HTMLElement} groupe
  * @param {object} options
- * @param {number[]} options.annees de la plus récente à la plus ancienne.
- * @param {number} options.choisie
- * @param {(annee: number, pas: string) => void} options.surChoix
+ * @param {Array<number|string>} options.annees de la plus récente à la plus ancienne.
+ * @param {number|string} options.choisie
+ * @param {(annee: number|string, pas: string|null) => void} options.surChoix
+ *   `pas` : la flèche utilisée, ou `null` pour un choix dans la liste.
  */
 export function brancherChoixAnnee(groupe, { annees, choisie, surChoix, libelle = String, nom = String }) {
   let annee = choisie;
+  const etiquette = groupe.getAttribute('aria-label') ?? 'Année';
+  const affichee = groupe.querySelector('.annee-choisie');
   const majAffichage = () => {
     const i = annees.indexOf(annee);
-    groupe.querySelector('.annee-choisie').textContent = libelle(annee);
+    affichee.textContent = libelle(annee);
+    affichee.setAttribute('aria-label', `${etiquette} : ${nom(annee)}. Choisir dans la liste`);
+    affichee.disabled = annees.length < 2;
     for (const [pas, cible] of [['-1', annees[i + 1]], ['1', annees[i - 1]]]) {
       const bouton = groupe.querySelector(`[data-pas="${pas}"]`);
       bouton.setAttribute('aria-disabled', String(cible === undefined));
@@ -138,16 +238,28 @@ export function brancherChoixAnnee(groupe, { annees, choisie, surChoix, libelle 
         : `Afficher ${nom(cible)}`);
     }
   };
+  const choisir = (nouvelle, pas) => {
+    if (nouvelle === annee) return;
+    annee = nouvelle;
+    majAffichage();
+    surChoix(annee, pas);
+  };
   majAffichage();
   groupe.addEventListener('click', (evenement) => {
+    if (evenement.target.closest('.annee-choisie')) {
+      // Un second clic sur l'année referme la liste.
+      if (menuActif?.bouton === affichee) { menuActif.fermer(); return; }
+      menuContextuel(affichee, annees.map((a) => ({
+        libelle: libelle(a), coche: a === annee, action: () => choisir(a, null)
+      })), { alignement: 'gauche' });
+      return;
+    }
     const bouton = evenement.target.closest('[data-pas]');
     if (!bouton || bouton.getAttribute('aria-disabled') === 'true') return;
-    annee = annees[annees.indexOf(annee) - Number(bouton.dataset.pas)];
-    majAffichage();
-    surChoix(annee, bouton.dataset.pas);
+    choisir(annees[annees.indexOf(annee) - Number(bouton.dataset.pas)], bouton.dataset.pas);
   });
   /** Pour changer l'année de l'extérieur (filtres effacés), sans rappeler `surChoix`. */
-  return { definir: (nouvelle) => { annee = nouvelle; majAffichage(); } };
+  return { definir: (nouvelle) => { annee = nouvelle; majAffichage(); }, valeur: () => annee };
 }
 
 /** Options des douze mois, de valeur 1 à 12, avec une majuscule. */
@@ -205,8 +317,7 @@ export function toast(message, type = 'succes') {
   // Une erreur interrompt l'annonce en cours du lecteur d'écran ; une réussite
   // attend son tour.
   element.setAttribute('role', estErreur ? 'alert' : 'status');
-  element.innerHTML = icone(estErreur ? 'cercle-alerte' : 'cercle-valide', { taille: 18 }) +
-    `<span>${echapperHtml(message)}</span>`;
+  element.innerHTML = `${icone(estErreur ? 'cercle-alerte' : 'cercle-valide', { taille: 18 })}<span>${echapperHtml(message)}</span><i class="meche" aria-hidden="true"></i>`;
 
   conteneur.appendChild(element);
   if (conteneur.showPopover) {
@@ -215,16 +326,37 @@ export function toast(message, type = 'succes') {
     conteneur.showPopover();
   }
 
-  // Le survol suspend le compte à rebours : le temps de lire jusqu'au bout.
   const retirer = () => {
     element.remove();
     if (conteneur.childElementCount === 0 && conteneur.hidePopover && conteneur.matches(':popover-open')) {
       conteneur.hidePopover();
     }
   };
-  let minuteur = setTimeout(retirer, 4000);
-  element.addEventListener('pointerenter', () => clearTimeout(minuteur));
-  element.addEventListener('pointerleave', () => { minuteur = setTimeout(retirer, 2000); });
+  // Le message s'efface en fondu, puis quitte la pile.
+  const partir = () => {
+    if (mouvementReduit()) { retirer(); return; }
+    element.classList.add('part');
+    setTimeout(retirer, 200);
+  };
+
+  // Une mèche se consume sous le message pendant le temps qui lui reste
+  // (d'après « Swipe Toast » de React Bits). Le survol la suspend, le temps de
+  // lire jusqu'au bout ; à la sortie, il reste au moins deux secondes.
+  const DUREE = 4000;
+  const RELIQUAT = 2000;
+  if (mouvementReduit()) {
+    let minuteur = setTimeout(partir, DUREE);
+    element.addEventListener('pointerenter', () => clearTimeout(minuteur));
+    element.addEventListener('pointerleave', () => { minuteur = setTimeout(partir, RELIQUAT); });
+    return;
+  }
+  const meche = element.querySelector('.meche').animate([{ scale: '1 1' }, { scale: '0 1' }], { duration: DUREE, easing: 'linear', fill: 'forwards' });
+  meche.finished.then(partir, () => {});
+  element.addEventListener('pointerenter', () => meche.pause());
+  element.addEventListener('pointerleave', () => {
+    if (meche.currentTime > DUREE - RELIQUAT) meche.currentTime = DUREE - RELIQUAT;
+    meche.play();
+  });
 }
 
 // ---- Boîtes de dialogue -------------------------------------------------------------
@@ -502,26 +634,49 @@ export function infobulle(texte, pour = 'ce réglage') {
  */
 export function installerInfobulles() {
   const MARGE = 8;
+  /**
+   * Au survol, la première bulle attend un instant (un pointeur qui passe ne
+   * l'ouvre pas) ; tant qu'une bulle vient de se fermer, la voisine s'ouvre
+   * aussitôt, sans rejouer son apparition. D'après « Warm Tooltip » de React Bits.
+   */
+  const ATTENTE = 350;
+  const CHALEUR = 600;
+  let derniereFermeture = -Infinity;
+  let attente = null;
   /** Bulle ouverte au clic : elle reste jusqu'au prochain clic ou à Échap. */
   let epinglee = null;
 
   const montrer = (declencheur) => {
+    clearTimeout(attente);
     const bulle = declencheur.nextElementSibling;
     if (!bulle?.classList.contains('bulle-aide')) return;
     // Mesurable même cachée : `visibility` conserve la mise en page.
     const ancre = declencheur.getBoundingClientRect();
-    const taille = bulle.getBoundingClientRect();
-    const gauche = Math.max(MARGE, Math.min(ancre.left, window.innerWidth - taille.width - MARGE));
+    // Largeur de mise en page : l'échelle d'apparition ne la fausse pas.
+    const gauche = Math.max(MARGE, Math.min(ancre.left, window.innerWidth - bulle.offsetWidth - MARGE));
     bulle.style.left = `${gauche}px`;
     bulle.style.top = `${ancre.bottom + MARGE}px`;
+    // La bulle naît de son icône.
+    bulle.style.transformOrigin = `${(ancre.left + ancre.width / 2 - gauche).toFixed(1)}px -${MARGE}px`;
+    bulle.classList.toggle('sans-apparition', performance.now() - derniereFermeture < CHALEUR);
     bulle.classList.add('visible');
     declencheur.setAttribute('aria-expanded', 'true');
   };
 
   const cacher = (declencheur) => {
+    clearTimeout(attente);
     if (declencheur === epinglee) return; // ouverte au clic : elle reste
-    declencheur.nextElementSibling?.classList.remove('visible');
+    const bulle = declencheur.nextElementSibling;
+    if (bulle?.classList.contains('visible')) derniereFermeture = performance.now();
+    bulle?.classList.remove('visible');
     declencheur.setAttribute('aria-expanded', 'false');
+  };
+
+  /** Survol : tout de suite si une bulle vient de se fermer, sinon après un instant. */
+  const survoler = (declencheur) => {
+    clearTimeout(attente);
+    if (performance.now() - derniereFermeture < CHALEUR) { montrer(declencheur); return; }
+    attente = setTimeout(() => { if (declencheur.isConnected) montrer(declencheur); }, ATTENTE);
   };
 
   const desepingler = () => {
@@ -534,7 +689,8 @@ export function installerInfobulles() {
   for (const [entree, sortie] of [['pointerover', 'pointerout'], ['focusin', 'focusout']]) {
     document.addEventListener(entree, (evenement) => {
       const declencheur = evenement.target.closest?.('.declencheur-infobulle');
-      if (declencheur) montrer(declencheur);
+      // Au clavier, la bulle s'ouvre aussitôt : le focus est un choix, pas un passage.
+      if (declencheur) (entree === 'pointerover' ? survoler : montrer)(declencheur);
     });
     document.addEventListener(sortie, (evenement) => {
       const declencheur = evenement.target.closest?.('.declencheur-infobulle');
@@ -576,6 +732,39 @@ export function installerInfobulles() {
 
 // ---- Divers --------------------------------------------------------------------------------
 
+/** L'heure d'une date, à la française : « 14 h 05 ». */
+export const heureLisible = (date) => `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`;
+
+/** Va à une adresse ; la même que l'actuelle redessine quand même la page. */
+export function allerA(adresse) {
+  if (window.location.hash === adresse) window.dispatchEvent(new HashChangeEvent('hashchange'));
+  else window.location.hash = adresse;
+}
+
+/** Un clic sur le voile d'une boîte modale, hors de la boîte elle-même, appelle `fermer`. */
+export function fermerAuClicSurLeVoile(dialogue, fermer) {
+  dialogue.addEventListener('mousedown', (evenement) => {
+    if (evenement.target !== dialogue) return;
+    const r = dialogue.getBoundingClientRect();
+    if (evenement.clientX < r.left || evenement.clientX > r.right || evenement.clientY < r.top || evenement.clientY > r.bottom) fermer();
+  });
+}
+
+/** Écouteurs de la fenêtre propres à la page affichée, un par événement. */
+const ecouteursDePage = new Map();
+
+/**
+ * Écoute un événement de la fenêtre pour la page qui s'affiche : l'écouteur
+ * de la page précédente pour le même événement laisse sa place (les vues se
+ * redessinent à chaque navigation, sans quoi les écouteurs s'accumuleraient).
+ */
+export function ecouterPourLaPage(type, ecouteur) {
+  const precedent = ecouteursDePage.get(type);
+  if (precedent) window.removeEventListener(type, precedent);
+  ecouteursDePage.set(type, ecouteur);
+  window.addEventListener(type, ecouteur);
+}
+
 /**
  * Adresse du bouton « Exporter » d'un registre : la page Exports, sur la carte
  * de ce registre, avec l'année et le mois filtrés à l'écran s'il y en a. Ce
@@ -611,18 +800,27 @@ export function animerCompteurs(racine, devise, depuis = null) {
     const final = element.innerHTML;
     const debut = performance.now();
     const avancer = (maintenant) => {
-      const t = Math.min(1, (maintenant - debut) / DUREE);
+      // L'heure de l'image peut précéder `debut` : sans plancher, le premier
+      // pas partait sous l'origine (un « -12,00 € » d'une image).
+      const t = Math.min(1, Math.max(0, (maintenant - debut) / DUREE));
       const progression = 1 - (1 - t) ** 4; // départ vif, fin douce
-      element.innerHTML = t < 1 ? montantDetaille(origine + (cible - origine) * progression, devise) : final;
+      const valeur = origine + (cible - origine) * progression;
+      element.innerHTML = t < 1 ? montantDetaille(valeur, devise) : final;
+      // La valeur montrée en route : un nouveau défilement (année changée
+      // d'un clic rapide) repart d'elle, pas de la cible.
+      if (t < 1) element.dataset.affiche = String(valeur); else delete element.dataset.affiche;
       if (t < 1) requestAnimationFrame(avancer);
     };
     requestAnimationFrame(avancer);
   }
 }
 
-/** Valeurs des compteurs affichés, par clé (`data-cle`) : le point de départ du prochain défilement. */
+/**
+ * Valeurs des compteurs tels qu'ils sont montrés, par clé (`data-cle`) : le
+ * point de départ du prochain défilement, en route s'il n'est pas fini.
+ */
 export const valeursCompteurs = (racine) => Object.fromEntries(
-  [...racine.querySelectorAll('[data-compteur][data-cle]')].map((e) => [e.dataset.cle, Number(e.dataset.compteur)])
+  [...racine.querySelectorAll('[data-compteur][data-cle]')].map((e) => [e.dataset.cle, Number(e.dataset.affiche ?? e.dataset.compteur)])
 );
 
 /**
@@ -644,16 +842,16 @@ export function montantDetaille(valeur, devise) {
  * l'écran bougent. Sans effet en mouvement réduit.
  *
  * @param {HTMLElement} racine
- * @param {string} selecteur éléments suivis.
+ * @param {string} suivis sélecteur des éléments suivis.
  * @param {(e: HTMLElement) => string} cle identité d'un élément d'un rendu à l'autre.
  * @returns {() => void} à appeler une fois le contenu remplacé.
  */
-export function preparerFlip(racine, selecteur, cle) {
+export function preparerFlip(racine, suivis, cle) {
   if (mouvementReduit()) return () => {};
-  const avant = new Map([...racine.querySelectorAll(selecteur)].map((e) => [cle(e), e.getBoundingClientRect().top]));
+  const avant = new Map([...racine.querySelectorAll(suivis)].map((e) => [cle(e), e.getBoundingClientRect().top]));
   return () => {
     const visible = (y) => y > -120 && y < innerHeight + 120;
-    for (const element of racine.querySelectorAll(selecteur)) {
+    for (const element of racine.querySelectorAll(suivis)) {
       const haut = avant.get(cle(element));
       const apres = element.getBoundingClientRect().top;
       if (!visible(apres) && (haut === undefined || !visible(haut))) continue;
@@ -723,10 +921,10 @@ export function replierPuisRetirer(element) {
  * recherche, sans tenir compte de la casse ni des accents, comme la recherche
  * elle-même (« dupre » trouve et surligne « Dupré »).
  */
-export function surlignerRecherche(racine, selecteur, recherche) {
+export function surlignerRecherche(racine, cellules, recherche) {
   const aiguille = normaliserTexte(recherche);
   if (!aiguille) return;
-  for (const cellule of racine.querySelectorAll(selecteur)) {
+  for (const cellule of racine.querySelectorAll(cellules)) {
     const marcheur = document.createTreeWalker(cellule, NodeFilter.SHOW_TEXT);
     const noeuds = [];
     while (marcheur.nextNode()) {

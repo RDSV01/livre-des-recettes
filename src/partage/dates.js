@@ -110,11 +110,11 @@ export function trimestreDe(mois) {
 }
 
 /** « 2026-07-31 » : date ISO construite sans passer par un fuseau horaire. */
-const iso = (annee, mois, jour) =>
+export const dateIso = (annee, mois, jour) =>
   `${annee}-${String(mois).padStart(2, '0')}-${String(jour).padStart(2, '0')}`;
 
 /** Nombre de jours d'un mois (1 à 12). Le jour 0 du mois suivant est le dernier. */
-const joursDuMois = (annee, mois) => new Date(Date.UTC(annee, mois, 0)).getUTCDate();
+export const joursDuMois = (annee, mois) => new Date(Date.UTC(annee, mois, 0)).getUTCDate();
 
 /**
  * Identifiant d'une période de déclaration : « 2026-07 » pour un mois,
@@ -147,7 +147,7 @@ const dernierMois = (type, valeur) => (type === 'mois' ? valeur : valeur * 3);
 export function finPeriode(annee, type, valeur) {
   if (type !== 'mois' && type !== 'trimestre') return null;
   const mois = dernierMois(type, valeur);
-  return iso(annee, mois, joursDuMois(annee, mois));
+  return dateIso(annee, mois, joursDuMois(annee, mois));
 }
 
 /**
@@ -160,7 +160,7 @@ export function echeanceDeclaration(annee, type, valeur) {
   if (type !== 'mois' && type !== 'trimestre') return null;
   const suivant = dernierMois(type, valeur) + 1;
   const [a, m] = suivant === 13 ? [annee + 1, 1] : [annee, suivant];
-  return iso(a, m, joursDuMois(a, m));
+  return dateIso(a, m, joursDuMois(a, m));
 }
 
 /**

@@ -95,6 +95,17 @@ test('statistiquesTableauDeBord sait revenir sur une année passée', () => {
   assert.ok(stats.dernieresRecettes.every((r) => r.dateEncaissement.startsWith('2025')));
 });
 
+test('statistiquesTableauDeBord donne aussi l’année précédente, mois par mois, pour comparer', () => {
+  const stats = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16) });
+  const precedente = stats.caParMoisAnneePrecedente;
+  assert.equal(precedente.length, 12);
+  assert.deepEqual(precedente[0], { annee: 2025, mois: 1, total: 0 });
+  assert.deepEqual(precedente.at(-1), { annee: 2025, mois: 12, total: 999 });
+  // Rien avant la première année du livre : douze mois à zéro.
+  const avant = statistiquesTableauDeBord(RECETTES, { maintenant: new Date(2026, 6, 16), annee: 2025 });
+  assert.ok(avant.caParMoisAnneePrecedente.every((m) => m.annee === 2024 && m.total === 0));
+});
+
 test('statistiquesTableauDeBord ventile la part prestations et les non catégorisées', () => {
   const recettes = [
     recette('2026-01-10', 100, { categorie: 'prestations' }),

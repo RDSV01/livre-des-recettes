@@ -11,8 +11,8 @@
  */
 
 import { api } from '../api.js';
-import { etat, definirParametres } from '../etat.js';
-import { echapperHtml, toast, accorder, choixAnnee, brancherChoixAnnee, mouvementReduit, enFondu, montantDetaille } from '../ui.js';
+import { etat, modifierParametres } from '../etat.js';
+import { echapperHtml, toast, accorder, choixAnnee, brancherChoixAnnee, mouvementReduit, enFondu } from '../ui.js';
 import { reussite, halo, bandeauRetour, brancherSegmentes, copierDansPressePapiers } from '../retours.js';
 import { icone } from '../icones.js';
 import { pastilleEtat } from '../declarations.js';
@@ -123,6 +123,13 @@ export async function vueUrssaf(conteneur, params) {
   else choix = { annee: anneeCourante, type: vueParDefaut, valeur: vueParDefaut === 'mois' ? Number(aujourdHui.slice(5, 7)) : trimestreDe(Number(aujourdHui.slice(5, 7))) };
   const retenir = () => { memoire = { periodicite: p().periodiciteUrssaf, choix: { ...choix } }; };
   retenir();
+  /** Un choix de l'utilisateur est retenu, et l'adresse le suit : un rechargement le retrouve. */
+  const choisir = (nouveau) => {
+    choix = nouveau;
+    retenir();
+    const id = idPeriode(choix.annee, choix.type, choix.valeur);
+    history.replaceState(null, '', id ? `#/urssaf?periode=${id}` : '#/urssaf');
+  };
   if (!anneesProposees.includes(choix.annee)) {
     anneesProposees.push(choix.annee);
     anneesProposees.sort((a, b) => b - a);
@@ -141,7 +148,7 @@ export async function vueUrssaf(conteneur, params) {
       `${p().versementLiberatoire ? 'avec' : 'sans'} versement libératoire`,
       // L'ACRE en cours se rappelle ; terminée, elle n'a plus rien à dire ici.
       // Espaces insécables : la mention ne se coupe pas en fin de ligne.
-      ...(acre && acre.fin >= aujourdHui ? [`ACRE jusqu’au ${echapperHtml(formaterDate(acre.fin, p().formatDate))}`] : [])
+      ...(acre && acre.fin >= aujourdHui ? [`ACRE\u00a0jusqu’au\u00a0${echapperHtml(formaterDate(acre.fin, p().formatDate))}`] : [])
     ];
     // Chaque morceau reste d'un seul tenant : la ligne ne se coupe qu'après un
     // point (`<wbr>`, sans ajouter d'espace).
@@ -257,8 +264,8 @@ export async function vueUrssaf(conteneur, params) {
         </div>
         <div class="chiffre-cle reste">
           <span class="libelle">${libelleReste}</span>
-          <div class="valeur">${montantDetaille(c.reste, devise)}</div>
-          <span class="precision">${c.versementLiberatoire ? 'impôt sur le revenu compris' : 'avant impôt sur le revenu'}</span>
+          <div class="valeur">${echapperHtml(formaterMontantEntier(c.reste, devise))}</div>
+          <span class="precision">estimation, ${c.versementLiberatoire ? 'impôt sur le revenu compris' : 'avant impôt sur le revenu'}</span>
         </div>` : ''}
       </div>
       ${c ? '' : `<p class="notes bloc-note"><a href="#/parametres?section=regime">Indiquez votre type d’activité</a> pour estimer ce que l’URSSAF prélèvera et ce qu’il vous restera.</p>`}
@@ -289,9 +296,8 @@ export async function vueUrssaf(conteneur, params) {
     }
   }
 
-  async function enregistrerDerniereDeclaree(valeur) {
-    const reponse = await api.enregistrerParametres({ ...p(), dernierePeriodeDeclaree: valeur });
-    definirParametres(reponse.parametres);
+  function enregistrerDerniereDeclaree(valeur) {
+    return modifierParametres({ dernierePeriodeDeclaree: valeur });
   }
 
   // ---- Événements
@@ -303,8 +309,7 @@ export async function vueUrssaf(conteneur, params) {
     annees: anneesProposees,
     choisie: choix.annee,
     surChoix: (annee) => {
-      choix = { ...choix, annee };
-      retenir();
+      choisir({ ...choix, annee });
       enFondu(rendreTout);
     }
   });
@@ -316,17 +321,14 @@ export async function vueUrssaf(conteneur, params) {
       const type = decoupage.dataset.decoupage;
       // On garde le même moment de l'année : juillet devient le 3e trimestre.
       const mois = choix.type === 'mois' ? choix.valeur : choix.type === 'trimestre' ? choix.valeur * 3 : 12;
-      choix = { annee: choix.annee, type, valeur: type === 'mois' ? mois : type === 'trimestre' ? trimestreDe(mois) : null };
-      retenir();
+      choisir({ annee: choix.annee, type, valeur: type === 'mois' ? mois : type === 'trimestre' ? trimestreDe(mois) : null });
       await enFondu(rendreTout);
       return;
     }
 
     const onglet = evenement.target.closest('.periode');
     if (onglet) {
-      choix = { ...choix, valeur: Number(onglet.dataset.valeur) };
-      retenir();
-      history.replaceState(null, '', `#/urssaf?periode=${idPeriode(choix.annee, choix.type, choix.valeur)}`);
+      choisir({ ...choix, valeur: Number(onglet.dataset.valeur) });
       zoneOnglets.querySelectorAll('.periode').forEach((b) => b.setAttribute('aria-pressed', String(b === onglet)));
       await enFondu(() => rendreDetail().catch((erreur) => toast(erreur.message, 'erreur')));
       return;

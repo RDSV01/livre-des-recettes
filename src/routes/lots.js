@@ -26,17 +26,20 @@ function liste(valeur) {
 }
 
 /**
- * Valide chaque ligne d'un lot ; retourne `{ erreur }` au premier refus, en
- * disant laquelle (numérotée à partir de 1) et pourquoi.
+ * Lit et valide les `lignes` du corps ; retourne `{ erreur }` si la liste
+ * manque ou au premier refus, en disant quelle ligne (numérotée à partir
+ * de 1) et pourquoi.
  */
-function validerLot(lignes, validerLigne) {
+function lireLot(corps, validerLigne) {
+  const lignes = liste(corps?.lignes);
+  if (!lignes) return { erreur: 'Liste de lignes manquante ou invalide.' };
   const valides = [];
   for (const [i, ligne] of lignes.entries()) {
     const identite = validerIdentite(ligne);
     if (identite.erreur) return { erreur: `Ligne ${i + 1} : ${identite.erreur}` };
     const { erreurs, valeurs } = validerLigne(ligne);
     if (erreurs) return { erreur: `Ligne ${i + 1} : ${Object.values(erreurs)[0]}` };
-    valides.push({ identite: identite.valeurs, valeurs });
+    valides.push({ ligne, identite: identite.valeurs, valeurs });
   }
   return { valides };
 }
@@ -68,13 +71,11 @@ export function installerRoutesLot(routeur, { cle, valider, supprimer, restaurer
   });
 
   routeur.post('/lot/restaurer', (req, res) => {
-    const lignes = liste(req.body?.lignes);
-    if (!lignes) return res.status(400).json({ erreur: 'Liste de lignes manquante ou invalide.' });
-    const { erreur, valides } = validerLot(lignes, valider);
+    const { erreur, valides } = lireLot(req.body, valider);
     if (erreur) return res.status(400).json({ erreur });
     try {
-      const restaurees = restaurer(valides.map(({ identite, valeurs }, i) => ({
-        id: identite.id, ...valeurs, ...pieceDe(lignes[i]), creeLe: identite.creeLe, modifieLe: identite.modifieLe
+      const restaurees = restaurer(valides.map(({ ligne, identite, valeurs }) => ({
+        id: identite.id, ...valeurs, ...pieceDe(ligne), creeLe: identite.creeLe, modifieLe: identite.modifieLe
       })));
       res.status(201).json({ [cle]: restaurees });
     } catch (e) {
@@ -85,9 +86,7 @@ export function installerRoutesLot(routeur, { cle, valider, supprimer, restaurer
 
   if (modifier) {
     routeur.put('/lot', (req, res) => {
-      const lignes = liste(req.body?.lignes);
-      if (!lignes) return res.status(400).json({ erreur: 'Liste de lignes manquante ou invalide.' });
-      const { erreur, valides } = validerLot(lignes, valider);
+      const { erreur, valides } = lireLot(req.body, valider);
       if (erreur) return res.status(400).json({ erreur });
       const modifiees = modifier(valides.map(({ identite, valeurs }) => ({ id: identite.id, champs: valeurs })));
       if (!modifiees) return res.status(404).json({ erreur: 'Une des lignes est introuvable : rien n’a été modifié.' });

@@ -45,7 +45,7 @@ export const PAGE_VERSIONS = `https://github.com/${DEPOT}/releases/latest`;
 const DELAI_MS = 8000;
 const SUFFIXE_ANCIEN = '.ancien';
 // Empreinte SHA-256 publiée à côté de chaque exécutable, vérifiée avant tout
-// remplacement (voir `.github/workflows/executables.yml`).
+// remplacement (voir `.github/workflows/verifier-et-publier.yml`).
 const SUFFIXE_EMPREINTE = '.sha256';
 // L'API publique de GitHub est limitée à 60 appels par heure et par adresse :
 // la réponse est gardée en mémoire pour ne pas la solliciter à chaque
@@ -197,7 +197,7 @@ export async function appliquerMiseAJour() {
     // Remise en état : l'application reste utilisable dans sa version actuelle.
     if (!fs.existsSync(executable) && fs.existsSync(ancien)) fs.renameSync(ancien, executable);
     fs.rmSync(nouveau, { force: true });
-    throw new Error(`Remplacement impossible : ${erreur.message}`);
+    throw new Error(`Remplacement impossible : ${erreur.message}`, { cause: erreur });
   }
   return version;
 }

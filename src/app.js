@@ -27,7 +27,9 @@ import { routesSauvegardes } from './routes/sauvegardes.js';
 import { routesSecurite } from './routes/securite.js';
 import { routesFichierSauvegarde } from './routes/fichier-sauvegarde.js';
 import { statistiquesTableauDeBord } from './totaux.js';
-import { construireJeuDemo } from './demo.js';
+import { recettesARenouveler } from './partage/recurrences.js';
+import { aujourdHuiIso } from './partage/dates.js';
+import { construireJeuDemo, piecesDemo } from './demo.js';
 import { dossierDonneesParDefaut } from './emplacements.js';
 import { creerFichierSauvegarde } from './fichier-sauvegarde.js';
 import { creerArchives } from './archives.js';
@@ -125,15 +127,22 @@ function refuserRequetesExterieures(req, res, suite) {
  * @param {boolean} [options.taches] lance les tâches de fond (copie externe,
  *   archives annuelles) : seulement pour l'application lancée pour de vrai,
  *   pas pour les tests.
+ * @param {() => Promise<object[]>} [options.listerVolumes] clés et disques
+ *   proposés pour la copie externe, à la place de ceux de la machine : les
+ *   tests de l'interface y mettent des dossiers temporaires, pour ne jamais
+ *   écrire sur une vraie clé.
  */
 export function creerApp({
-  dossierDonnees, dossierSauvegardes, actifs, arreter, taches = false
+  dossierDonnees, dossierSauvegardes, actifs, arreter, taches = false, listerVolumes
 } = {}) {
   const dossier = dossierDonnees ?? DOSSIER_DONNEES_DEFAUT;
   const stockage = creerStockage(dossier, dossierSauvegardes ? { dossierSauvegardes } : {});
   const pieces = creerPieces(dossier, stockage.dossierSauvegardes);
   const archives = creerArchives({ dossier: path.join(stockage.dossierSauvegardes, 'archives'), stockage, pieces });
-  const copieExterne = creerCopieExterne({ stockage, pieces, archives });
+  // Des volumes simulés vivent sur le disque du livre : ils ne sont pas écartés comme lui.
+  const copieExterne = creerCopieExterne(listerVolumes
+    ? { stockage, pieces, archives, listerVolumes, ecarterMemeDisque: false }
+    : { stockage, pieces, archives });
   // Une mise à jour qui n'a pas pu démarrer : la version rétablie le dit une fois.
   let majEchouee = taches ? constaterEchecMaj() : null;
 
@@ -194,13 +203,21 @@ export function creerApp({
     res.status(204).end();
   });
 
-  // GET /api/tableau-de-bord?annee=2025 (année courante par défaut)
+  // GET /api/tableau-de-bord?annee=2025 (année courante par défaut), avec les
+  // recettes qui reviennent chaque mois et attendent celle d'aujourd'hui.
   app.get('/api/tableau-de-bord', (req, res) => {
     const annee = Number.parseInt(req.query.annee, 10);
-    res.json(statistiquesTableauDeBord(stockage.listerRecettes(), {
-      annee: Number.isInteger(annee) && annee >= 2000 && annee <= 2100 ? annee : null,
-      achats: stockage.listerAchats()
-    }));
+    const recettes = stockage.listerRecettes();
+    res.json({
+      ...statistiquesTableauDeBord(recettes, {
+        annee: Number.isInteger(annee) && annee >= 2000 && annee <= 2100 ? annee : null,
+        achats: stockage.listerAchats()
+      }),
+      aRenouveler: recettesARenouveler(recettes, {
+        aujourdhui: aujourdHuiIso(),
+        ecartees: stockage.obtenirParametres().recurrencesEcartees ?? []
+      })
+    });
   });
 
   app.get('/api/systeme', (req, res) => {
@@ -238,13 +255,32 @@ export function creerApp({
    * Refusé si le livre contient déjà quoi que ce soit, pour ne jamais
    * recouvrir de vraies données.
    */
-  app.post('/api/demo', (req, res) => {
-    const nombre = stockage.compter();
-    if (nombre.recettes > 0 || nombre.achats > 0 || nombre.clients > 0) {
-      return res.status(409).json({ erreur: 'Le jeu de démonstration ne se charge que sur un livre vide.' });
+  app.post('/api/demo', async (req, res, suite) => {
+    const vide = () => {
+      const nombre = stockage.compter();
+      return nombre.recettes === 0 && nombre.achats === 0 && nombre.clients === 0;
+    };
+    const refus = () => res.status(409).json({ erreur: 'Le jeu de démonstration ne se charge que sur un livre vide.' });
+    if (!vide()) return refus();
+    try {
+      const jeu = construireJeuDemo();
+      // Ce qui tient à la personne et non à l'entreprise fictive reste tel
+      // quel : son prénom, ses préférences d'affichage et de copie. L'accueil,
+      // lui, est terminé : on a choisi de découvrir avec l'exemple.
+      const actuels = stockage.obtenirParametres();
+      for (const cle of ['prenom', 'formatDate', 'devise', 'verifierMisesAJour', 'signalerAbsenceCopie']) {
+        jeu.parametres[cle] = actuels[cle];
+      }
+      jeu.parametres.accueil = 'termine';
+      await piecesDemo(jeu, (octets, nom) => pieces.enregistrer(octets, nom));
+      // Le temps de créer les PDF, le livre a pu recevoir une ligne : on ne la
+      // recouvre pas (les PDF orphelins partiront au prochain ménage).
+      if (!vide()) return refus();
+      stockage.chargerDemo(jeu);
+      res.json({ charge: true });
+    } catch (erreur) {
+      suite(erreur);
     }
-    stockage.chargerDemo(construireJeuDemo());
-    res.json({ charge: true });
   });
 
   app.use('/api', (req, res) => {

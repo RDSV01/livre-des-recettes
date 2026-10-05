@@ -302,6 +302,26 @@ function validerNumerosIgnores(entree) {
   return { erreur: null, valeurs };
 }
 
+const RECURRENCES_ECARTEES_MAX = 500;
+
+/**
+ * Valide la liste des recettes récurrentes à ne plus proposer : des clés
+ * « client|libellé|centimes » (voir `partage/recurrences.js`), sans doublon.
+ */
+function validerRecurrencesEcartees(entree) {
+  if (!Array.isArray(entree) || entree.some((c) => typeof c !== 'string')) {
+    return { erreur: 'Liste de recettes récurrentes écartées invalide.', valeurs: null };
+  }
+  const valeurs = [...new Set(entree.filter(Boolean))];
+  if (valeurs.some((c) => c.length > 600)) {
+    return { erreur: 'Une recette récurrente écartée est trop longue.', valeurs: null };
+  }
+  if (valeurs.length > RECURRENCES_ECARTEES_MAX) {
+    return { erreur: `Au plus ${RECURRENCES_ECARTEES_MAX} recettes récurrentes écartées.`, valeurs: null };
+  }
+  return { erreur: null, valeurs };
+}
+
 /** Valide et normalise les paramètres de l'application. */
 export function validerParametres(entree) {
   const e = entree ?? {};
@@ -376,6 +396,11 @@ export function validerParametres(entree) {
   if (ignores?.erreur) {
     erreurs.numerosIgnores = ignores.erreur;
   }
+  // Même règle pour les recettes récurrentes que l'utilisateur ne veut plus voir proposées.
+  const ecartees = e.recurrencesEcartees === undefined ? null : validerRecurrencesEcartees(e.recurrencesEcartees);
+  if (ecartees?.erreur) {
+    erreurs.recurrencesEcartees = ecartees.erreur;
+  }
 
   return resultat(erreurs, {
     prenom, accueil,
@@ -387,8 +412,11 @@ export function validerParametres(entree) {
     periodiciteUrssaf, dernierePeriodeDeclaree,
     alertesNumerotation: booleen(e.alertesNumerotation, true),
     ...(ignores ? { numerosIgnores: ignores.valeurs } : {}),
+    ...(ecartees ? { recurrencesEcartees: ecartees.valeurs } : {}),
     alerteRecetteSimilaire: booleen(e.alerteRecetteSimilaire, true),
     suiviSeuils: booleen(e.suiviSeuils, true),
+    comparerAnneePrecedente: booleen(e.comparerAnneePrecedente, true),
+    proposerRenouvellements: booleen(e.proposerRenouvellements, true),
     signalerAbsenceCopie: booleen(e.signalerAbsenceCopie, true),
     verifierMisesAJour: booleen(e.verifierMisesAJour, true),
     // Le formulaire des paramètres renvoie ce drapeau à faux : enregistrer

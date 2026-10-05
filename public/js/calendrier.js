@@ -4,7 +4,8 @@
  * suit pas le format de date choisi dans les paramètres.
  *
  * La date se tape au clavier (« 24/09/2026 », « 24/9/26 », « 24/09 » pour
- * l'année en cours, « 24092026 ») ou se choisit dans un calendrier qui
+ * l'année en cours, « 24092026 », + et − pour le jour suivant ou précédent,
+ * A pour aujourd'hui) ou se choisit dans un calendrier qui
  * s'ouvre dessous : semaine commençant le lundi, aujourd'hui repéré, flèches
  * du clavier pour se déplacer (Page préc. et Page suiv. changent de mois),
  * Entrée pour choisir, Échap pour refermer.
@@ -59,7 +60,8 @@ export const champDate = ({ id, nom, format = 'JJ/MM/AAAA' }) => `
   <div class="champ-date">
     <input class="champ-texte" type="text" id="${id}" inputmode="numeric" autocomplete="off" spellcheck="false"
       placeholder="${format}" role="combobox" aria-haspopup="dialog" aria-expanded="false"
-      aria-controls="${id}-calendrier" aria-describedby="${id}-apercu">
+      aria-controls="${id}-calendrier" aria-describedby="${id}-apercu" aria-keyshortcuts="+ - A"
+      title="+ ou − : jour suivant ou précédent · A : aujourd’hui · flèche bas : calendrier">
     <button type="button" class="btn-icone champ-date-bouton" tabindex="-1" aria-label="Ouvrir le calendrier"
       title="Calendrier">${icone('calendrier', { taille: 16 })}</button>
     <input type="hidden" name="${nom}">
@@ -183,7 +185,30 @@ export function brancherChampDate(racine, { format = 'JJ/MM/AAAA', surChangement
     // Une saisie illisible ne remplace pas la date arrêtée ; un champ vidé, si.
     if (cache.value || saisie.value.trim() === '') signaler();
   });
+  /** Pose une date sans quitter le champ (raccourcis + et −, A). */
+  const poser = (iso) => {
+    cache.value = iso;
+    afficher();
+    saisie.select();
+    if (!calendrier.hidden) { focale = iso; dessiner(); }
+  };
   saisie.addEventListener('keydown', (evenement) => {
+    // + et − passent au jour suivant ou précédent, A revient à aujourd'hui. Le
+    // − ne joue que sur une date complète : « 24-9-2026 » se tape encore.
+    if (!evenement.ctrlKey && !evenement.metaKey && !evenement.altKey) {
+      const pas = { '+': 1, '-': -1 }[evenement.key];
+      const complete = cache.value && saisie.value === formaterDate(cache.value, format);
+      if (pas && (complete || saisie.value.trim() === '')) {
+        evenement.preventDefault();
+        poser(decaler(cache.value || aujourdHuiIso(), pas));
+        return;
+      }
+      if (evenement.key === 'a' || evenement.key === 'A') {
+        evenement.preventDefault();
+        poser(aujourdHuiIso());
+        return;
+      }
+    }
     if (evenement.key === 'ArrowDown') {
       evenement.preventDefault();
       ouvrir({ focusGrille: true });

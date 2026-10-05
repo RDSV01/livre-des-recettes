@@ -87,11 +87,17 @@ test('les options d’interface sont des booléens, activées par défaut', () =
   assert.equal(valeurs.alertesNumerotation, true);
   assert.equal(valeurs.alerteRecetteSimilaire, true);
   assert.equal(valeurs.suiviSeuils, true);
+  assert.equal(valeurs.comparerAnneePrecedente, true);
+  assert.equal(valeurs.proposerRenouvellements, true);
 
-  const desactive = validerParametres({ alertesNumerotation: false, suiviSeuils: false }).valeurs;
+  const desactive = validerParametres({
+    alertesNumerotation: false, suiviSeuils: false, comparerAnneePrecedente: false, proposerRenouvellements: false
+  }).valeurs;
   assert.equal(desactive.alertesNumerotation, false);
   assert.equal(desactive.alerteRecetteSimilaire, true);
   assert.equal(desactive.suiviSeuils, false);
+  assert.equal(desactive.comparerAnneePrecedente, false);
+  assert.equal(desactive.proposerRenouvellements, false);
 
   // Le drapeau du jeu de démonstration retombe à faux dès qu'on enregistre ses
   // propres paramètres (le formulaire ne le renvoie pas).
@@ -267,4 +273,14 @@ test('les numéros ignorés sont nettoyés, et conservés quand la requête les 
 
   assert.ok(validerParametres({ numerosIgnores: 'FAC-015' }).erreurs.numerosIgnores, 'une liste est exigée');
   assert.ok(validerParametres({ numerosIgnores: ['x'.repeat(101)] }).erreurs.numerosIgnores);
+});
+
+test('les recettes récurrentes écartées sont gardées sans doublon, et conservées quand la requête les omet', () => {
+  const cle = 'cafe des arts|maintenance mensuelle|12000';
+  const { valeurs } = validerParametres({ recurrencesEcartees: [cle, cle, ''] });
+  assert.deepEqual(valeurs.recurrencesEcartees, [cle]);
+  assert.equal('recurrencesEcartees' in validerParametres({}).valeurs, false);
+  assert.ok(validerParametres({ recurrencesEcartees: cle }).erreurs.recurrencesEcartees, 'une liste est exigée');
+  assert.ok(validerParametres({ recurrencesEcartees: [42] }).erreurs.recurrencesEcartees, 'des textes seulement');
+  assert.ok(validerParametres({ recurrencesEcartees: ['x'.repeat(601)] }).erreurs.recurrencesEcartees);
 });

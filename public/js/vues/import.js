@@ -120,8 +120,8 @@ export async function vueImport(conteneur) {
     <div class="page">
       <header class="entete-page">
         <div>
-          <h1>Import CSV</h1>
-          <p class="sous-titre">Reprenez un historique tenu dans un tableur : rien n’est importé sans votre confirmation.</p>
+          <h1>Importer</h1>
+          <p class="sous-titre">Reprenez un historique tenu dans un tableur, en fichier CSV : rien n’est importé sans votre confirmation.</p>
         </div>
       </header>
       <section class="carte" id="import" aria-label="Import CSV"></section>
@@ -223,7 +223,7 @@ export async function vueImport(conteneur) {
           <span class="attenue">Les numéros de facture du fichier sont repris tels quels.</span>
           <div class="actions">
             <button type="button" class="btn btn-fantome" data-etape="2">Retour</button>
-            <button type="button" class="btn btn-principal" id="i-importer" ${rapport.valides + rapport.doublons.length === 0 ? 'disabled' : ''}>
+            <button type="button" class="btn btn-principal" id="i-importer" ${rapport.valides === 0 ? 'disabled' : ''}>
               ${icone('coche', { taille: 16 })}<span>Importer ${accorder(rapport.valides, nom(rapport.valides))}</span></button>
           </div>
         </div>`;
@@ -378,7 +378,7 @@ export async function vueImport(conteneur) {
           resultat = await desc().importer({ lignes, importerDoublons });
           aller(4);
           halo(zone.querySelector('.sceau-reussite'));
-          annoncer(`${accorder(resultat.importees, un, plusieurs)} importé${resultat.importees > 1 ? 's' : ''}`);
+          annoncer(zone.querySelector('.reussite-import h2').textContent);
         } catch (erreur) {
           reprendre();
           signaler(erreur.message);

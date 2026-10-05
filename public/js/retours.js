@@ -12,8 +12,7 @@
  *  - `halo(element)` : l'onde verte d'une déclaration faite, d'un import réussi ;
  *  - `confettis(element)` : la pluie de confettis d'une recette ajoutée ;
  *  - `brancherSegmentes(racine)` : le curseur qui glisse d'une option à
- *    l'autre dans les groupes à bascule ;
- *  - `menuContextuel(bouton, entrees)` : le menu « … » d'une ligne.
+ *    l'autre dans les groupes à bascule.
  *
  * Tout est aussi annoncé aux lecteurs d'écran par une zone discrète.
  */
@@ -64,16 +63,23 @@ const enCours = new WeakMap();
 export function reussite(bouton, texte, { duree = 1700, nomIcone = 'coche', echec = false } = {}) {
   if (!bouton?.isConnected) { annoncer(texte); return; }
   const precedent = enCours.get(bouton);
-  if (precedent) clearTimeout(precedent.minuteur);
+  if (precedent) clearTimeout(precedent.attente);
   const origine = precedent?.origine ?? { html: bouton.innerHTML, largeur: bouton.style.minWidth };
   const classe = echec ? 'echoue' : 'reussi';
   bouton.style.minWidth = `${bouton.offsetWidth}px`;
   bouton.classList.remove('reussi', 'echoue');
   bouton.classList.add(classe);
-  // Seule la coche se dessine : sur une icône de fichier, le tracé se hacherait.
-  bouton.innerHTML = `${icone(nomIcone, { taille: 16, classe: nomIcone === 'coche' ? 'trace-coche' : '' })}<span>${echapperHtml(texte)}</span>`;
+  // Le bouton attendait à l'instant (voir `patienter`) : sa roue se referme
+  // en anneau et une coche (ou une croix) s'y trace. Sinon, seule la coche se
+  // dessine : sur une icône de fichier, le tracé se hacherait.
+  const angle = attentesFinies.get(bouton);
+  attentesFinies.delete(bouton);
+  const marque = angle !== undefined && !mouvementReduit()
+    ? statut({ angle, fin: echec ? 'croix' : 'coche' })
+    : icone(nomIcone, { taille: 16, classe: nomIcone === 'coche' ? 'trace-coche' : '' });
+  bouton.innerHTML = `${marque}<span>${echapperHtml(texte)}</span>`;
   annoncer(texte);
-  const minuteur = setTimeout(() => {
+  const attente = setTimeout(() => {
     enCours.delete(bouton);
     if (!bouton.isConnected) return;
     bouton.classList.remove(classe);
@@ -82,7 +88,7 @@ export function reussite(bouton, texte, { duree = 1700, nomIcone = 'coche', eche
     bouton.style.minWidth = origine.largeur;
     setTimeout(() => bouton.classList.remove('revient'), 300);
   }, duree);
-  enCours.set(bouton, { minuteur, origine });
+  enCours.set(bouton, { attente, origine });
 }
 
 /**
@@ -93,12 +99,36 @@ export function patienter(bouton, texte) {
   bouton.style.minWidth = `${bouton.offsetWidth}px`;
   const html = bouton.innerHTML;
   bouton.disabled = true;
-  bouton.innerHTML = `${icone('chargement', { taille: 16, classe: 'tourne' })}<span>${echapperHtml(texte)}</span>`;
+  bouton.innerHTML = `${statut()}<span>${echapperHtml(texte)}</span>`;
   return () => {
+    // L'angle de la roue à cet instant : un résultat annoncé dans la foulée
+    // (« Sauvegardé », même tâche) la reprend là où elle tournait (voir
+    // `reussite`). Passé cette tâche, l'attente est oubliée.
+    const anneau = bouton.querySelector('.statut .anneau');
+    if (anneau) {
+      attentesFinies.set(bouton, parseFloat(getComputedStyle(anneau).rotate) || 0);
+      queueMicrotask(() => attentesFinies.delete(bouton));
+    }
     bouton.disabled = false;
     bouton.innerHTML = html;
     bouton.style.minWidth = '';
   };
+}
+
+/** Les attentes qui viennent de finir : l'angle de leur roue, par bouton. */
+const attentesFinies = new WeakMap();
+
+/**
+ * Marque d'état d'un bouton, d'après « Status Mark » de React Bits : une roue
+ * qui tourne pendant l'attente ; à la fin (`fin`), elle se referme en anneau
+ * en poursuivant sa course depuis `angle`, et une coche ou une croix s'y trace.
+ */
+function statut({ angle = 0, fin = null } = {}) {
+  const trace = { coche: 'm8.5 12.2 2.4 2.4 4.6-4.9', croix: 'M9.5 9.5l5 5M14.5 9.5l-5 5' }[fin];
+  return `<svg class="icone statut${fin ? ` statut-fin ${fin}` : ''}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <circle class="anneau" cx="12" cy="12" r="9" pathLength="100" style="--angle:${angle.toFixed(1)}deg"/>
+      ${trace ? `<path class="marque" d="${trace}" pathLength="1"/>` : ''}</svg>`;
 }
 
 /**
@@ -255,8 +285,15 @@ function curseurSegmente(groupe) {
     curseur.hidden = !actif;
     if (!actif) return;
     curseur.style.transition = anime ? '' : 'none';
-    curseur.style.width = `${actif.offsetWidth}px`;
-    curseur.style.transform = `translateX(${actif.offsetLeft - 3}px)`;
+    // Le curseur couvre tout le groupe ; une découpe n'en montre que l'option
+    // choisie, et c'est elle qui glisse. Mesurée à l'écran depuis la place du
+    // curseur (son retrait dans le groupe vient du style), sans arrondi : des
+    // largeurs arrondies laissaient un pixel de jour d'un côté.
+    const zone = curseur.getBoundingClientRect();
+    const option = actif.getBoundingClientRect();
+    const gauche = option.left - zone.left;
+    const droite = zone.right - option.right;
+    curseur.style.clipPath = `inset(0 ${droite.toFixed(2)}px 0 ${gauche.toFixed(2)}px round var(--rayon-petit))`;
   };
   requestAnimationFrame(() => placer(false));
   const suivi = new MutationObserver(() => placer(true));
@@ -272,58 +309,24 @@ function curseurSegmente(groupe) {
 export const brancherSegmentes = (racine) => racine.querySelectorAll('.segmente').forEach(curseurSegmente);
 
 /**
- * Petit menu d'actions sous un bouton « … » : flèches pour parcourir, Échap,
- * un clic ailleurs ou un défilement pour fermer ; le focus revient au bouton.
- *
- * @param {HTMLElement} bouton
- * @param {Array<{libelle: string, icone: string, action: () => void, danger?: boolean}|'separateur'>} entrees
+ * Réponse d'une case à un geste, posée une fois pour toutes (les vues se
+ * redessinent, les écouteurs du document restent) : cochée, elle se gonfle
+ * un instant et sa coche se trace (d'après le composant « Task List » de
+ * Rare UI). Rien au premier affichage : une case déjà cochée ne rejoue rien.
  */
-export function menuContextuel(bouton, entrees) {
-  document.querySelector('.menu-contextuel')?.remove();
-  const menu = document.createElement('div');
-  menu.className = 'menu-contextuel';
-  menu.setAttribute('role', 'menu');
-  menu.innerHTML = entrees.map((e, i) => (e === 'separateur'
-    ? '<hr>'
-    : `<button type="button" role="menuitem" data-i="${i}" class="${e.danger ? 'danger' : ''}">${icone(e.icone, { taille: 16 })}${echapperHtml(e.libelle)}</button>`)).join('');
-  document.body.append(menu);
-  const r = bouton.getBoundingClientRect();
-  const haut = r.bottom + 6 + menu.offsetHeight > innerHeight ? r.top - menu.offsetHeight - 6 : r.bottom + 6;
-  menu.style.top = `${haut}px`;
-  menu.style.left = `${Math.max(8, r.right - menu.offsetWidth)}px`;
-  menu.classList.toggle('vers-le-haut', haut < r.top);
-  bouton.setAttribute('aria-expanded', 'true');
-  const items = [...menu.querySelectorAll('[role="menuitem"]')];
-  items[0]?.focus();
-
-  const fermer = (rendreFocus = true) => {
-    if (!menu.isConnected) return;
-    menu.remove();
-    bouton.setAttribute('aria-expanded', 'false');
-    document.removeEventListener('pointerdown', dehors, true);
-    window.removeEventListener('scroll', auDefilement, true);
-    if (rendreFocus && bouton.isConnected) bouton.focus();
+export function installerReponsesControles() {
+  const rejouer = (element, classe) => {
+    if (mouvementReduit()) return;
+    element.classList.remove(classe);
+    void element.offsetWidth;
+    element.classList.add(classe);
   };
-  const dehors = (evenement) => {
-    if (!menu.contains(evenement.target) && evenement.target !== bouton) fermer(false);
-  };
-  const auDefilement = () => fermer(false);
-  document.addEventListener('pointerdown', dehors, true);
-  window.addEventListener('scroll', auDefilement, true);
-  menu.addEventListener('keydown', (evenement) => {
-    const i = items.indexOf(document.activeElement);
-    if (evenement.key === 'ArrowDown') { evenement.preventDefault(); items[(i + 1) % items.length].focus(); }
-    if (evenement.key === 'ArrowUp') { evenement.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
-    if (evenement.key === 'Escape' || evenement.key === 'Tab') {
-      evenement.preventDefault();
-      evenement.stopPropagation();
-      fermer();
-    }
+  document.addEventListener('change', (evenement) => {
+    const caseACocher = evenement.target.closest?.('.case');
+    if (caseACocher?.checked) rejouer(caseACocher, 'coche-anime');
   });
-  menu.addEventListener('click', (evenement) => {
-    const choix = evenement.target.closest('[data-i]');
-    if (!choix) return;
-    fermer(false);
-    entrees[Number(choix.dataset.i)].action();
+  document.addEventListener('animationend', (evenement) => {
+    const element = evenement.target;
+    if (element.classList?.contains('case') && evenement.animationName === 'gonfler-case') element.classList.remove('coche-anime');
   });
 }

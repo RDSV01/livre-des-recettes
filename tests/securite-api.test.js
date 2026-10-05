@@ -9,13 +9,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { creerApp } from '../src/app.js';
+import { ecouterSurUnPortLibre } from '../src/lancement.js';
 
 const RECETTE = { dateEncaissement: '2026-07-15', client: 'Client', libelle: 'Prestation', numeroFacture: 'F1', montant: 100, modeReglement: 'carte' };
 
 /** Lance l'application sur ces dossiers ; `fermer` libère le port. */
 async function lancer(donnees, sauvegardes) {
   const app = creerApp({ dossierDonnees: donnees, dossierSauvegardes: sauvegardes });
-  const serveur = await new Promise((pret) => { const s = app.listen(0, '127.0.0.1', () => pret(s)); });
+  const serveur = await ecouterSurUnPortLibre(app);
   const adresse = `http://127.0.0.1:${serveur.address().port}`;
   const envoyer = async (methode, chemin, corps) => {
     const reponse = await fetch(adresse + chemin, {

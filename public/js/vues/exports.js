@@ -18,7 +18,7 @@ import { api, urlExport, urlRapportAnnuel, telechargerFichier } from '../api.js'
 import { registreAchatsUtile } from '../etat.js';
 import { icone } from '../icones.js';
 import {
-  infobulle, echapperHtml, selecteur, optionsAnnees, OPTIONS_MOIS, accorder, mouvementReduit
+  infobulle, echapperHtml, selecteur, OPTIONS_MOIS, accorder, mouvementReduit, choixAnnee, brancherChoixAnnee
 } from '../ui.js';
 import { reussite, patienter, annoncer } from '../retours.js';
 import { titrePeriode, anneeDe, moisDe } from '/partage/dates.js';
@@ -92,7 +92,7 @@ export async function vueExports(conteneur, params) {
         <p>${r.texte}</p>
         <div class="document-reglages">
           <div class="document-periode">
-            ${selecteur({ id: `${id}-annee`, etiquette: 'Année', options: optionsAnnees(r.annees) })}
+            ${choixAnnee({ id: `${id}-annee`, etiquette: 'Année' })}
             ${selecteur({ id: `${id}-mois`, etiquette: 'Mois', options: `<option value="">Année complète</option>${OPTIONS_MOIS}` })}
           </div>
           <label class="option-pieces"><input type="checkbox" class="case" id="${id}-pieces">
@@ -126,7 +126,7 @@ export async function vueExports(conteneur, params) {
             <div class="document-titre"><span class="tuile analyse">${icone('fichier-texte', { taille: 17 })}</span><h2 id="titre-rapport">Rapport annuel de gestion</h2></div>
             <p>Chiffre d’affaires et sa répartition, panier moyen, évolution mois par mois, moyens de paiement, meilleurs clients. Document de gestion sans valeur légale : seuls les registres font foi.</p>
             <div class="document-reglages">
-              <div class="document-periode">${selecteur({ id: 'rapport-annee', etiquette: 'Année', options: optionsAnnees(anneesRecettes) })}</div>
+              <div class="document-periode">${choixAnnee({ id: 'rapport-annee', etiquette: 'Année' })}</div>
               <p class="option-pieces attenue">Une page de synthèse, puis le détail des encaissements.</p>
               <div class="formats">
                 <button type="button" class="btn btn-principal pleine" id="telecharger-rapport">${icone('fichier-texte', { taille: 16 })}Rapport annuel (PDF)</button>
@@ -138,8 +138,24 @@ export async function vueExports(conteneur, params) {
     </div>`;
 
   const page = conteneur.querySelector('.page');
+  // Arrivée depuis le bouton « Exporter » d'un registre : la carte reprend la
+  // période filtrée à l'écran et s'éclaire.
+  const demande = params?.get('registre');
+  const carteDemandee = demande && REGISTRES[demande] ? page.querySelector(`#carte-${demande}`) : null;
+
+  /** L'année choisie de chaque carte (registres et rapport), d'abord la plus récente. */
+  const annees = {};
+  const brancherAnnee = (id, liste, surChoix = () => {}) => {
+    const voulue = id === demande ? Number(params.get('annee')) : NaN;
+    annees[id] = liste.includes(voulue) ? voulue : liste[0];
+    brancherChoixAnnee(page.querySelector(`#${id}-annee`), {
+      annees: liste,
+      choisie: annees[id],
+      surChoix: (annee) => { annees[id] = annee; surChoix(); }
+    });
+  };
   const periodeDe = (id) => ({
-    annee: page.querySelector(`#${id}-annee`).value,
+    annee: String(annees[id]),
     mois: page.querySelector(`#${id}-mois`).value
   });
 
@@ -161,25 +177,19 @@ export async function vueExports(conteneur, params) {
       : `Avec ${accorder(avecPdf, `PDF joint`, 'PDF joints')} <span class="attenue">(archive .zip)</span>`;
   }
 
-  for (const id of Object.keys(REGISTRES)) {
-    majOptionPieces(id);
-    page.querySelector(`#${id}-annee`).addEventListener('change', () => majOptionPieces(id));
+  for (const [id, r] of Object.entries(REGISTRES)) {
+    brancherAnnee(id, r.annees, () => majOptionPieces(id));
     page.querySelector(`#${id}-mois`).addEventListener('change', () => majOptionPieces(id));
   }
+  brancherAnnee('rapport', anneesRecettes);
 
-  // Arrivée depuis le bouton « Exporter » d'un registre : la carte reprend la
-  // période filtrée à l'écran et s'éclaire.
-  const demande = params?.get('registre');
-  const carteDemandee = demande && REGISTRES[demande] ? page.querySelector(`#carte-${demande}`) : null;
   if (carteDemandee) {
-    const choisir = (select, valeur) => {
-      if (valeur && [...select.options].some((o) => o.value === valeur)) select.value = valeur;
-    };
-    choisir(page.querySelector(`#${demande}-annee`), params.get('annee'));
-    choisir(page.querySelector(`#${demande}-mois`), params.get('mois'));
-    majOptionPieces(demande);
+    const mois = page.querySelector(`#${demande}-mois`);
+    const voulu = params.get('mois');
+    if (voulu && [...mois.options].some((o) => o.value === voulu)) mois.value = voulu;
     carteDemandee.classList.add('mise-en-avant');
   }
+  for (const id of Object.keys(REGISTRES)) majOptionPieces(id);
 
   /**
    * Contrôle puis téléchargement d'un registre : les points s'affichent l'un
@@ -269,7 +279,7 @@ export async function vueExports(conteneur, params) {
       void cadre.offsetWidth;
       cadre.classList.add('imprime');
       try {
-        await telechargerFichier(urlRapportAnnuel(page.querySelector('#rapport-annee').value));
+        await telechargerFichier(urlRapportAnnuel(String(annees.rapport)));
         reprendre();
         reussite(rapport, 'Rapport prêt', { duree: 2200, nomIcone: 'fichier-valide' });
       } catch (erreur) {

@@ -10,19 +10,20 @@
  */
 
 import { api } from '../api.js';
-import { etat, definirParametres, registreAchatsUtile } from '../etat.js';
+import { etat, modifierParametres, registreAchatsUtile } from '../etat.js';
 import {
   echapperHtml, toast, animerCompteurs, valeursCompteurs, montantDetaille, infobulle, accorder, choixAnnee,
-  brancherChoixAnnee, mouvementReduit, enFondu
+  brancherChoixAnnee, mouvementReduit, enFondu, replierPuisRetirer, ecouterPourLaPage
 } from '../ui.js';
 import { reussite, halo, bandeauRetour, brancherSegmentes, copierDansPressePapiers } from '../retours.js';
 import { icone } from '../icones.js';
 import { graphiqueMensuel, tableauMensuel, brancherGraphique, hauteursBarres } from '../graphique.js';
 import { pastilleEtat } from '../declarations.js';
 import { pastilleCategorie } from './recettes.js';
-import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
-import { formaterDate, nomMois, dateEnFrancaisLong, aujourdHuiIso } from '/partage/dates.js';
-import { bilanSeuils, seuilsValentPour, libelleActivite, periodeSeuils } from '/partage/seuils.js';
+import { etatFiltres } from '../preferences-vues.js';
+import { formaterMontant, formaterMontantEntier, sommeMontants } from '/partage/montants.js';
+import { formaterDate, nomMois, dateEnFrancaisLong, aujourdHuiIso, MOIS_ABREGES } from '/partage/dates.js';
+import { bilanSeuils, seuilsValentPour, periodeSeuils } from '/partage/seuils.js';
 import { periodeATraiter, libellePeriode, joursEntre } from '/partage/declarations.js';
 import { salutation } from '/partage/salutations.js';
 import { majusculeInitiale } from '/partage/texte.js';
@@ -49,7 +50,7 @@ function salutationDuJour(periode) {
   const quoi = `Votre déclaration URSSAF pour ${periodeDansPhrase(periode)}`;
   const echeance = dateEnFrancaisLong(periode.echeance).replace(/ \d{4}$/, '');
   const rappel = periode.etat === 'en-retard'
-    ? `${quoi} reste à faire : l’échéance du ${echeance} est passée.`
+    ? `${quoi} reste à faire\u00a0: l’échéance du ${echeance} est passée.`
     : `${quoi} est à faire avant le ${echeance}.`;
   return salutation({ prenom, rappel });
 }
@@ -57,7 +58,9 @@ function salutationDuJour(periode) {
 // ---- Seuils ------------------------------------------------------------------------------
 
 /**
- * Une jauge de progression vers un seuil, avec son message.
+ * Une jauge de progression vers un seuil, ce qu'il reste à sa droite, et un
+ * message dessous seulement quand il y a quelque chose à signaler. Même à 1 %,
+ * le remplissage se voit : une pastille de la hauteur de la jauge.
  *
  * Les seuils de TVA ont deux étages : un seuil de base, et un seuil majoré
  * au-delà duquel la franchise tombe immédiatement. Quand il existe, la jauge
@@ -66,21 +69,25 @@ function salutationDuJour(periode) {
 function regle({ titre, ca, progression, devise, messageAttention, messageDepasse, teinte = '' }) {
   const pourcentage = progression.pourcentage;
   const niveau = pourcentage >= 100 ? 'depasse' : pourcentage >= 80 ? 'attention' : teinte;
+  const alerte = niveau === 'attention' || niveau === 'depasse';
   const majore = progression.seuilMajore;
   const reference = majore ?? progression.seuil;
   const note = niveau === 'depasse' ? messageDepasse
     : niveau === 'attention' ? messageAttention.replace('{p}', pourcentage)
-      : `Il reste ${formaterMontantEntier(progression.restant, devise)} (${pourcentage} % atteints).`;
+      : majore ? `Seuil majoré : ${formaterMontantEntier(majore, devise)}.` : '';
   return `<div class="regle">
       <div class="regle-tete"><span>${echapperHtml(titre)}</span>
         <span class="valeurs"><strong>${echapperHtml(formaterMontantEntier(ca, devise))}</strong> / ${echapperHtml(formaterMontantEntier(progression.seuil, devise))}</span></div>
-      <div class="piste ${niveau}" role="meter" aria-valuemin="0" aria-valuemax="${progression.seuil}" aria-valuenow="${Math.round(ca)}"
-        aria-label="${echapperHtml(titre)} : ${pourcentage} % du seuil">
-        <span class="rempli" style="width:${Math.min(100, (ca / reference) * 100)}%"></span>
-        ${majore ? `<span class="repere" style="left:calc(${(progression.seuil / majore) * 100}% - 1px)"
-          title="Seuil de base : ${echapperHtml(formaterMontant(progression.seuil, devise))} · seuil majoré : ${echapperHtml(formaterMontant(majore, devise))}"></span>` : ''}
+      <div class="regle-jauge">
+        <div class="piste ${niveau}" role="meter" aria-valuemin="0" aria-valuemax="${progression.seuil}" aria-valuenow="${Math.round(ca)}"
+          aria-label="${echapperHtml(titre)} : ${pourcentage} % du seuil">
+          <span class="rempli" style="width:${ca > 0 ? `max(10px, ${Math.min(100, (ca / reference) * 100)}%)` : '0'}"></span>
+          ${majore ? `<span class="repere" style="left:calc(${(progression.seuil / majore) * 100}% - 1px)"
+            title="Seuil de base : ${echapperHtml(formaterMontant(progression.seuil, devise))} · seuil majoré : ${echapperHtml(formaterMontant(majore, devise))}"></span>` : ''}
+        </div>
+        ${niveau === 'depasse' ? '' : `<span class="reste" title="${pourcentage} % du seuil atteints">Il reste ${echapperHtml(formaterMontantEntier(progression.restant, devise))}</span>`}
       </div>
-      <p class="regle-note ${niveau === 'attention' || niveau === 'depasse' ? niveau : ''}">${niveau === 'attention' || niveau === 'depasse' ? icone('triangle-alerte', { taille: 14 }) : ''}<span>${echapperHtml(note)}${majore && niveau !== 'depasse' ? ` Seuil majoré : ${echapperHtml(formaterMontantEntier(majore, devise))}.` : ''}</span></p>
+      ${note ? `<p class="regle-note ${alerte ? niveau : ''}">${alerte ? icone('triangle-alerte', { taille: 14 }) : ''}<span>${echapperHtml(note)}${majore && niveau === 'attention' ? ` Seuil majoré : ${echapperHtml(formaterMontantEntier(majore, devise))}.` : ''}</span></p>` : ''}
     </div>`;
 }
 
@@ -106,7 +113,6 @@ function carteSeuils(stats, devise) {
   const estMixte = bilan.typeActivite === 'mixte';
   const titreTotal = estMixte ? 'CA total (ventes et prestations)' : 'Chiffre d’affaires';
   const titrePart = 'Part prestations de services';
-  const deuxConditions = 'Les deux conditions doivent être respectées.';
 
   /**
    * Franchir le seuil de base et franchir le seuil majoré n'ont pas les mêmes
@@ -127,10 +133,11 @@ function carteSeuils(stats, devise) {
       `${periodeSeuils(stats.annee)} ; en cas de doute, vérifiez les valeurs en vigueur sur economie.gouv.fr.`,
       'le suivi des seuils'
     )}</h2><span class="note">${stats.annee}</span></div>
-    <p class="activite-seuils">${echapperHtml(libelleActivite(etat.parametres))}</p>
+    ${estMixte ? `<p class="explication-plafonds">Activité mixte : pour chaque régime, le CA total et la part prestations
+      doivent tous deux rester sous leur seuil.</p>` : ''}
     <div class="regime">
       <h3>Rester en micro-entreprise</h3>
-      <p class="explication">${estMixte ? deuxConditions : 'Au-delà, le régime prend fin après deux années consécutives de dépassement.'}</p>
+      <p class="explication">Au-delà, le régime prend fin après deux années consécutives de dépassement.</p>
       ${regle({
         titre: titreTotal, ca: stats.caAnnee, progression: bilan.plafondMicro, devise,
         messageAttention: '{p} % du plafond annuel atteint.',
@@ -145,7 +152,7 @@ function carteSeuils(stats, devise) {
     </div>
     <div class="regime">
       <h3>Franchise en base de TVA</h3>
-      <p class="explication">${estMixte ? deuxConditions : 'Tant que ce seuil tient, vous ne facturez pas la TVA.'}</p>
+      <p class="explication">${estMixte ? 'Tant que ces seuils tiennent' : 'Tant que ce seuil tient'}, vous ne facturez pas la TVA.</p>
       ${regle({
         titre: titreTotal, ca: stats.caAnnee, progression: bilan.franchiseTva, devise,
         messageAttention: 'Vous approchez du seuil de franchise de TVA ({p} %).',
@@ -195,7 +202,7 @@ function carteDeclaration(periode, bilan, devise) {
       ${bilan ? `<div class="lignes-montants">
         ${ligne(declarable ? 'Chiffre d’affaires à déclarer' : 'Encaissé à ce jour', formaterMontantEntier(bilan.aDeclarer, devise), { classe: 'principal', copier: bilan.aDeclarer })}
         ${c ? `${ligne('Sera prélevé par l’URSSAF', formaterMontantEntier(c.totalPreleve, devise))}
-        ${ligne('Il vous restera', formaterMontant(c.reste, devise), { classe: 'reste' })}` : ''}
+        ${ligne('Il vous restera', formaterMontantEntier(c.reste, devise), { classe: 'reste' })}` : ''}
       </div>
       ${c ? '<p class="note-estimation">Prélèvement et reste estimés : le montant exact sera celui de l’URSSAF.</p>'
         : `<p class="note-carte"><a href="#/parametres?section=regime">Indiquez votre type d’activité</a> pour estimer ce que l’URSSAF prélèvera et ce qu’il vous restera.</p>`}`
@@ -215,8 +222,16 @@ export async function vueTableauDeBord(conteneur) {
   const anneeCourante = new Date().getFullYear();
   const anneesDisponibles = annees.length > 0 ? annees : [anneeCourante];
   let anneeChoisie = anneesDisponibles[0]; // la plus récente avec des données
-  // Flèche de l'année cliquée : elle garde le focus quand la page se redessine.
+  // Flèche de l'année cliquée (ou « liste ») : elle garde le focus quand la page se redessine.
   let flecheAnnee = null;
+  /** La page dessinée : les montants affichés y sont relevés avant un nouveau dessin. */
+  let pageCourante = null;
+
+  /** Ce qu'affiche la page : les montants et les barres repartiront de là. */
+  const affichage = () => (mouvementReduit() || !pageCourante ? null : {
+    compteurs: valeursCompteurs(pageCourante.querySelector('.indicateurs')),
+    barres: hauteursBarres(pageCourante)
+  });
 
   /** Charge la période à traiter et son bilan ; sans bilan, la carte s'affiche quand même. */
   async function chargerDeclaration() {
@@ -254,8 +269,10 @@ export async function vueTableauDeBord(conteneur) {
       `<span class="cle cle-${cle}"><i></i>${libelle} <strong>${echapperHtml(formaterMontant(montant, devise))}</strong></span>`).join('');
     const legendeParts = legende(parts);
     // Le mois affiché, réparti de la même façon : mêmes pastilles, mêmes couleurs.
+    // Même vide, il garde ses deux lignes : son montant reste aligné sur celui
+    // des cartes voisines.
     const nonCategoriseMois = Math.max(0, Math.round((stats.caMois - stats.caMoisVentes - stats.caMoisPrestations) * 100) / 100);
-    const legendeMois = estMixte && stats.caMois > 0 ? legende([
+    const legendeMois = estMixte && stats.caAnnee > 0 ? legende([
       ['prestations', stats.caMoisPrestations, 'Prestations'],
       ['ventes', stats.caMoisVentes, 'Ventes'],
       ...(nonCategoriseMois > 0 ? [['neutre', nonCategoriseMois, 'Non catégorisé']] : [])
@@ -267,15 +284,18 @@ export async function vueTableauDeBord(conteneur) {
       ...(stats.nombreAnneeVentes > 0 ? [['ventes', moyenne(stats.caAnneeVentes, stats.nombreAnneeVentes), 'Ventes']] : [])
     ]) : '';
     // Les achats n'ont pas de catégorie : ceux du mois, puis ceux des mois
-    // d'avant (« Janvier à août »), et ceux datés plus tard dans l'année s'il y en a.
-    const plageMois = (du, au) => (du === au
-      ? majusculeInitiale(nomMois(du))
-      : `${majusculeInitiale(nomMois(du))} à ${nomMois(au)}`);
+    // d'avant (« Janv. à sept. », abrégé pour tenir sur une ligne dans la carte
+    // étroite), et ceux datés plus tard dans l'année s'il y en a. Un seul mois
+    // se nomme en entier.
+    const abrege = (m) => (MOIS_ABREGES[m - 1] === nomMois(m) ? nomMois(m) : `${MOIS_ABREGES[m - 1]}.`);
+    const plage = (du, au) => majusculeInitiale(du === au ? nomMois(du) : `${abrege(du)} à ${abrege(au)}`);
+    const moisAvant = plage(1, stats.mois - 1);
+    const moisApres = plage(stats.mois + 1, 12);
     const achatsApres = Math.round((stats.achatsAnnee - stats.achatsMois - stats.achatsAvantMois) * 100) / 100;
     const legendeAchats = stats.achatsAnnee > 0 ? legende([
       ['achat', stats.achatsMois, majusculeInitiale(nomMois(stats.mois))],
-      ...(stats.mois > 1 ? [['achat-avant', stats.achatsAvantMois, plageMois(1, stats.mois - 1)]] : []),
-      ...(achatsApres > 0 ? [['achat-avant', achatsApres, plageMois(stats.mois + 1, 12)]] : [])
+      ...(stats.mois > 1 ? [['achat-avant', stats.achatsAvantMois, moisAvant]] : []),
+      ...(achatsApres > 0 ? [['achat-avant', achatsApres, moisApres]] : [])
     ]) : '';
 
     const indicateur = ({ cle, icone: nomIcone, teinte = '', titre, valeur, detail, repartition = '' }) => `
@@ -286,7 +306,9 @@ export async function vueTableauDeBord(conteneur) {
         <p class="indicateur-detail">${detail}</p>
       </article>`;
 
-    const indicateurs = `
+    // Le cadre mesure la place disponible : trop étroite, la carte de l'année
+    // prend toute une ligne et les autres se partagent la suivante.
+    const indicateurs = `<div class="cadre-indicateurs">
       <section class="indicateurs${avecAchats ? '' : ' trois'}" aria-label="Indicateurs clés">
         <article class="carte indicateur principal">
           <div class="indicateur-tete"><span class="tuile recette">${icone('portefeuille', { taille: 17 })}</span>Chiffre d’affaires encaissé en ${stats.annee}</div>
@@ -308,7 +330,7 @@ export async function vueTableauDeBord(conteneur) {
         })}
         ${indicateur({
           cle: 'moyenne', icone: 'recettes', teinte: 'analyse',
-          titre: 'Moyenne par encaissement',
+          titre: 'Panier moyen',
           valeur: stats.moyenneEncaissement,
           repartition: legendeMoyenne,
           detail: stats.nombreAnnee > 0 ? `Sur ${accorder(stats.nombreAnnee, 'encaissement')}` : 'Aucun encaissement cette année'
@@ -320,7 +342,7 @@ export async function vueTableauDeBord(conteneur) {
           repartition: legendeAchats,
           detail: `${accorder(stats.nombreAchatsAnnee, 'achat')} au registre`
         }) : ''}
-      </section>`;
+      </section></div>`;
 
     // ---- Graphique : empilé en activité mixte, simple ailleurs
     const series = estMixte ? ['prestations', 'ventes', ...(nonCategorise > 0 ? ['nonCategorise'] : [])] : ['total'];
@@ -341,6 +363,14 @@ export async function vueTableauDeBord(conteneur) {
       };
     });
     const aDesRecettes = stats.caAnnee > 0;
+    // L'année d'avant, si le livre la connaît : une barre étroite par mois.
+    const avant = (stats.caParMoisAnneePrecedente ?? []).map((p) => p.total);
+    // Sauf si l'utilisateur a choisi de ne pas comparer (Paramètres, Options).
+    const precedente = etat.parametres.comparerAnneePrecedente !== false && avant.some((v) => v > 0) ? avant : null;
+    const totalPrecedente = precedente ? sommeMontants(precedente) : 0;
+    const clePrecedente = precedente
+      ? `<span class="cle cle-precedente"><i></i>${stats.annee - 1} <strong>${echapperHtml(formaterMontantEntier(totalPrecedente, devise))}</strong></span>`
+      : '';
     const carteGraphique = `
       <section class="carte carte-graphique" aria-labelledby="titre-mois">
         <div class="carte-tete">
@@ -352,7 +382,7 @@ export async function vueTableauDeBord(conteneur) {
         </div>
         ${aDesRecettes ? `
           ${graphiqueMensuel()}
-          <div class="vue-tableau" hidden><div class="defile" tabindex="0" aria-label="Chiffres mois par mois">${tableauMensuel(mois, series, { moisCourant, devise })}</div></div>
+          <div class="vue-tableau" hidden><div class="defile" tabindex="0" aria-label="Chiffres mois par mois">${tableauMensuel(mois, series, { moisCourant, devise, annee: stats.annee, precedente })}</div></div>
           <div class="legende pied-graphique">${estMixte
             ? series.map((s) => {
               const cle = { prestations: 'prestations', ventes: 'ventes', nonCategorise: 'neutre' }[s];
@@ -360,9 +390,23 @@ export async function vueTableauDeBord(conteneur) {
               const libelle = { prestations: 'Prestations', ventes: 'Ventes', nonCategorise: 'Non catégorisé' }[s];
               return `<span class="cle cle-${cle}"><i></i>${libelle} <strong>${echapperHtml(formaterMontantEntier(total, devise))}</strong></span>`;
             }).join('')
-            : `<span class="cle cle-total"><i></i>Encaissé en ${stats.annee} <strong>${echapperHtml(formaterMontantEntier(stats.caAnnee, devise))}</strong></span>`}</div>`
+            : `<span class="cle cle-total"><i></i>Encaissé en ${stats.annee} <strong>${echapperHtml(formaterMontantEntier(stats.caAnnee, devise))}</strong></span>`}${clePrecedente}</div>`
           : `<div class="vide-graphique">${icone('recettes', { taille: 28 })}<p>Le graphique apparaîtra dès vos premiers encaissements de ${stats.annee}.</p></div>`}
       </section>`;
+
+    // ---- Recettes qui reviennent chaque mois et attendent celle du mois : une
+    // bande en tête des dernières recettes, pour l'ajouter d'un clic (pré-remplie).
+    const aRenouveler = estCourante && etat.parametres.proposerRenouvellements !== false ? (stats.aRenouveler ?? []).slice(0, 3) : [];
+    const bandeRenouveler = aRenouveler.length === 0 ? '' : `
+      <div class="a-renouveler" role="group" aria-label="Recettes qui reviennent chaque mois">
+        ${aRenouveler.map(({ cle, derniere: r }) => `<div class="ligne-renouveler">
+          <span class="tuile recette">${icone('historique', { taille: 15 })}</span>
+          <span class="texte-renouveler"><strong>${echapperHtml(r.libelle)}</strong>, ${echapperHtml(r.client)}, ${echapperHtml(formaterMontant(r.montant, devise))}
+            <small>Encaissée les trois derniers mois, pas encore en ${nomMois(stats.mois)}.</small></span>
+          <button type="button" class="lien-ecarter" data-ecarter="${echapperHtml(cle)}">Ne plus proposer</button>
+          <a class="btn btn-petit" href="#/recettes?modele=${encodeURIComponent(r.id)}">${icone('plus', { taille: 15 })}Ajouter</a>
+        </div>`).join('')}
+      </div>`;
 
     // ---- Dernières recettes : autant de lignes que la carte en contient
     const avecSeuils = Boolean(suiviSeuils);
@@ -372,6 +416,7 @@ export async function vueTableauDeBord(conteneur) {
           <h2 id="titre-dernieres">Dernières recettes${estCourante ? '' : ` de ${stats.annee}`}</h2>
           <a class="btn btn-petit btn-fantome" href="#/recettes?nouvelle=1">${icone('plus', { taille: 15 })}Ajouter</a>
         </div>
+        ${bandeRenouveler}
         ${stats.dernieresRecettes.length === 0 ? `
           <div class="vide-carte">
             <p>Votre livre des recettes est vide pour l’instant.</p>
@@ -379,9 +424,9 @@ export async function vueTableauDeBord(conteneur) {
           </div>` : `
           <div class="${avecSeuils ? 'lignes-ajustees' : 'lignes-libres'}"><table class="tableau">
             <thead><tr><th>Encaissé le</th><th>Client</th><th>Libellé</th>${estMixte ? '<th>Catégorie</th>' : ''}<th class="montant">Montant</th></tr></thead>
-            <tbody>${stats.dernieresRecettes.slice(0, avecSeuils ? 12 : 8).map((r) => `<tr>
+            <tbody>${stats.dernieresRecettes.slice(0, avecSeuils ? 12 : 8).map((r) => `<tr class="ligne-cliquable">
               <td class="date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
-              <td class="client">${echapperHtml(r.client)}</td>
+              <td class="client"><a class="lien-ligne" href="#/recettes?voir=${encodeURIComponent(r.id)}">${echapperHtml(r.client)}</a></td>
               <td class="libelle"${r.libelle ? ` title="${echapperHtml(r.libelle)}"` : ''}>${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">Sans libellé</span>'}</td>
               ${estMixte ? `<td>${pastilleCategorie(r.categorie)}</td>` : ''}
               <td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td></tr>`).join('')}</tbody>
@@ -401,7 +446,6 @@ export async function vueTableauDeBord(conteneur) {
           </div>
           <div class="actions">
             ${anneesDisponibles.length > 1 ? choixAnnee({ id: 'annee-tableau', etiquette: 'Année affichée' }) : ''}
-            <a class="btn btn-fantome" href="#/exports">${icone('telecharger', { taille: 16 })}Exporter le livre des recettes</a>
             ${avecAchats ? `<a class="btn" href="#/achats?nouveau=1">${icone('plus', { taille: 16 })}Nouvel achat</a>` : ''}
             <a class="btn btn-principal" href="#/recettes?nouvelle=1">${icone('plus', { taille: 16 })}Nouvelle recette</a>
           </div>
@@ -416,9 +460,17 @@ export async function vueTableauDeBord(conteneur) {
       </div>`;
 
     const page = conteneur.querySelector('.page');
+    pageCourante = page;
     if (aDesRecettes) {
       brancherGraphique(page.querySelector('.carte-graphique'), mois, {
-        series, annee: stats.annee, moisCourant, devise, anime, depuis: depuis?.barres ?? null
+        series, annee: stats.annee, moisCourant, devise, anime, depuis: depuis?.barres ?? null, precedente,
+        // Un mois choisi ouvre ses recettes, filtres remis à zéro.
+        surClic: (numero) => {
+          const { filtres } = etatFiltres('recettes');
+          Object.keys(filtres).forEach((cle) => { filtres[cle] = ''; });
+          Object.assign(filtres, { annee: String(stats.annee), mois: String(numero) });
+          window.location.hash = '#/recettes';
+        }
       });
       brancherSegmentes(page);
       // Graphique ou tableau des chiffres, dans la même place : la carte ne change pas de taille.
@@ -428,6 +480,9 @@ export async function vueTableauDeBord(conteneur) {
         if (!bouton) return;
         const tableau = bouton.dataset.vue === 'tableau';
         carte.querySelectorAll('[data-vue]').forEach((b) => b.setAttribute('aria-pressed', String(b === bouton)));
+        // Une animation se rejoue quand son élément réapparaît : le graphique
+        // revient tel quel, sans refaire monter ses barres.
+        if (!tableau) carte.querySelectorAll('.graphique .anime, .graphique .morph').forEach((e) => e.classList.remove('anime', 'morph'));
         carte.querySelector('.graphique').hidden = tableau;
         carte.querySelector('.vue-tableau').hidden = !tableau;
       });
@@ -435,6 +490,15 @@ export async function vueTableauDeBord(conteneur) {
     const cadreLignes = page.querySelector('.lignes-ajustees');
     if (cadreLignes) ajusterLignes(cadreLignes);
     brancherDeclaration(page, devise);
+    brancherRenouveler(page);
+    // Une dernière recette ouvre le registre sur elle, mise en avant. Le lien
+    // est sur le client (clavier) ; un clic ailleurs sur la ligne le suit,
+    // sauf pendant une sélection de texte.
+    page.querySelector('.carte-dernieres tbody')?.addEventListener('click', (evenement) => {
+      const ligne = evenement.target.closest('.ligne-cliquable');
+      if (!ligne || evenement.target.closest('a') || !window.getSelection()?.isCollapsed) return;
+      ligne.querySelector('.lien-ligne')?.click();
+    });
     const choix = page.querySelector('#annee-tableau');
     if (choix) {
       brancherChoixAnnee(choix, {
@@ -442,17 +506,15 @@ export async function vueTableauDeBord(conteneur) {
         choisie: anneeChoisie,
         surChoix: (annee, pas) => {
           anneeChoisie = annee;
-          flecheAnnee = pas;
+          flecheAnnee = pas ?? 'liste';
           // D'une année à l'autre, les montants défilent et les barres
           // changent de taille, depuis ce qui était affiché.
-          const depuisAffiche = mouvementReduit() ? null : {
-            compteurs: valeursCompteurs(page.querySelector('.indicateurs')),
-            barres: hauteursBarres(page)
-          };
-          rendre({ depuis: depuisAffiche }).catch((erreur) => toast(erreur.message, 'erreur'));
+          rendre({ depuis: affichage() }).catch((erreur) => toast(erreur.message, 'erreur'));
         }
       });
-      if (flecheAnnee) choix.querySelector(`[data-pas="${flecheAnnee}"]`).focus({ preventScroll: true });
+      if (flecheAnnee) {
+        choix.querySelector(flecheAnnee === 'liste' ? '.annee-choisie' : `[data-pas="${flecheAnnee}"]`).focus({ preventScroll: true });
+      }
       flecheAnnee = null;
     }
     if (anime) animerCompteurs(page.querySelector('.indicateurs'), devise);
@@ -502,9 +564,43 @@ export async function vueTableauDeBord(conteneur) {
     });
   }
 
-  async function enregistrerDerniereDeclaree(id) {
-    const reponse = await api.enregistrerParametres({ ...etat.parametres, dernierePeriodeDeclaree: id });
-    definirParametres(reponse.parametres);
+  /**
+   * « Ne plus proposer » une recette qui revient : elle quitte la bande, et
+   * une ligne permet de revenir sur ce choix quelques secondes.
+   */
+  function brancherRenouveler(page) {
+    const bande = page.querySelector('.a-renouveler');
+    bande?.addEventListener('click', async (evenement) => {
+      const bouton = evenement.target.closest('[data-ecarter]');
+      if (!bouton) return;
+      const avant = etat.parametres.recurrencesEcartees ?? [];
+      bouton.disabled = true;
+      try {
+        await enregistrerEcartees([...avant, bouton.dataset.ecarter]);
+      } catch (erreur) {
+        bouton.disabled = false;
+        toast(erreur.message, 'erreur');
+        return;
+      }
+      // La ligne se replie, le retour prend sa place ; la bande vide s'efface ensuite.
+      await replierPuisRetirer(bouton.closest('.ligne-renouveler'));
+      bandeauRetour(bande, 'Ne sera plus proposée', async () => {
+        try {
+          await enregistrerEcartees(avant);
+          await rendre();
+        } catch (erreur) {
+          toast(erreur.message, 'erreur');
+        }
+      });
+    });
+  }
+
+  function enregistrerEcartees(cles) {
+    return modifierParametres({ recurrencesEcartees: cles });
+  }
+
+  function enregistrerDerniereDeclaree(id) {
+    return modifierParametres({ dernierePeriodeDeclaree: id });
   }
 
   async function redessinerDeclaration(page, devise) {
@@ -518,6 +614,17 @@ export async function vueTableauDeBord(conteneur) {
   }
 
   await rendre();
+
+  // Ctrl+Z / Ctrl+Y : le tableau de bord se met à jour sur place, montants et
+  // barres passant de leur valeur affichée à la nouvelle. Une page quittée se
+  // désabonne au premier événement qui suit.
+  const surHistorique = (evenement) => {
+    if (!pageCourante?.isConnected) { window.removeEventListener('historique-applique', surHistorique); return; }
+    evenement.preventDefault();
+    rendre({ depuis: affichage() }).catch((erreur) => toast(erreur.message, 'erreur'));
+  };
+  // Une seule page à la fois : l'écouteur de la précédente laisse sa place.
+  ecouterPourLaPage('historique-applique', surHistorique);
 }
 
 /**

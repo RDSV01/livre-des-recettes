@@ -46,20 +46,32 @@ export async function annulerAction(action) {
   return true;
 }
 
-/** Annule la dernière action. Retourne `false` s'il n'y a rien à annuler. */
-export async function annuler() {
-  const action = pileAnnulation.pop();
+/**
+ * Vrai si l'action peut encore s'annuler. Après un Ctrl+Z, un « Annuler » posé
+ * sur place pour une action qui ne l'est plus doit disparaître.
+ */
+export const estAnnulable = (action) => pileAnnulation.includes(action);
+
+/**
+ * Rejoue l'action du sommet de `depuis` et la passe sur `vers`. Retirée avant
+ * d'être rejouée (deux Ctrl+Z rapides visent deux actions distinctes), elle
+ * reprend sa place si le serveur refuse : elle reste à refaire, pas perdue.
+ */
+async function rejouer(depuis, vers, sens) {
+  const action = depuis.pop();
   if (!action) return false;
-  await action.annuler();
-  pileRetablissement.push(action);
+  try {
+    await action[sens]();
+  } catch (erreur) {
+    depuis.push(action);
+    throw erreur;
+  }
+  vers.push(action);
   return true;
 }
 
+/** Annule la dernière action. Retourne `false` s'il n'y a rien à annuler. */
+export const annuler = () => rejouer(pileAnnulation, pileRetablissement, 'annuler');
+
 /** Rétablit la dernière action annulée. Retourne `false` s'il n'y a rien à rétablir. */
-export async function retablir() {
-  const action = pileRetablissement.pop();
-  if (!action) return false;
-  await action.retablir();
-  pileAnnulation.push(action);
-  return true;
-}
+export const retablir = () => rejouer(pileRetablissement, pileAnnulation, 'retablir');

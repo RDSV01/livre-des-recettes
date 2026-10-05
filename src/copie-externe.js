@@ -103,7 +103,7 @@ async function listerVolumesDuSysteme() {
     : [`/media/${os.userInfo().username}`, `/run/media/${os.userInfo().username}`, '/media', '/mnt'];
   const volumes = [];
   for (const racine of racines) {
-    let noms = [];
+    let noms;
     try { noms = fs.readdirSync(racine); } catch { continue; }
     for (const nom of noms) {
       const chemin = path.join(racine, nom);

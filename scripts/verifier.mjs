@@ -14,14 +14,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { creerApp } from '../src/app.js';
+import { ecouterSurUnPortLibre } from '../src/lancement.js';
 
 const dossierDonnees = fs.mkdtempSync(path.join(os.tmpdir(), 'ldr-verif-donnees-'));
 const dossierSauvegardes = fs.mkdtempSync(path.join(os.tmpdir(), 'ldr-verif-sauv-'));
 
 const app = creerApp({ dossierDonnees, dossierSauvegardes });
-const serveur = await new Promise((pret) => {
-  const instance = app.listen(0, '127.0.0.1', () => pret(instance));
-});
+const serveur = await ecouterSurUnPortLibre(app);
 const base = `http://127.0.0.1:${serveur.address().port}`;
 
 const resultats = [];
@@ -55,9 +54,10 @@ for (const chemin of [
 for (const chemin of [
   '/', '/css/theme.css', '/css/style.css', '/polices/commissioner-latin.woff2',
   '/js/app.js', '/js/preferences-vues.js', '/js/panneau.js', '/js/pieces.js', '/js/accueil.js', '/js/calendrier.js',
-  '/js/fichier-sauvegarde.js',
+  '/js/fichier-sauvegarde.js', '/js/raccourcis.js', '/js/recherche-globale.js',
+  '/js/ressort.js', '/js/glisseur.js',
   '/partage/doublons.js', '/partage/seuils.js', '/partage/bareme-seuils.js', '/partage/declarations.js',
-  '/partage/salutations.js', '/partage/acre.js'
+  '/partage/salutations.js', '/partage/acre.js', '/partage/recurrences.js'
 ]) {
   await verifier(`GET ${chemin}`, 200, () => statut(chemin));
 }

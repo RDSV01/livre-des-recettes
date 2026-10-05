@@ -27,6 +27,25 @@ export function definirParametres(parametres) {
 }
 
 /**
+ * Les enregistrements passent un par un. Chacun envoie tous les paramètres :
+ * partis ensemble, le second repartirait des valeurs d'avant le premier et
+ * l'effacerait (deux réglages changés coup sur coup).
+ */
+let enregistrementEnCours = Promise.resolve();
+
+/** Enregistre une modification des paramètres, tout le reste repris tel quel ; retourne les paramètres enregistrés. */
+export function modifierParametres(modification) {
+  const envoi = enregistrementEnCours.then(async () => {
+    const { parametres } = await api.enregistrerParametres({ ...etat.parametres, ...modification });
+    definirParametres(parametres);
+    return parametres;
+  });
+  // Un échec revient à l'appelant sans bloquer les enregistrements suivants.
+  enregistrementEnCours = envoi.catch(() => {});
+  return envoi;
+}
+
+/**
  * Le registre des achats n'est obligatoire que pour les activités qui
  * revendent des marchandises : il est masqué pour une pure prestation de
  * services ou une activité libérale, sauf s'il contient déjà des achats

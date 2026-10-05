@@ -9,6 +9,7 @@
  */
 
 import { echapperHtml, identifiantUnique } from './ui.js';
+import { surlignageGlissant } from './glisseur.js';
 import { normaliserTexte } from '/partage/texte.js';
 
 /** Minuscules sans accents, à longueur égale : les positions restent celles du texte d'origine. */
@@ -52,6 +53,9 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
   liste.hidden = true;
   champ.parentElement.classList.add('avec-suggestions');
   champ.after(liste);
+  // Un seul surlignage, qui glisse d'une suggestion à l'autre.
+  const surlignage = surlignageGlissant(liste, { classe: 'choix' });
+  const placerSurlignage = () => { if (!liste.hidden) surlignage.placer(liste.querySelector('[aria-selected="true"]')); };
   champ.setAttribute('role', 'combobox');
   champ.setAttribute('aria-autocomplete', 'list');
   champ.setAttribute('aria-controls', idListe);
@@ -84,6 +88,7 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
         class="sugg${e.extra ? ' extra' : ''}" aria-selected="${i === actif}">${e.extra ? e.rendu : rendu(e, saisie)}</li>`).join('');
     if (actif >= 0) champ.setAttribute('aria-activedescendant', `${idListe}-${actif}`);
     else champ.removeAttribute('aria-activedescendant');
+    placerSurlignage();
   }
 
   function ouvrir() {
@@ -98,6 +103,7 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
       liste.classList.remove('entre');
       void liste.offsetWidth;
       liste.classList.add('entre');
+      placerSurlignage();
     }
     champ.setAttribute('aria-expanded', 'true');
   }
@@ -105,6 +111,7 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
   function fermer() {
     liste.hidden = true;
     actif = -1;
+    surlignage.oublier();
     champ.setAttribute('aria-expanded', 'false');
     champ.removeAttribute('aria-activedescendant');
   }
@@ -135,6 +142,9 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
       actif = (actif + pas + elements.length) % elements.length;
       dessiner();
       liste.querySelector(`[data-i="${actif}"]`)?.scrollIntoView({ block: 'nearest' });
+    } else if (evenement.key === 'Enter' && (evenement.ctrlKey || evenement.metaKey)) {
+      // Ctrl+Entrée enregistre la saisie telle qu'elle est tapée.
+      fermer();
     } else if (evenement.key === 'Enter' && actif >= 0) {
       evenement.preventDefault();
       choisir(actif);
@@ -160,6 +170,7 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
     actif = Number(li.dataset.i);
     liste.querySelectorAll('[aria-selected]').forEach((x) => x.setAttribute('aria-selected', String(x === li)));
     champ.setAttribute('aria-activedescendant', li.id);
+    placerSurlignage();
   });
 
   return { fermer };

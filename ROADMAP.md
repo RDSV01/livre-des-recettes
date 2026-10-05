@@ -5,6 +5,27 @@ locale, légère et simple.
 
 ## Déjà livré
 
+### v2.2
+
+- Recherche dans tout le livre (Ctrl+K) : clients, recettes, achats et pages. Raccourcis
+  clavier (N, A, /, ?), listés dans les paramètres.
+- Saisie plus rapide : mode de règlement repris du client ou du fournisseur, saisie en série
+  avec Ctrl+Entrée, date au clavier (+, −, A pour aujourd'hui).
+- Les recettes qui reviennent chaque mois se proposent d'un clic sur le tableau de bord.
+- Tableau de bord : comparaison avec l'année précédente, un mois du graphique ou une
+  dernière recette ouvre le registre, année choisie d'une flèche ou dans une liste. Chaque
+  aide se désactive dans les paramètres.
+- Ctrl+Z annule aussi sur place : registres, totaux et tableau de bord se mettent à jour.
+- Jeu de démonstration complet : deux années d'activité, factures PDF jointes, déclarations
+  à jour.
+- Chaque écran vérifié dans un vrai navigateur avant chaque version, avec et sans
+  animations : saisies, annulations, exports, imports, sauvegardes et récupération.
+- Interface affinée : filtres en boutons, plafonds plus lisibles, montants URSSAF en euros
+  entiers, paramètres regroupés, heure du dernier enregistrement en bas du menu, animations
+  discrètes.
+- Nouvelle licence (PolyForm Noncommercial) : l'application reste gratuite et son code
+  ouvert, sans usage commercial.
+
 ### v2.1
 
 - Copie automatique sur une clé USB ou un disque externe, choisi dans les paramètres.
@@ -108,20 +129,20 @@ locale, légère et simple.
 
 ## Prochaines versions
 
-### v2.2 : plusieurs entreprises
+### v2.3 : plusieurs entreprises
 
 - [ ] Un livre par entreprise, qu'on bascule de l'un à l'autre, chacun avec ses sauvegardes
       et sa copie externe.
 - [ ] Un exécutable pour Mac Intel.
 
-### v2.3 : pilotage
+### v2.4 : pilotage
 
 - [ ] Tableau de bord personnalisable.
 - [ ] Projection de fin d'année : « à ce rythme, 41 200 €, soit 49 % du plafond ».
 - [ ] Protection des périodes déjà déclarées : l'application prévient avant de modifier une
       recette d'une période déclarée à l'URSSAF, et indique le montant à rectifier.
 
-### v2.4 : exports et déclarations
+### v2.5 : exports et déclarations
 
 - [ ] Export d'une période libre.
 - [ ] Impression directe du registre.

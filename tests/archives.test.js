@@ -50,3 +50,13 @@ test('un premier archivage sans année close ne bloque pas les suivants', async 
   assert.deepEqual(await archives.archiver({ maintenant: MAINTENANT }), [2025]);
   assert.deepEqual(archives.lister().map((a) => a.annee), [2025]);
 });
+
+test('un livre de démonstration n’est jamais archivé ; repris à son compte, il l’est', async (t) => {
+  const { stockage, dossier, archives } = environnement(t);
+  stockage.chargerDemo({ parametres: { nomEntreprise: 'Démo', jeuDemo: true }, recettes: [{ ...RECETTE, dateEncaissement: '2025-05-12' }] });
+  assert.deepEqual(await archives.archiver({ maintenant: MAINTENANT }), []);
+  assert.ok(!fs.existsSync(path.join(dossier, '2025')), 'aucune archive fictive à côté des vraies');
+  // L'utilisateur renseigne sa propre entreprise : le livre devient le sien.
+  stockage.modifierParametres({ ...stockage.obtenirParametres(), jeuDemo: false });
+  assert.deepEqual(await archives.archiver({ maintenant: MAINTENANT }), [2025]);
+});

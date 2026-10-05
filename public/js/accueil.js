@@ -11,7 +11,7 @@
  */
 
 import { api } from './api.js';
-import { etat, definirParametres } from './etat.js';
+import { etat, definirParametres, modifierParametres } from './etat.js';
 import {
   echapperHtml, mouvementReduit, interrupteur, resultatSiret, afficherErreursFormulaire,
   effacerErreursFormulaire, toast
@@ -59,8 +59,8 @@ export function lancerAccueil({ fermer }) {
   racine.innerHTML = `
     <aside class="accueil-cote">
       <div class="accueil-marque"><span class="marque-logo">${icone('livre', { taille: 20 })}</span>Livre des recettes</div>
-      <ol class="accueil-etapes">${ETAPES.map((titre, i) => `<li data-etape="${i}">
-          <span class="accueil-repere"><span class="numero">${i + 1}</span>${icone('coche', { taille: 14, classe: 'trace-coche' })}</span>${titre}</li>`).join('')}</ol>
+      <ol class="accueil-etapes">${ETAPES.map((titre, i) => `<li data-etape="${i}"${i === DERNIERE ? ' class="arrivee"' : ''}>
+          <span class="accueil-repere">${i === DERNIERE ? '' : `<span class="numero">${i + 1}</span>`}${icone('coche', { taille: 14, classe: 'trace-coche' })}</span>${titre}</li>`).join('')}</ol>
       <p class="accueil-note">100 % local : vos données restent sur cet ordinateur.</p>
     </aside>
     <section class="accueil-scene" aria-labelledby="titre-etape">
@@ -289,10 +289,14 @@ export function lancerAccueil({ fermer }) {
 
   // ---- Enregistrement et sortie -------------------------------------------------------------
 
+  /**
+   * Enregistre les valeurs d'une étape. Seules celles-ci reviennent du
+   * serveur (normalisées) : une étape suivante remplie puis quittée par
+   * « Retour » garde ce qui y a été tapé.
+   */
   async function enregistrer(valeurs) {
-    const { parametres } = await api.enregistrerParametres({ ...etat.parametres, ...valeurs });
-    definirParametres(parametres);
-    Object.assign(saisie, parametres);
+    const enregistres = await modifierParametres(valeurs);
+    for (const cle of Object.keys(valeurs)) saisie[cle] = enregistres[cle];
   }
 
   /** Referme l'accueil sur la page `route`, une fois celle-ci dessinée derrière lui. */

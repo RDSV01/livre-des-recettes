@@ -80,6 +80,20 @@ export function creerPieces(dossierDonnees, dossierSauvegardes) {
     }
   };
 
+  /**
+   * Écrit le fichier puis son double hors du dossier de données. Le double
+   * est un filet : son échec (dossier inaccessible) n'empêche jamais de
+   * joindre la pièce, il est refait au prochain démarrage (voir `redoubler`).
+   */
+  const ranger = (id, octets) => {
+    fs.mkdirSync(dossier, { recursive: true });
+    ecrireDurablement(principal(id), octets);
+    try {
+      fs.mkdirSync(copies, { recursive: true });
+      fs.copyFileSync(principal(id), copie(id));
+    } catch { /* refait par `redoubler` */ }
+  };
+
   return {
     dossier,
 
@@ -96,14 +110,7 @@ export function creerPieces(dossierDonnees, dossierSauvegardes) {
         throw Object.assign(new Error('Ce PDF dépasse 10 Mo.'), { code: 'PIECE' });
       }
       const id = crypto.randomUUID();
-      fs.mkdirSync(dossier, { recursive: true });
-      ecrireDurablement(principal(id), octets);
-      // La copie hors du dossier de données est un filet : son échec
-      // (dossier inaccessible) ne doit jamais empêcher de joindre la pièce.
-      try {
-        fs.mkdirSync(copies, { recursive: true });
-        fs.copyFileSync(principal(id), copie(id));
-      } catch { /* retentée d'elle-même : la copie reviendra à la lecture */ }
+      ranger(id, octets);
       return { id, nom: nomPiece(nom), taille: octets.length };
     },
 
@@ -115,12 +122,7 @@ export function creerPieces(dossierDonnees, dossierSauvegardes) {
     deposer(id, octets) {
       if (!MOTIF_ID.test(String(id)) || !Buffer.isBuffer(octets) || !estPdf(octets)) return false;
       if (fs.existsSync(principal(id))) return false;
-      fs.mkdirSync(dossier, { recursive: true });
-      ecrireDurablement(principal(id), octets);
-      try {
-        fs.mkdirSync(copies, { recursive: true });
-        fs.copyFileSync(principal(id), copie(id));
-      } catch { /* refaite au prochain démarrage (voir `redoubler`) */ }
+      ranger(id, octets);
       return true;
     },
 

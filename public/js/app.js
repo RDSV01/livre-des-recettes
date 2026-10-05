@@ -11,7 +11,7 @@
 import { api } from './api.js';
 import { chargerEtat, etat, registreAchatsUtile } from './etat.js';
 import {
-  echapperHtml, toast, confirmer, dialogueAttente, chargeur, installerInfobulles, mouvementReduit, enFondu
+  echapperHtml, toast, confirmer, dialogueAttente, chargeur, installerInfobulles, mouvementReduit, enFondu, fermerMenu, heureLisible
 } from './ui.js';
 import { icone } from './icones.js';
 import { annuler, retablir } from './historique.js';
@@ -20,6 +20,10 @@ import { ouvrirReprise } from './fichier-sauvegarde.js';
 import { basculerTheme, themeCourant, themeChoisi, appliquerThemeEphemere, revenirAuThemeParDefaut } from './theme.js';
 import { fermerPanneauOuvert } from './panneau.js';
 import { lancerAccueil } from './accueil.js';
+import { installerRaccourcis } from './raccourcis.js';
+import { ouvrirRechercheGlobale } from './recherche-globale.js';
+import { RESSORT_SURBRILLANCE } from './ressort.js';
+import { installerReponsesControles } from './retours.js';
 import { alerteUrssaf } from '/partage/declarations.js';
 import { vueTableauDeBord } from './vues/tableau-de-bord.js';
 import { vueRecettes } from './vues/recettes.js';
@@ -41,7 +45,7 @@ const ROUTES = [
   { chemin: 'achats', label: 'Achats', icone: 'achats', vue: vueAchats, utile: registreAchatsUtile, forme: 'liste', groupe: 1 },
   { chemin: 'urssaf', label: 'URSSAF', icone: 'urssaf', vue: vueUrssaf, forme: 'simple', groupe: 1, alerte: true },
   { chemin: 'clients', label: 'Clients', icone: 'clients', vue: vueClients, forme: 'liste', groupe: 1 },
-  { chemin: 'import', label: 'Import CSV', icone: 'import', vue: vueImport, forme: 'simple', groupe: 2 },
+  { chemin: 'import', label: 'Importer', icone: 'import', vue: vueImport, forme: 'simple', groupe: 2 },
   { chemin: 'exports', label: 'Exports', icone: 'telecharger', vue: vueExports, forme: 'simple', groupe: 2 },
   { chemin: 'parametres', label: 'Paramètres', icone: 'parametres', vue: vueParametres, forme: 'simple', groupe: 3 }
 ];
@@ -59,6 +63,9 @@ const routesVisibles = () => ROUTES.filter((r) => !r.utile || r.utile());
 
 function construireRail() {
   const nav = document.getElementById('navigation');
+  // La surbrillance rejoint le lien choisi avec un léger dépassement, comme tirée par un ressort.
+  nav.style.setProperty('--ressort-surbrillance', RESSORT_SURBRILLANCE.easing);
+  nav.style.setProperty('--ressort-surbrillance-duree', `${RESSORT_SURBRILLANCE.duree}ms`);
   const lien = (r) => `<a class="lien-nav" href="#/${r.chemin}" data-route="${r.chemin}">
       ${icone(r.icone, { taille: 18 })}<span>${echapperHtml(r.label)}</span>${r.alerte ? '<span class="alerte-nav" hidden></span>' : ''}
     </a>`;
@@ -69,18 +76,50 @@ function construireRail() {
       <span class="marque-logo">${icone('livre', { taille: 18 })}</span>
       <span class="marque-nom">Livre des recettes<small id="nom-entreprise"></small></span>
     </a>
+    <button type="button" class="recherche-rail" id="recherche-rail" aria-keyshortcuts="Control+K">
+      ${icone('recherche', { taille: 16 })}<span>Rechercher</span><span class="touches"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+    </button>
     <span class="indicateur-nav" aria-hidden="true"></span>
     <div class="nav-principale">${groupe(1)}${groupe(2)}</div>
     <div class="pied-rail">
       <a class="etat-copie" id="etat-copie" href="#/parametres?section=securite" hidden>
-        ${icone('disque', { taille: 16 })}<span class="texte-etat-copie"></span>
+        ${icone('disque', { taille: 18 })}<span class="texte-etat-copie"></span>
       </a>
-      <button type="button" class="bascule-theme" id="bouton-theme"></button>
-      ${liens(3)}
-      <p class="mention-locale"><span id="version-app">${etat.systeme ? `Version ${echapperHtml(etat.systeme.version)}` : ''}</span>100 % local, vos données restent chez vous</p>
+      <div class="ligne-reglages">
+        ${liens(3)}
+        <button type="button" class="bascule-theme" id="bouton-theme"></button>
+      </div>
+      <p class="mention-locale"><span class="ligne-version"><span id="version-app">${etat.systeme ? `Version ${echapperHtml(etat.systeme.version)}` : ''}</span><span class="etat-enregistrement" id="etat-enregistrement" aria-hidden="true"></span></span>
+        <a class="lien-soutien" href="https://buymeacoffee.com/rdsv01" target="_blank" rel="noopener">Offrir un café à l’auteur</a></p>
     </div>`;
   nav.querySelector('#bouton-theme').addEventListener('click', (evenement) => basculerTheme(evenement.currentTarget));
+  nav.querySelector('#recherche-rail').addEventListener('click', rechercher);
   majRail({ anime: false });
+}
+
+/** Durée pendant laquelle l'heure d'enregistrement remplace la version (ms). */
+const DUREE_ENREGISTREMENT = 7000;
+let minuteurEnregistrement = null;
+
+// Chaque écriture réussie du livre (voir `api.js`) : « Enregistré à 14 h 32 »
+// prend un instant la place de la version, en fondu, sans rien déplacer.
+window.addEventListener('donnees-enregistrees', () => {
+  const zone = document.getElementById('etat-enregistrement');
+  if (!zone) return;
+  zone.innerHTML = `${icone('coche', { taille: 13 })}Enregistré à ${heureLisible(new Date())}`;
+  const ligne = zone.parentElement;
+  ligne.classList.add('montre-heure');
+  zone.removeAttribute('aria-hidden');
+  clearTimeout(minuteurEnregistrement);
+  minuteurEnregistrement = setTimeout(() => {
+    ligne.classList.remove('montre-heure');
+    zone.setAttribute('aria-hidden', 'true');
+  }, DUREE_ENREGISTREMENT);
+});
+
+/** La recherche dans tout le livre (Ctrl+K, ou le bouton du menu). */
+function rechercher() {
+  ouvrirRechercheGlobale({ pages: routesVisibles().map(({ chemin, label, icone: nomIcone }) => ({ chemin, label, icone: nomIcone })) });
 }
 
 /** Met le menu à jour sans le reconstruire : page courante, pastille URSSAF, thème, nom. */
@@ -88,22 +127,11 @@ function majRail({ anime = true } = {}) {
   const nav = document.getElementById('navigation');
   const { chemin } = decouperHash();
   const route = routeDe(chemin);
-  let courant = null;
   nav.querySelectorAll('.lien-nav').forEach((a) => {
     const actif = !modeRestauration && a.dataset.route === route.chemin;
     // La page courante ne peut pas se signaler par la seule couleur du lien.
-    if (actif) { a.setAttribute('aria-current', 'page'); courant = a; } else a.removeAttribute('aria-current');
+    if (actif) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  const indicateur = nav.querySelector('.indicateur-nav');
-  if (courant) {
-    indicateur.style.transition = anime && !mouvementReduit() ? '' : 'none';
-    indicateur.style.transform = `translateY(${courant.offsetTop}px)`;
-    indicateur.style.height = `${courant.offsetHeight}px`;
-    indicateur.style.opacity = '1';
-  } else {
-    indicateur.style.opacity = '0';
-  }
-
   const alerte = nav.querySelector('.alerte-nav');
   const texte = etat.parametres && !modeRestauration ? alerteUrssaf(etat.parametres) : '';
   if (alerte) {
@@ -112,18 +140,53 @@ function majRail({ anime = true } = {}) {
     alerte.classList.toggle('retard', texte === 'En retard');
   }
   nav.querySelector('#nom-entreprise').textContent = etat.parametres?.nomEntreprise ?? '';
+  // Pendant la récupération des données, rien à chercher : le livre n'est pas lisible.
+  nav.querySelector('#recherche-rail').hidden = modeRestauration;
 
   // Pas de copie hors de l'ordinateur, ou plus récente depuis une semaine : dit
   // discrètement en tête du pied de menu, avec ce qu'il faut faire.
   const copie = nav.querySelector('#etat-copie');
   const avis = modeRestauration ? null : avisCopie(etat.systeme?.copieExterne);
   copie.hidden = !avis;
-  copie.querySelector('.texte-etat-copie').innerHTML = avis ? `<strong>${avis.titre}</strong>${avis.conseil}` : '';
+  // Une seule ligne ; le conseil s'affiche au survol, et se lit avec le titre.
+  copie.querySelector('.texte-etat-copie').innerHTML = avis ? `${avis.titre}<span class="hors-ecran"> : ${avis.conseil}</span>` : '';
+  copie.title = avis?.conseil ?? '';
 
   const bouton = nav.querySelector('#bouton-theme');
   const sombre = themeCourant() === 'dark';
-  bouton.innerHTML = `${icone(sombre ? 'soleil' : 'lune', { taille: 17 })}<span>Thème ${sombre ? 'clair' : 'sombre'}</span>`;
+  bouton.innerHTML = icone(sombre ? 'soleil' : 'lune', { taille: 17 });
   bouton.setAttribute('aria-label', `Passer au thème ${sombre ? 'clair' : 'sombre'}`);
+  bouton.title = `Thème ${sombre ? 'clair' : 'sombre'}`;
+  // En dernier : ce qui précède (nom, avis de copie, Rechercher) déplace les liens.
+  placerIndicateur({ anime });
+}
+
+/**
+ * Pose la surbrillance sur le lien de la page courante. Elle couvre tout le
+ * menu et n'en laisse voir, par découpe, que la place du lien : d'une page à
+ * l'autre, seule la découpe glisse, sans animer ni largeur ni hauteur.
+ */
+function placerIndicateur({ anime = false } = {}) {
+  const nav = document.getElementById('navigation');
+  const indicateur = nav?.querySelector('.indicateur-nav');
+  if (!indicateur) return;
+  const courant = nav.querySelector('.lien-nav[aria-current="page"]');
+  if (!courant) {
+    indicateur.style.opacity = '0';
+    return;
+  }
+  // Mesuré sans elle : sa hauteur précédente gonflerait celle du menu.
+  indicateur.style.height = '0';
+  indicateur.style.height = `${nav.scrollHeight}px`;
+  indicateur.style.transition = anime && !mouvementReduit() ? '' : 'none';
+  // Paramètres partage sa ligne avec le bouton du thème : la découpe prend sa
+  // largeur. Mesurée à l'écran, sans arrondi.
+  const zone = indicateur.getBoundingClientRect();
+  const lien = courant.getBoundingClientRect();
+  const [haut, droite, bas, gauche] = [lien.top - zone.top, zone.right - lien.right, zone.bottom - lien.bottom, lien.left - zone.left]
+    .map((v) => `${v.toFixed(2)}px`);
+  indicateur.style.clipPath = `inset(${haut} ${droite} ${bas} ${gauche} round var(--rayon))`;
+  indicateur.style.opacity = '1';
 }
 
 /**
@@ -137,10 +200,10 @@ function avisCopie(copie) {
   if (!copie.active) {
     return etat.parametres?.signalerAbsenceCopie === false
       ? null
-      : { titre: 'Aucune copie hors de cet ordinateur', conseil: 'Pensez à faire une sauvegarde.' };
+      : { titre: 'Aucune sauvegarde externe', conseil: 'Pensez à faire une sauvegarde.' };
   }
   if (!copie.enRetard) return null;
-  if (!copie.derniereCopie) return { titre: 'Copie hors de l’ordinateur pas encore faite', conseil: 'Branchez la clé ou le disque choisi.' };
+  if (!copie.derniereCopie) return { titre: 'Première copie pas encore faite', conseil: 'Branchez la clé ou le disque choisi.' };
   const jours = Math.floor((Date.now() - Date.parse(copie.derniereCopie)) / 86_400_000);
   return { titre: `Dernière copie il y a ${jours} jours`, conseil: 'Branchez la clé ou le disque pour la mettre à jour.' };
 }
@@ -177,7 +240,7 @@ async function afficherVue() {
 
   // Ce qui appartient à la page précédente s'en va avec elle.
   fermerPanneauOuvert();
-  document.querySelector('.menu-contextuel')?.remove();
+  fermerMenu();
   const barre = document.getElementById('barre-selection');
   barre.hidden = true;
   barre.classList.remove('resultat');
@@ -404,11 +467,16 @@ window.addEventListener('keydown', async (evenement) => {
   if (document.querySelector('dialog[open]')) return;
 
   evenement.preventDefault();
+  // Un menu ouvert (« … », liste des années) visait l'état d'avant : il se referme.
+  fermerMenu();
   try {
     const fait = veutAnnuler ? await annuler() : await retablir();
     if (fait) {
       toast(veutAnnuler ? 'Action annulée.' : 'Action rétablie.');
-      afficherVue();
+      // Un registre affiché se recharge lui-même, lignes et total animés ;
+      // ailleurs, la page est redessinée.
+      const surPlace = !window.dispatchEvent(new Event('historique-applique', { cancelable: true }));
+      if (!surPlace) afficherVue();
     }
   } catch (erreur) {
     toast(erreur.message, 'erreur');
@@ -569,6 +637,12 @@ window.addEventListener('ouvrir-accueil', ouvrirAccueil);
 // Écouteurs délégués : posés une fois, ils valent pour toutes les vues, qui
 // se redessinent entièrement à chaque navigation.
 installerInfobulles();
+installerReponsesControles();
+// Raccourcis clavier (N, A, /, ?, Ctrl+K) : ni pendant l'accueil, ni sur l'écran de récupération.
+installerRaccourcis({
+  disponibles: () => Boolean(etat.parametres) && !modeRestauration && !document.querySelector('.accueil'),
+  rechercher
+});
 window.addEventListener('hashchange', afficherVue);
 // Les polices chargées peuvent décaler les liens : l'indicateur se recale une fois.
 document.fonts?.ready.then(() => majRail({ anime: false }));

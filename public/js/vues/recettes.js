@@ -21,7 +21,7 @@
  */
 
 import { api, urlPiece } from '../api.js';
-import { etat, definirParametres } from '../etat.js';
+import { etat, modifierParametres } from '../etat.js';
 import {
   echapperHtml, toast, formaterChampMontant, effacerErreursFormulaire, afficherErreursFormulaire,
   installerChampMontant, optionsCodes, selecteur, accorder, initiales, teinteDe,
@@ -31,7 +31,7 @@ import { annoncer, bandeauRetour, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
 import { etatFiltres } from '../preferences-vues.js';
 import { enregistrerAction } from '../historique.js';
-import { installerRegistre, cadrePanneau } from '../registre.js';
+import { installerRegistre, cadrePanneau, suivreModeDuTiers, saisieEnSerie } from '../registre.js';
 import { ouvrirPanneau } from '../panneau.js';
 import { autocompletion, surligner, eclairer } from '../autocompletion.js';
 import { zoneDepot } from '../pieces.js';
@@ -68,6 +68,9 @@ const CLES_TRI = {
   categorie: (r) => libelleCategorieCourt(r.categorie),
   montant: (r) => enCentimes(r.montant)
 };
+
+/** Détail des anomalies de numérotation déplié, d'une visite à l'autre (en mémoire seulement). */
+let avisOuvert = false;
 
 /** Pastille de catégorie d'une recette (activité mixte). */
 export const pastilleCategorie = (code) => (code
@@ -115,7 +118,9 @@ export async function vueRecettes(conteneur, params) {
     colonnes: [
       { cle: 'date', titre: 'Encaissé le', cellule: (r) => `<td class="date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>` },
       { cle: 'client', titre: 'Client', cellule: (r) => `<td class="client">${echapperHtml(r.client)}</td>` },
-      { cle: 'libelle', titre: 'Libellé', cellule: (r) => `<td class="libelle">${r.libelle ? echapperHtml(r.libelle) : '<span class="attenue">Sans libellé</span>'}</td>` },
+      { cle: 'libelle', titre: 'Libellé', cellule: (r) => `<td class="libelle">${r.libelle
+        ? `<span class="texte-libelle" title="${echapperHtml(r.libelle)}">${echapperHtml(r.libelle)}</span>`
+        : '<span class="attenue">Sans libellé</span>'}</td>` },
       { cle: 'facture', titre: 'Facture', avecPiece: true, cellule: (r) => `<td class="col-piece-hote">${r.numeroFacture ? `<span class="ref">${echapperHtml(r.numeroFacture)}</span>` : '<span class="attenue">Sans facture</span>'}</td>` },
       { cle: 'mode', titre: 'Paiement', cellule: (r) => `<td class="mode">${echapperHtml(libelleMode(r.modeReglement, modesPersonnalises))}</td>` },
       ...(estMixte ? [{ cle: 'categorie', titre: 'Catégorie', cellule: (r) => `<td>${pastilleCategorie(r.categorie)}</td>` }] : []),
@@ -158,33 +163,49 @@ export async function vueRecettes(conteneur, params) {
 
   // ---- Anomalies de numérotation -----------------------------------------------
   /**
-   * L'avis se déplie quand il apparaît et se replie quand plus rien n'est à
-   * signaler : le registre dessous glisse au lieu de sauter. `forcer` passe
-   * outre un retour encore affiché (celui qu'on annule, et qui se replie).
+   * Les anomalies se signalent par une pastille au bout de la barre d'outils
+   * (« Numérotation : 1 numéro manquant ») ; le détail se déplie dessous à la
+   * demande, et le registre glisse au lieu de sauter. `forcer` passe outre un
+   * retour encore affiché (celui qu'on annule, et qui se replie).
    */
   function rendreAnomalies(recettes, { forcer = false } = {}) {
     const zone = registre.zoneAvis;
+    const avis = avisAnomalies(recettes);
+    majSignal(avis);
     // Un retour « ne sera plus signalé » en cours d'affichage garde sa place.
     if (!forcer && zone.querySelector(':scope > .bandeau-retour')) return;
     const ancien = zone.querySelector(':scope > .avis');
-    const html = avisAnomalies(recettes);
-    if (!html) {
+    if (!avis || !avisOuvert) {
       replierPuisRetirer(ancien);
     } else if (ancien) {
-      ancien.outerHTML = html;
+      ancien.outerHTML = avis.html;
     } else {
-      zone.insertAdjacentHTML('beforeend', html);
+      zone.insertAdjacentHTML('beforeend', avis.html);
       deplierHauteur(zone.lastElementChild);
     }
   }
 
-  /** L'avis des anomalies de numérotation, ou '' s'il n'y a rien à signaler. */
+  /** La pastille de la barre d'outils, ou rien quand tout est en ordre. */
+  function majSignal(avis) {
+    registre.zoneSignal.innerHTML = avis
+      ? `<button type="button" class="pastille-signal" data-basculer-avis aria-expanded="${avisOuvert}" aria-controls="avis-numerotation">
+          ${icone('cercle-alerte', { taille: 15 })}<span>Numérotation : ${avis.resume}</span>${icone('chevron-bas', { taille: 14, classe: 'chevron' })}</button>`
+      : '';
+  }
+
+  registre.zoneSignal.addEventListener('click', (evenement) => {
+    if (!evenement.target.closest('[data-basculer-avis]')) return;
+    avisOuvert = !avisOuvert;
+    rendreAnomalies(registre.toutes(), { forcer: true });
+  });
+
+  /** L'avis des anomalies de numérotation (`{ resume, html }`), ou `null` s'il n'y a rien à signaler. */
   function avisAnomalies(recettes) {
-    if (!etat.parametres.alertesNumerotation) return '';
+    if (!etat.parametres.alertesNumerotation) return null;
     const { doublons, manquants } = analyserNumerotation(recettes, {
       ignores: etat.parametres.numerosIgnores ?? []
     });
-    if (doublons.length === 0 && manquants.length === 0) return '';
+    if (doublons.length === 0 && manquants.length === 0) return null;
     // Chaque numéro signalé porte son « ne plus signaler », entre parenthèses.
     const ignorer = (numero) => `(<button type="button" class="lien-bouton" data-ignorer="${echapperHtml(numero)}"
       aria-label="Ne plus signaler ${echapperHtml(numero)}">ne plus signaler</button>)`;
@@ -205,8 +226,10 @@ export async function vueRecettes(conteneur, params) {
     ];
     const titre = '<strong>Numérotation des factures :</strong>';
 
-    return `
-      <div class="avis" role="status">
+    return {
+      resume,
+      html: `
+      <div class="avis" id="avis-numerotation" role="status">
         ${icone('cercle-alerte', { taille: 17 })}
         <div>
           ${phrases.length === 1
@@ -214,7 +237,8 @@ export async function vueRecettes(conteneur, params) {
             : `<p>${titre} ${resume}.</p>${phrases.map((p) => `<p>${p}</p>`).join('')}`}
           <p class="aide-avis">Facture annulée, ou réglée en plusieurs fois ? « Ne plus signaler » retire l’alerte, ici comme dans le contrôle avant export.</p>
         </div>
-      </div>`;
+      </div>`
+    };
   }
 
   // Un numéro signalé à tort est déclaré normal d'un clic ; le retour posé
@@ -227,6 +251,7 @@ export async function vueRecettes(conteneur, params) {
     bouton.disabled = true;
     try {
       await enregistrerNumerosIgnores([...avant, numero]);
+      majSignal(avisAnomalies(registre.toutes()));
       const zone = registre.zoneAvis;
       // L'avis se replie pendant que le retour se déplie à sa place.
       replierPuisRetirer(zone.querySelector(':scope > .avis'));
@@ -246,9 +271,8 @@ export async function vueRecettes(conteneur, params) {
     }
   });
 
-  async function enregistrerNumerosIgnores(numeros) {
-    const reponse = await api.enregistrerParametres({ ...etat.parametres, numerosIgnores: numeros });
-    definirParametres(reponse.parametres);
+  function enregistrerNumerosIgnores(numeros) {
+    return modifierParametres({ numerosIgnores: numeros });
   }
 
   // ---- Sources d'autocomplétion ---------------------------------------------------
@@ -385,7 +409,8 @@ export async function vueRecettes(conteneur, params) {
       titre: recette ? 'Modifier la recette' : 'Nouvelle recette',
       sousTitre: modele ? 'Copie d’un paiement récurrent, datée d’aujourd’hui.' : 'Un encaissement reçu, à sa date de réception.',
       corps,
-      libelleBouton: recette ? 'Enregistrer' : 'Ajouter la recette'
+      libelleBouton: recette ? 'Enregistrer' : 'Ajouter la recette',
+      enchainer: recette ? '' : 'Ajouter et en saisir une autre'
     }), { idTitre: 'titre-panneau', lireEtat });
 
     const racine = panneau.element;
@@ -393,7 +418,10 @@ export async function vueRecettes(conteneur, params) {
     const aide = racine.querySelector('#f-client-aide');
     const suggestionFacture = racine.querySelector('#f-suggestion-facture');
     const avertissement = racine.querySelector('#f-similaire');
-    const boutonEnregistrer = f.querySelector('[type="submit"] span');
+    // Le libellé du bouton se cherche à chaque fois : « Ajoutée » (une recette
+    // enchaînée) remplace son contenu le temps de la confirmer.
+    const libelleParDefaut = recette ? 'Enregistrer' : 'Ajouter la recette';
+    const libellerBouton = (texte) => { const s = f.querySelector('[type="submit"] span'); if (s) s.textContent = texte; };
 
     // ---- Remplissage
     f.client.value = source?.client ?? '';
@@ -422,7 +450,7 @@ export async function vueRecettes(conteneur, params) {
     }
 
     // Prochain numéro de facture, pour une nouvelle recette : un clic le reprend.
-    const suggestion = recette ? null : suggererNumeroSuivant(registre.toutes());
+    let suggestion = recette ? null : suggererNumeroSuivant(registre.toutes());
     const majSuggestion = () => {
       suggestionFacture.hidden = !suggestion || f.numeroFacture.value.trim() !== '';
       if (suggestion) suggestionFacture.textContent = `Utiliser ${suggestion}, le numéro suivant`;
@@ -442,6 +470,14 @@ export async function vueRecettes(conteneur, params) {
       eclairer(champ);
     };
 
+    // ---- Mode de paiement : celui que le client emploie d'habitude, tant que
+    // l'utilisateur ne l'a pas changé lui-même.
+    const modePaiement = suivreModeDuTiers(f.modeReglement, {
+      modes,
+      deja: Boolean(source),
+      modeDe: (nom) => proposes.find((c) => normaliserTexte(c.nom) === normaliserTexte(nom))?.derniere?.modeReglement
+    });
+
     // ---- Autocomplétion du client
     const dire = (html, type = '') => { aide.className = `aide-champ ${type}`.trim(); aide.innerHTML = html; };
     f.client.addEventListener('input', (evenement) => {
@@ -449,12 +485,14 @@ export async function vueRecettes(conteneur, params) {
       siretResolu = null;
       dire('');
     });
+    // Un client tapé en entier, sans passer par la liste, compte aussi.
+    f.client.addEventListener('change', () => modePaiement.proposer(f.client.value));
     autocompletion(f.client, {
       source: () => proposes,
       texte: (c) => c.nom,
       rendu: (c, saisie) => `<span class="monogramme petit" data-teinte="${teinteDe(c.nom)}" aria-hidden="true">${echapperHtml(initiales(c.nom))}</span>
         <span class="sugg-texte"><strong>${surligner(c.nom, saisie)}</strong>
-          <span>${c.siret ? `SIRET ${siretLisible(c.siret)}` : 'Sans SIRET'} · ${c.nombre > 0 ? accorder(c.nombre, 'encaissement') : 'aucun encaissement'}</span></span>`,
+          <span>${c.siret ? `SIRET ${siretLisible(c.siret)} · ` : ''}${c.nombre > 0 ? accorder(c.nombre, 'encaissement') : 'aucun encaissement'}</span></span>`,
       extra: (saisie, trouves) => {
         const chiffres = saisie.replace(/\s/g, '');
         if (estIdentifiant(chiffres)) {
@@ -481,6 +519,7 @@ export async function vueRecettes(conteneur, params) {
         if (c.derniere) {
           dire(`${icone('historique', { taille: 14 })}<span>Dernier encaissement le ${echapperHtml(formaterDate(c.derniere.dateEncaissement, formatDate))}${c.derniere.libelle ? ` : ${echapperHtml(c.derniere.libelle)}` : ''}</span>`);
         }
+        modePaiement.proposer(c.nom);
         f.libelle.focus();
       }
     });
@@ -493,6 +532,7 @@ export async function vueRecettes(conteneur, params) {
         siretResolu = { nom: entreprise.nom, siret: entreprise.siret || (chiffres.length === 14 ? chiffres : '') };
         f.client.value = entreprise.nom;
         eclairer(f.client);
+        modePaiement.proposer(entreprise.nom);
         const connu = proposes.some((c) => normaliserTexte(c.nom) === normaliserTexte(entreprise.nom));
         resultatSiret(aide, { nom: entreprise.nom, texte: connu ? `${entreprise.nom}, déjà dans vos clients` : `${entreprise.nom} : sera ajouté à vos clients` });
         f.libelle.focus();
@@ -518,7 +558,7 @@ export async function vueRecettes(conteneur, params) {
     });
 
     // ---- Pièce jointe
-    zoneDepot(racine.querySelector('#f-piece'), piece, (p) => { piece = p; }, {
+    const depot = zoneDepot(racine.querySelector('#f-piece'), piece, (p) => { piece = p; }, {
       quoi: 'la facture',
       apercu: () => ({
         url: urlPiece('recettes', recette.id),
@@ -575,8 +615,33 @@ export async function vueRecettes(conteneur, params) {
       }
     }
 
+    // ---- Saisie en série : Ctrl+Entrée (ou le lien du pied) ajoute la recette
+    // et laisse le panneau ouvert, prêt pour la suivante, à la même date.
+    const enSerieDemandee = saisieEnSerie(f, racine, !recette);
+
+    /** Remet le panneau à zéro pour la recette suivante ; la date, le paiement et la catégorie restent. */
+    function recommencer() {
+      for (const champ of [f.client, f.libelle, f.montant, f.numeroFacture]) champ.value = '';
+      effacerErreursFormulaire(f);
+      dire('');
+      siretResolu = null;
+      saisieAvertie = '';
+      avertissement.hidden = true;
+      libellerBouton(libelleParDefaut);
+      categorieChoisie = false;
+      modePaiement.oublier();
+      depot.vider();
+      suggestion = suggererNumeroSuivant(registre.toutes());
+      majSuggestion();
+      panneau.memoriser();
+      racine.querySelector('.panneau-corps').scrollTop = 0;
+      f.client.focus();
+      annoncer('Recette suivante');
+    }
+
     f.addEventListener('submit', async (evenement) => {
       evenement.preventDefault();
+      const enSerie = enSerieDemandee();
       effacerErreursFormulaire(f);
 
       // Activité mixte : la catégorie est exigée à la saisie.
@@ -620,23 +685,28 @@ export async function vueRecettes(conteneur, params) {
             ${echapperHtml(formaterDate(similaire.dateEncaissement, formatDate))},
             ${echapperHtml(similaire.client)},
             ${echapperHtml(formaterMontant(similaire.montant, devise))}${similaire.numeroFacture ? `, facture ${echapperHtml(similaire.numeroFacture)}` : ''}.</span>`;
-          boutonEnregistrer.textContent = 'Enregistrer quand même';
+          libellerBouton('Enregistrer quand même');
           avertissement.scrollIntoView({ block: 'nearest' });
           return;
         }
       }
 
-      await registre.enregistrerSaisie(recette, saisie, {
+      // L'enregistrement part : « Enregistrer quand même » a servi, le bouton
+      // reprend son libellé (celui que « Ajoutée » lui rendra ensuite).
+      libellerBouton(libelleParDefaut);
+      const enregistree = await registre.enregistrerSaisie(recette, saisie, {
         panneau,
         piece,
         texteRetour: client.connu ? undefined : 'Ajoutée, nouveau client',
         // De l'argent qui rentre : une création se fête.
         celebrer: true,
+        enchainer: enSerie,
         apres: async () => {
           if (!client.dansCarnet) await ajouterAuCarnet(client);
           await chargerClients();
         }
       });
+      if (enregistree && enSerie) recommencer();
     });
 
     panneau.memoriser();
@@ -653,8 +723,13 @@ export async function vueRecettes(conteneur, params) {
 
   // Arrivée depuis « Nouvelle recette » du tableau de bord : le panneau
   // s'ouvre une fois la page arrivée, son voile gagne alors aussi le menu.
-  if (params?.get('nouvelle')) {
+  // Depuis une recette qui revient chaque mois : le panneau part de la
+  // dernière, datée d'aujourd'hui.
+  const modele = params?.get('modele') && registre.toutes().find((r) => r.id === params.get('modele'));
+  if (params?.get('nouvelle') || modele) {
     const bouton = conteneur.querySelector('#nouvelle-recette');
-    finDuFondu().then(() => { if (bouton.isConnected) ouvrirFormulaire(); });
+    finDuFondu().then(() => { if (bouton.isConnected) ouvrirFormulaire(null, modele || null); });
   }
+  // Depuis la recherche dans tout le livre : la recette, mise en avant.
+  if (params?.get('voir')) finDuFondu().then(() => registre.montrer(params.get('voir')));
 }

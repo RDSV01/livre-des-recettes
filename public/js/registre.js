@@ -20,11 +20,12 @@ import {
   echapperHtml, toast, differer, selecteur, marquerFiltre, lienExport, accorder,
   poidsLisible, optionsCodes, OPTIONS_MOIS, afficherErreursFormulaire,
   mouvementReduit, choixAnnee, brancherChoixAnnee, preparerFlip, surlignerRecherche,
-  deplierHauteur, replierPuisRetirer
+  deplierHauteur, replierPuisRetirer, menuContextuel, ecouterPourLaPage
 } from './ui.js';
-import { annoncer, bandeauRetour, menuContextuel, reussite, confettis, minuteur, DUREE_RETOUR } from './retours.js';
+import { annoncer, bandeauRetour, reussite, confettis, minuteur, brancherSegmentes, DUREE_RETOUR } from './retours.js';
 import { icone } from './icones.js';
-import { enregistrerAction, annulerAction } from './historique.js';
+import { eclairer } from './autocompletion.js';
+import { enregistrerAction, annulerAction, estAnnulable } from './historique.js';
 import { apercuPiece, choisirPdf, verifierPdf, glisseDesFichiers } from './pieces.js';
 import { formaterMontant, sommeMontants } from '/partage/montants.js';
 import { formaterDate, anneeDe, nomMois } from '/partage/dates.js';
@@ -33,6 +34,9 @@ import { majusculeInitiale } from '/partage/texte.js';
 
 /** Au-delà, l'affichage est progressif (« Afficher les … restantes »). */
 const LIMITE_AFFICHAGE = 200;
+
+/** Durée du défilement du total, d'une valeur à l'autre (ms). */
+const DUREE_DEFILEMENT = 520;
 
 /**
  * Cadre du panneau de saisie d'une ligne : en-tête, corps (les champs de la
@@ -43,8 +47,10 @@ const LIMITE_AFFICHAGE = 200;
  * @param {string} options.sousTitre
  * @param {string} options.corps balisage des champs.
  * @param {string} options.libelleBouton « Ajouter la recette », « Enregistrer »…
+ * @param {string} [options.enchainer] pour une création : « Ajouter et en
+ *   saisir une autre » (Ctrl+Entrée), qui garde le panneau ouvert.
  */
-export function cadrePanneau({ titre, sousTitre, corps, libelleBouton }) {
+export function cadrePanneau({ titre, sousTitre, corps, libelleBouton, enchainer = '' }) {
   return `
     <form class="formulaire-panneau" novalidate>
       <div class="panneau-tete">
@@ -59,13 +65,69 @@ export function cadrePanneau({ titre, sousTitre, corps, libelleBouton }) {
         <p class="erreur-panneau" data-erreur-panneau role="alert"></p>
       </div>
       <div class="panneau-pied">
-        <span class="aide"><kbd>Échap</kbd> pour fermer</span>
+        ${enchainer
+          ? `<button type="button" class="aide lien-enchainer" data-enchainer aria-keyshortcuts="Control+Enter">${echapperHtml(enchainer)}<span class="touches"><kbd>Ctrl</kbd><kbd>Entrée</kbd></span></button>`
+          : '<span class="aide"><kbd>Échap</kbd> pour fermer</span>'}
         <div class="actions">
           <button type="button" class="btn btn-fantome" data-fermer>Annuler</button>
           <button type="submit" class="btn btn-principal">${icone('coche', { taille: 16 })}<span>${echapperHtml(libelleBouton)}</span></button>
         </div>
       </div>
     </form>`;
+}
+
+/**
+ * Le mode de paiement suit le tiers choisi (client ou fournisseur) : son
+ * dernier mode connu est proposé tant que l'utilisateur n'a pas choisi
+ * lui-même. `oublier()` reprend la proposition pour une nouvelle saisie.
+ *
+ * @param {HTMLSelectElement} champ
+ * @param {object} options
+ * @param {(nom: string) => string|undefined} options.modeDe dernier mode du tiers nommé.
+ * @param {{ code: string }[]} options.modes modes proposés dans la liste.
+ * @param {boolean} [options.deja] un mode est déjà choisi (modification, duplication).
+ */
+export function suivreModeDuTiers(champ, { modeDe, modes, deja = false }) {
+  let choisi = deja;
+  champ.addEventListener('change', () => { choisi = true; });
+  return {
+    proposer(nom) {
+      if (choisi) return;
+      const mode = modeDe(nom);
+      if (!mode || mode === champ.value || !modes.some((m) => m.code === mode)) return;
+      champ.value = mode;
+      eclairer(champ);
+    },
+    oublier() { choisi = false; }
+  };
+}
+
+/**
+ * Saisie en série : Ctrl+Entrée (ou le lien du pied du panneau) envoie le
+ * formulaire en gardant le panneau ouvert, prêt pour la suivante. Retourne
+ * de quoi lire, une fois par envoi, si celui-ci a été demandé en série.
+ *
+ * @param {HTMLFormElement} formulaire
+ * @param {HTMLElement} racine le panneau, qui porte le lien `[data-enchainer]`.
+ * @param {boolean} possible seulement pour une création.
+ */
+export function saisieEnSerie(formulaire, racine, possible) {
+  let demandee = false;
+  const envoyer = () => {
+    demandee = possible;
+    formulaire.requestSubmit();
+  };
+  formulaire.addEventListener('keydown', (evenement) => {
+    if (evenement.key !== 'Enter' || !(evenement.ctrlKey || evenement.metaKey)) return;
+    evenement.preventDefault();
+    envoyer();
+  });
+  racine.querySelector('[data-enchainer]')?.addEventListener('click', envoyer);
+  return () => {
+    const enSerie = demandee;
+    demandee = false;
+    return enSerie;
+  };
 }
 
 /**
@@ -119,6 +181,8 @@ export function installerRegistre(carte, registre) {
   let idsVisibles = [];         // lignes réellement dessinées
   let montrerTout = false;      // affichage au-delà de LIMITE_AFFICHAGE
   let idNouveau = null;         // ligne à mettre en avant au prochain rendu
+  let totalAffiche = null;      // total montré, point de départ du prochain défilement
+  let defilement = null;        // défilement du total en cours : { depuis, vers, debut }
   /** Retour posé sur une ligne : id → { texte, action, apresAnnulation, erreur }. */
   const retours = new Map();
   /** Places laissées par les suppressions d'une ligne : { cle, rang, texte, action }. */
@@ -126,6 +190,7 @@ export function installerRegistre(carte, registre) {
   let minuteurLot = null;
 
   carte.innerHTML = gabarit();
+  brancherSegmentes(carte);
   const $ = (selecteurCss) => carte.querySelector(selecteurCss);
   const refs = {
     recherche: $('#filtre-q'),
@@ -143,7 +208,7 @@ export function installerRegistre(carte, registre) {
   const surveillerCollage = (element, bord) => {
     const observateur = new IntersectionObserver(([entree]) => {
       if (!element.isConnected) { observateur.disconnect(); return; }
-      // Avec un seuil de 1, \`isIntersecting\` tombe dès qu'un pixel dépasse :
+      // Avec un seuil de 1, `isIntersecting` tombe dès qu'un pixel dépasse :
       // c'est la part visible qui dit si l'élément est à l'écran.
       const r = entree.boundingClientRect;
       element.classList.toggle('colle', entree.intersectionRatio > 0 &&
@@ -157,6 +222,14 @@ export function installerRegistre(carte, registre) {
   function gabarit() {
     const filtre = (cle, etiquette, options) => `<div class="champ-filtre">
         <label class="etiquette-champ" for="filtre-${cle}">${etiquette}</label>${selecteur({ id: `filtre-${cle}`, options })}</div>`;
+    // Peu de valeurs : des boutons à bascule, un clic au lieu de deux. `texte`
+    // est celui de la pastille du filtre actif.
+    const bascule = (cle, etiquette, valeurs) => `<div class="champ-filtre">
+        <span class="etiquette-champ" id="etiquette-filtre-${cle}">${etiquette}</span>
+        <div class="segmente compact filtre-segmente" role="group" id="filtre-${cle}" aria-labelledby="etiquette-filtre-${cle}">
+          ${valeurs.map(([valeur, libelle, texte = libelle]) => `<button type="button" data-valeur="${valeur}" data-texte="${echapperHtml(texte)}"
+            aria-pressed="false">${libelle}</button>`).join('')}
+        </div></div>`;
     const entete = (col) => {
       if (col.tri === false) return `<th class="${col.classe ?? ''}">${col.titre}</th>`;
       return `<th class="${col.classe ?? ''}" data-tri="${col.cle}" aria-sort="none">
@@ -178,11 +251,14 @@ export function installerRegistre(carte, registre) {
         <div class="filtres-actifs"></div>
         <div class="panneau-filtres" id="filtres-${registre.id}" popover role="dialog" aria-label="Filtres">
           ${filtre('mois', 'Mois', `<option value="">Tous les mois</option>${OPTIONS_MOIS}`)}
-          ${registre.avecCategorie ? filtre('categorie', 'Catégorie', '<option value="">Toutes catégories</option><option value="prestations">Prestations</option><option value="ventes">Ventes</option><option value="aucune">Non catégorisées</option>') : ''}
+          ${registre.avecCategorie ? bascule('categorie', 'Catégorie', [
+            ['', 'Toutes'], ['prestations', 'Prestations'], ['ventes', 'Ventes'], ['aucune', 'Aucune', 'Non catégorisées']
+          ]) : ''}
           ${filtre('mode', 'Paiement', `<option value="">Tous les paiements</option>${optionsCodes(modes)}`)}
-          ${filtre('piece', 'PDF joint', '<option value="">Tous</option><option value="avec">Avec PDF joint</option><option value="sans">Sans PDF joint</option>')}
+          ${bascule('piece', 'PDF joint', [['', 'Tous'], ['avec', 'Avec', 'Avec PDF joint'], ['sans', 'Sans', 'Sans PDF joint']])}
           <button type="button" class="lien-bouton" data-vider-panneau hidden>Retirer ces filtres</button>
         </div>
+        <div class="signal-registre"></div>
       </div>
       <div class="zone-avis"></div>
       <div class="zone-retours"></div>
@@ -204,9 +280,18 @@ export function installerRegistre(carte, registre) {
   // L'année a son propre sélecteur, « ‹ 2026 › », branché au chargement.
   const champs = Object.fromEntries(Object.keys(filtres).filter((cle) => cle !== 'annee')
     .map((cle) => [cle, $(`#filtre-${cle}`)]));
+  // Un filtre est une liste, un champ de recherche, ou un groupe de boutons à bascule.
+  const estGroupe = (champ) => champ.classList.contains('segmente');
+  const ecrireChamp = (champ, valeur) => {
+    if (!estGroupe(champ)) { champ.value = valeur; return; }
+    champ.querySelectorAll('[data-valeur]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.valeur === valeur)));
+  };
+  const texteChamp = (champ, valeur) => (estGroupe(champ)
+    ? champ.querySelector(`[data-valeur="${valeur}"]`)?.dataset.texte
+    : champ.selectedOptions?.[0]?.text) ?? valeur;
   for (const [cle, champ] of Object.entries(champs)) {
     if (!champ) { filtres[cle] = ''; continue; }
-    champ.value = filtres[cle];
+    ecrireChamp(champ, filtres[cle]);
     if (champ.tagName === 'SELECT') marquerFiltre(champ);
   }
   /** Filtres rangés derrière le bouton « Filtres » (ni la recherche, ni l'année). */
@@ -222,7 +307,7 @@ export function installerRegistre(carte, registre) {
     $('.btn-filtres').classList.toggle('actif', actifs.length > 0);
     $('[data-vider-panneau]').hidden = actifs.length === 0;
     $('.filtres-actifs').innerHTML = actifs.map((cle) => {
-      const texte = champs[cle].selectedOptions[0]?.text ?? filtres[cle];
+      const texte = texteChamp(champs[cle], filtres[cle]);
       return `<button type="button" class="pastille-filtre" data-retirer-filtre="${cle}" aria-label="Retirer le filtre ${echapperHtml(texte)}">
         ${echapperHtml(texte)}${icone('croix', { taille: 13 })}</button>`;
     }).join('');
@@ -241,9 +326,20 @@ export function installerRegistre(carte, registre) {
     changerFiltres();
   }, 200));
   for (const cle of clesPanneau) {
-    champs[cle].addEventListener('change', () => {
-      filtres[cle] = champs[cle].value;
-      marquerFiltre(champs[cle]);
+    const champ = champs[cle];
+    if (estGroupe(champ)) {
+      champ.addEventListener('click', (evenement) => {
+        const bouton = evenement.target.closest('[data-valeur]');
+        if (!bouton || bouton.dataset.valeur === filtres[cle]) return;
+        filtres[cle] = bouton.dataset.valeur;
+        ecrireChamp(champ, filtres[cle]);
+        changerFiltres();
+      });
+      continue;
+    }
+    champ.addEventListener('change', () => {
+      filtres[cle] = champ.value;
+      marquerFiltre(champ);
       changerFiltres();
     });
   }
@@ -251,7 +347,7 @@ export function installerRegistre(carte, registre) {
     filtres[cle] = valeur;
     if (cle === 'annee') { choixAnneeRegistre?.definir(valeur); return; }
     if (!champs[cle]) return;
-    champs[cle].value = valeur;
+    ecrireChamp(champs[cle], valeur);
     if (champs[cle].tagName === 'SELECT') marquerFiltre(champs[cle]);
   };
   const filtreActif = () => Object.values(filtres).some(Boolean);
@@ -353,6 +449,8 @@ export function installerRegistre(carte, registre) {
       : () => {};
     affichees = trier(registre.filtrer(toutes, filtres));
     const total = sommeMontants(affichees.map((l) => l.montant));
+    const totalPrecedent = totalAffiche;
+    totalAffiche = total;
     const filtre = filtreActif();
     const sansPiece = toutes.filter((l) => !l.pieceJointe).length;
 
@@ -363,7 +461,7 @@ export function installerRegistre(carte, registre) {
     // l'on recopie dans une déclaration.
     refs.resume.innerHTML = toutes.length === 0 ? '' : `
       <span><strong>${accorder(affichees.length, nom.singulier, nom.pluriel)}</strong>${filtre ? ` sur ${toutes.length}` : ''}</span>
-      <span><strong>${echapperHtml(formaterMontant(total, devise))}</strong></span>
+      <span><strong data-total>${echapperHtml(formaterMontant(total, devise))}</strong></span>
       ${!filtre && sansPiece > 0 ? `<button type="button" class="lien-discret" data-voir-sans-piece>${icone('trombone', { taille: 14 })}${accorder(sansPiece, `${nom.singulier} sans PDF`, `${nom.pluriel} sans PDF`)}</button>` : ''}
       ${filtre ? '<button type="button" class="lien-bouton" data-effacer-filtres>Effacer les filtres</button>' : ''}`;
 
@@ -375,6 +473,7 @@ export function installerRegistre(carte, registre) {
         : ligneVide(`${icone('recherche', { taille: 22 })}Aucune ligne ne correspond à ces filtres.<br>
             <button type="button" class="lien-bouton" data-effacer-filtres>Effacer les filtres</button>`));
       refs.pied.innerHTML = '';
+      suivreTotal(totalPrecedent, total, anime);
       majSelection();
       return;
     }
@@ -415,7 +514,8 @@ export function installerRegistre(carte, registre) {
       </button>`) : '');
     refs.pied.innerHTML = `<tr><td></td><td colspan="${colonnes.length - 1}">${filtre ? 'Total des lignes filtrées' : 'Total'}
       <span class="attenue">· ${accorder(affichees.length, nom.singulier, nom.pluriel)}</span></td>
-      <td class="montant">${echapperHtml(formaterMontant(total, devise))}</td><td></td></tr>`;
+      <td class="montant" data-total>${echapperHtml(formaterMontant(total, devise))}</td><td></td></tr>`;
+    suivreTotal(totalPrecedent, total, anime);
     surlignerRecherche(refs.corps, 'td.client, td.libelle, .ref', filtres.q);
     // Un retour tout juste posé se déplie une fois ; redessiné ensuite (tri,
     // filtre), il reste tel quel. Avant le glissement, qui mesure les lignes.
@@ -429,6 +529,57 @@ export function installerRegistre(carte, registre) {
     // Le surlignage d'ajout n'a lieu qu'une fois, au rendu qui suit l'enregistrement.
     idNouveau = null;
     majSelection();
+  }
+
+  /** Le total montré (résumé et pied du tableau), tels qu'ils sont dans la page. */
+  const ecrireTotal = (valeur) => {
+    const texte = formaterMontant(valeur, devise);
+    carte.querySelectorAll('[data-total]').forEach((c) => { c.textContent = texte; });
+  };
+
+  /** Où en est le défilement en cours, à l'instant `maintenant`. */
+  const etapeDefilement = (maintenant) => {
+    const { depuis, vers, debut } = defilement;
+    // L'heure de l'image peut précéder `debut` : jamais en deçà du départ.
+    const t = Math.min(1, Math.max(0, (maintenant - debut) / DUREE_DEFILEMENT));
+    return { fini: t === 1, valeur: t < 1 ? Math.round((depuis + (vers - depuis) * (1 - (1 - t) ** 3)) * 100) / 100 : vers };
+  };
+
+  /**
+   * Après un geste ou un filtre, le total (résumé et pied du tableau) passe de
+   * l'ancienne valeur à la nouvelle, sur place, comme les montants du tableau
+   * de bord. Un rendu qui survient en route (une annulation recharge la liste,
+   * puis la redessine) ne l'interrompt pas : le défilement continue sur les
+   * éléments redessinés, ou repart de la valeur affichée vers le nouveau total.
+   * Le résumé, annoncé aux lecteurs d'écran, ne l'est qu'une fois le total
+   * arrivé. Sans effet en mouvement réduit.
+   *
+   * @param {number|null} depuis total montré avant ce rendu.
+   * @param {number} vers total à montrer.
+   * @param {boolean} anime le rendu suit un geste ou un filtre.
+   */
+  function suivreTotal(depuis, vers, anime) {
+    if (mouvementReduit()) return;
+    if (defilement) {
+      const { valeur } = etapeDefilement(performance.now());
+      if (defilement.vers !== vers) defilement = { depuis: valeur, vers, debut: performance.now() };
+      ecrireTotal(valeur);
+      return;
+    }
+    if (!anime || depuis === null || depuis === vers) return;
+    defilement = { depuis, vers, debut: performance.now() };
+    refs.resume.setAttribute('aria-busy', 'true');
+    // L'ancienne valeur, tout de suite : le nouveau total ne s'affiche pas une image avant de défiler.
+    ecrireTotal(depuis);
+    const avancer = (maintenant) => {
+      if (!defilement || !carte.isConnected) return;
+      const { fini, valeur } = etapeDefilement(maintenant);
+      ecrireTotal(valeur);
+      if (!fini) { requestAnimationFrame(avancer); return; }
+      defilement = null;
+      refs.resume.removeAttribute('aria-busy');
+    };
+    requestAnimationFrame(avancer);
   }
 
   /**
@@ -578,25 +729,32 @@ export function installerRegistre(carte, registre) {
     };
   }
 
+  /** Action dont la barre annonce le résultat (« Annuler »), ou `null`. */
+  let actionBarre = null;
+
+  /** La barre quitte le résultat du lot et redevient celle de la sélection. */
+  function finirResultat() {
+    clearTimeout(minuteurLot);
+    actionBarre = null;
+    barre.classList.remove('resultat');
+    if (carte.isConnected) majSelection(); else barre.hidden = true;
+  }
+
   /** La barre de sélection annonce le résultat du lot, avec « Annuler ». */
   function resultatSurBarre(texte, action) {
     clearTimeout(minuteurLot);
+    actionBarre = action;
     barre.hidden = false;
     barre.classList.add('resultat');
     barre.innerHTML = `<span class="compte">${icone('cercle-valide', { taille: 16 })}${echapperHtml(texte)}</span>
       <button type="button" class="btn" data-lot="annuler">${icone('annuler', { taille: 15 })}Annuler${minuteur(DUREE_RETOUR)}</button>`;
     annoncer(texte);
-    const finir = () => {
-      clearTimeout(minuteurLot);
-      barre.classList.remove('resultat');
-      if (carte.isConnected) majSelection(); else barre.hidden = true;
-    };
     barre.onclick = async (evenement) => {
       if (!evenement.target.closest('[data-lot="annuler"]')) return;
-      finir();
+      finirResultat();
       await annulerDepuisRetour(action);
     };
-    minuteurLot = setTimeout(finir, DUREE_RETOUR);
+    minuteurLot = setTimeout(finirResultat, DUREE_RETOUR);
   }
 
   // ---- Suppression annulable -----------------------------------------------------------
@@ -748,8 +906,11 @@ export function installerRegistre(carte, registre) {
    * @param {() => Promise<unknown>} [options.apres] rechargement en plus (le carnet de clients).
    * @param {boolean} [options.celebrer] une création se fête : le bouton dit
    *   « Ajoutée », des confettis en partent, puis le panneau se ferme.
+   * @param {boolean} [options.enchainer] une création qui en appelle une
+   *   autre : le panneau reste ouvert, la vue le remet à zéro.
+   * @returns {Promise<boolean>} vrai si la saisie est enregistrée.
    */
-  async function enregistrerSaisie(enEdition, champsSaisis, { panneau, piece, texteRetour, apres, celebrer = false }) {
+  async function enregistrerSaisie(enEdition, champsSaisis, { panneau, piece, texteRetour, apres, celebrer = false, enchainer = false }) {
     const formulaire = panneau.element.querySelector('form');
     const bouton = formulaire.querySelector('[type="submit"]');
     const zoneErreur = formulaire.querySelector('[data-erreur-panneau]');
@@ -787,21 +948,24 @@ export function installerRegistre(carte, registre) {
           : texteRetour ?? `Ajouté${e}`;
         poserRetour(ligne.id, texte, resultat.erreur ? null : action, { erreur: Boolean(resultat.erreur) });
         if (celebrer && !resultat.erreur && !mouvementReduit()) {
-          reussite(bouton, `Ajouté${e}`, { duree: 2000 });
+          reussite(bouton, `Ajouté${e}`, { duree: enchainer ? 1400 : 2000 });
           confettis(bouton);
-          await new Promise((fin) => { setTimeout(fin, 750); });
+          // En série, la saisie suivante n'attend pas la fin de la fête.
+          if (!enchainer) await new Promise((fin) => { setTimeout(fin, 750); });
         }
       }
-      await panneau.fermer(true);
+      if (!(enchainer && !enEdition)) await panneau.fermer(true);
       idNouveau = ligne.id;
       await Promise.all([charger({ anime: true }), apres?.()]);
       montrerLigne(ligne.id, `${Nom} ${texte.charAt(0).toLowerCase()}${texte.slice(1)}`, action);
+      return true;
     } catch (erreur) {
       if (erreur.erreurs) {
         afficherErreursFormulaire(formulaire, erreur.erreurs);
       } else {
         zoneErreur.innerHTML = `${icone('cercle-alerte', { taille: 16 })}<span>${echapperHtml(erreur.message)}</span>`;
       }
+      return false;
     } finally {
       bouton.disabled = false;
     }
@@ -947,6 +1111,25 @@ export function installerRegistre(carte, registre) {
     rendre();
   });
 
+  // Ctrl+Z / Ctrl+Y : la liste se recharge sur place (lignes et total animés)
+  // au lieu que toute la page soit redessinée. Une page quittée se désabonne
+  // au premier événement qui suit.
+  const surHistorique = (evenement) => {
+    if (!carte.isConnected) { window.removeEventListener('historique-applique', surHistorique); return; }
+    evenement.preventDefault();
+    // Les « Annuler » posés sur place pour une action qui ne s'annule plus
+    // (celle que le clavier vient de défaire) disparaissent : sans cela, une
+    // ligne restaurée côtoierait encore sa place « Supprimée · Annuler ».
+    places = places.filter((p) => estAnnulable(p.action));
+    for (const [id, retour] of retours) {
+      if (retour.action && !estAnnulable(retour.action)) retours.delete(id);
+    }
+    if (actionBarre && !estAnnulable(actionBarre)) finirResultat();
+    charger({ anime: true }).catch((erreur) => toast(erreur.message, 'erreur'));
+  };
+  // Un seul registre à la fois : l'écouteur du précédent laisse sa place.
+  ecouterPourLaPage('historique-applique', surHistorique);
+
   // Un PDF déposé sur une ligne s'y attache.
   refs.corps.addEventListener('dragover', (evenement) => {
     const tr = evenement.target.closest('tr[data-id]');
@@ -969,12 +1152,35 @@ export function installerRegistre(carte, registre) {
     if (ligne && fichier) joindre(ligne, fichier);
   });
 
+  /**
+   * Amène une ligne sous les yeux, mise en avant (arrivée depuis la recherche
+   * dans tout le livre) : les filtres qui la cacheraient sont retirés, et
+   * l'année affichée devient la sienne.
+   */
+  function montrer(id) {
+    const ligne = toutes.find((l) => l.id === id);
+    if (!ligne) return;
+    Object.keys(filtres).forEach((cle) => appliquerFiltre(cle, ''));
+    refs.recherche.value = '';
+    appliquerFiltre('annee', String(anneeDe(ligne[registre.cleDate])));
+    majFiltresActifs();
+    montrerTout = true;
+    places = [];
+    idNouveau = id;
+    rendre();
+    refs.corps.querySelector(`tr[data-id="${id}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: mouvementReduit() ? 'auto' : 'smooth' });
+  }
+
   return {
     charger,
     enregistrerSaisie,
+    montrer,
     /** Liste complète, telle que chargée. */
     toutes: () => toutes,
     /** Emplacement des avis propres au registre (numérotation des factures). */
-    zoneAvis: refs.zoneAvis
+    zoneAvis: refs.zoneAvis,
+    /** Bout de la barre d'outils, où un avis se signale replié. */
+    zoneSignal: $('.signal-registre')
   };
 }

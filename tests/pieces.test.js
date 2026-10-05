@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import JSZip from 'jszip';
 import { creerApp } from '../src/app.js';
+import { ecouterSurUnPortLibre } from '../src/lancement.js';
 import { creerStockage } from '../src/stockage.js';
 import { creerPieces, fichePiece, nomPiece, estPdf } from '../src/pieces.js';
 import { creerZip, crc32, nomsUniques } from '../src/exports/zip.js';
@@ -199,7 +200,7 @@ describe('routes des pièces jointes', () => {
     dossier = temporaire('api-pieces');
     dossierSauvegardes = temporaire('api-pieces-copies');
     const app = creerApp({ dossierDonnees: dossier, dossierSauvegardes });
-    await new Promise((resoudre) => { serveur = app.listen(0, '127.0.0.1', resoudre); });
+    serveur = await ecouterSurUnPortLibre(app);
     base = `http://127.0.0.1:${serveur.address().port}`;
   });
 

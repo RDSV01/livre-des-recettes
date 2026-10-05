@@ -13,6 +13,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { creerApp } from '../src/app.js';
+import { ecouterSurUnPortLibre } from '../src/lancement.js';
 import { lireZip } from '../src/exports/zip.js';
 
 let dossier;
@@ -26,9 +27,7 @@ before(async () => {
   // un dossier temporaire pour ne rien laisser sur la machine.
   dossierSauvegardes = fs.mkdtempSync(path.join(os.tmpdir(), 'livre-recettes-api-copies-'));
   const app = creerApp({ dossierDonnees: dossier, dossierSauvegardes });
-  await new Promise((resoudre) => {
-    serveur = app.listen(0, '127.0.0.1', resoudre);
-  });
+  serveur = await ecouterSurUnPortLibre(app);
   base = `http://127.0.0.1:${serveur.address().port}`;
 });
 
@@ -314,6 +313,8 @@ test('GET /api/tableau-de-bord répond avec les statistiques et le CA mensuel', 
   assert.ok(stats.caAnnee >= 0);
   assert.ok(Array.isArray(stats.dernieresRecettes));
   assert.equal(stats.caParMois.length, 12);
+  assert.equal(stats.caParMoisAnneePrecedente.length, 12);
+  assert.ok(Array.isArray(stats.aRenouveler), 'les recettes qui reviennent chaque mois');
 });
 
 test('GET /api/urssaf calcule un bilan de trimestre', async () => {
@@ -682,9 +683,7 @@ test('le dossier de données supprimé est détecté, puis réparé', async (t) 
   /** Ouvre l'application sur ces dossiers, comme un nouveau lancement. */
   const lancer = async () => {
     const app = creerApp({ dossierDonnees: donnees, dossierSauvegardes: copies });
-    const instance = await new Promise((pret) => {
-      const s = app.listen(0, '127.0.0.1', () => pret(s));
-    });
+    const instance = await ecouterSurUnPortLibre(app);
     const adresse = `http://127.0.0.1:${instance.address().port}`;
     return {
       adresse,
@@ -744,11 +743,19 @@ test('POST /api/demo charge un jeu, puis se refuse sur un livre non vide', async
   });
 
   const app = creerApp({ dossierDonnees: donnees, dossierSauvegardes: copies });
-  const instance = await new Promise((pret) => { const s = app.listen(0, '127.0.0.1', () => pret(s)); });
+  const instance = await ecouterSurUnPortLibre(app);
+  // Fermé même si une assertion échoue : sinon la suite de tests ne se termine pas.
+  t.after(() => { instance.close(); instance.closeAllConnections(); });
   const adresse = `http://127.0.0.1:${instance.address().port}`;
   const lire = async (chemin) => (await fetch(adresse + chemin)).json();
-  const charger = () => fetch(adresse + '/api/demo', {
+  const charger = () => fetch(`${adresse}/api/demo`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  });
+
+  // Le prénom saisi avant (accueil, paramètres) survit au chargement.
+  const avant = (await lire('/api/parametres')).parametres;
+  await fetch(`${adresse}/api/parametres`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...avant, prenom: 'Camille', formatDate: 'AAAA-MM-JJ' })
   });
 
   const premier = await charger();
@@ -757,15 +764,22 @@ test('POST /api/demo charge un jeu, puis se refuse sur un livre non vide', async
   const recettes = (await lire('/api/recettes')).recettes;
   const achats = (await lire('/api/achats')).achats;
   assert.ok(recettes.length > 0 && achats.length > 0, 'les deux registres sont remplis');
-  assert.equal((await lire('/api/parametres')).parametres.jeuDemo, true);
+  const parametres = (await lire('/api/parametres')).parametres;
+  assert.equal(parametres.jeuDemo, true);
+  assert.equal(parametres.prenom, 'Camille');
+  assert.equal(parametres.formatDate, 'AAAA-MM-JJ');
+  assert.equal(parametres.nomEntreprise, 'Atelier Démonstration');
+  // Des factures PDF jointes, servies comme les vraies.
+  const avecPdf = recettes.filter((r) => r.pieceJointe);
+  assert.ok(avecPdf.length > 0 && achats.some((a) => a.pieceJointe));
+  const pdf = await fetch(`${adresse}/api/recettes/${avecPdf[0].id}/piece`);
+  assert.equal(pdf.status, 200);
+  assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString('latin1'), '%PDF-');
   // Le total des achats remonte bien au tableau de bord.
   assert.ok((await lire('/api/tableau-de-bord')).achatsAnnee >= 0);
 
   // Une deuxième fois : refus, pour ne jamais recouvrir de vraies données.
   assert.equal((await charger()).status, 409);
-
-  instance.close();
-  instance.closeAllConnections();
 });
 
 // ---- Sécurité : nom d'hôte -------------------------------------------------------

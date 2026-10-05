@@ -246,9 +246,9 @@ export function genererRapportPdf(rapport, parametres, flux) {
    * toutes leur libellé sous la même clé : un client a un `nom`, un mode de
    * règlement un `libelle`. Le lire à l'aveugle laissait la colonne vide.
    */
-  function tableauClassement(entrees, { titre, compte, nom }) {
+  function tableauClassement(entrees, { titre: entete, compte, nom }) {
     tableau([
-      { titre, largeur: 245, texte: (e) => texteSur(nom(e)) },
+      { titre: entete, largeur: 245, texte: (e) => texteSur(nom(e)) },
       { titre: compte, largeur: 90, texte: (e) => String(e.nombre) },
       { titre: 'Montant', largeur: 100, montant: true, texte: (e) => euros(e.montant) },
       { titre: 'Part', largeur: 80, montant: true, texte: (e) => `${String(e.part).replace('.', ',')} %` }
@@ -295,10 +295,12 @@ export function genererRapportPdf(rapport, parametres, flux) {
 
   const reperes = [
     synthese.meilleurMois && `Meilleur mois : ${synthese.meilleurMois.nom} (${formaterMontant(synthese.meilleurMois.montant, parametres.devise)}).`,
-    comparaison.evolution === null
-      ? (comparaison.nombreEncaissements === 0 ? `Aucun encaissement en ${comparaison.annee} : pas de comparaison possible.` : null)
-      : `Par rapport à ${comparaison.annee} (${formaterMontant(comparaison.chiffreAffaires, parametres.devise)}) : ` +
-        `${comparaison.evolution >= 0 ? '+' : ''}${String(comparaison.evolution).replace('.', ',')} %.`
+    // L'évolution d'une année sur l'autre, sauf si l'utilisateur a choisi de ne pas comparer.
+    parametres.comparerAnneePrecedente === false ? null
+      : comparaison.evolution === null
+        ? (comparaison.nombreEncaissements === 0 ? `Aucun encaissement en ${comparaison.annee} : pas de comparaison possible.` : null)
+        : `Par rapport à ${comparaison.annee} (${formaterMontant(comparaison.chiffreAffaires, parametres.devise)}) : ` +
+          `${comparaison.evolution >= 0 ? '+' : ''}${String(comparaison.evolution).replace('.', ',')} %.`
   ].filter(Boolean).join(' ');
   if (reperes) commentaire(reperes);
 

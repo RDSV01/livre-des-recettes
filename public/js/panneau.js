@@ -8,7 +8,7 @@
  * s'ouvrent ainsi qu'au premier clic.
  */
 
-import { confirmer, mouvementReduit } from './ui.js';
+import { confirmer, mouvementReduit, fermerAuClicSurLeVoile } from './ui.js';
 
 /**
  * Ouvre un panneau.
@@ -20,10 +20,13 @@ import { confirmer, mouvementReduit } from './ui.js';
  * @param {string} [options.idTitre] identifiant du titre, qui nomme le panneau.
  * @param {() => string} [options.lireEtat] instantané des champs : s'il a
  *   changé depuis l'ouverture, abandonner la saisie demande confirmation.
+ * @param {boolean} [options.empiler] s'ouvre par-dessus le panneau ouvert au
+ *   lieu de le remplacer : l'aperçu d'un PDF choisi pendant une saisie la
+ *   laisse intacte dessous.
  * @returns {{ element: HTMLDialogElement, fermer: (sansGarde?: boolean) => Promise<boolean>, memoriser: () => void }}
  */
-export function ouvrirPanneau(contenu, { classe = '', idTitre = '', lireEtat = null } = {}) {
-  document.querySelector('dialog.panneau[open]')?.close();
+export function ouvrirPanneau(contenu, { classe = '', idTitre = '', lireEtat = null, empiler = false } = {}) {
+  if (!empiler) fermerPanneauOuvert();
   const element = document.createElement('dialog');
   element.className = `panneau ${classe}`.trim();
   element.tabIndex = -1;
@@ -70,13 +73,7 @@ export function ouvrirPanneau(contenu, { classe = '', idTitre = '', lireEtat = n
     if (evenement.target.closest('[data-fermer]')) fermer();
   });
   // Un clic sur le voile (hors du panneau) vaut « fermer ».
-  element.addEventListener('mousedown', (evenement) => {
-    if (evenement.target !== element) return;
-    const r = element.getBoundingClientRect();
-    const dehors = evenement.clientX < r.left || evenement.clientX > r.right ||
-      evenement.clientY < r.top || evenement.clientY > r.bottom;
-    if (dehors) fermer();
-  });
+  fermerAuClicSurLeVoile(element, fermer);
 
   element.showModal();
   // Filet pour les navigateurs qui donnent le focus au premier bouton malgré
@@ -90,10 +87,10 @@ export function ouvrirPanneau(contenu, { classe = '', idTitre = '', lireEtat = n
   };
 }
 
-/** Referme sans rien demander le panneau éventuellement ouvert (changement de page). */
+/** Referme sans rien demander les panneaux ouverts, aperçu par-dessus compris (changement de page). */
 export function fermerPanneauOuvert() {
-  const ouvert = document.querySelector('dialog.panneau');
-  if (!ouvert) return;
-  if (ouvert.open) ouvert.close();
-  ouvert.remove();
+  for (const ouvert of document.querySelectorAll('dialog.panneau')) {
+    if (ouvert.open) ouvert.close();
+    ouvert.remove();
+  }
 }

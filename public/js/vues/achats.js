@@ -21,7 +21,7 @@ import {
 import { annoncer } from '../retours.js';
 import { icone } from '../icones.js';
 import { etatFiltres } from '../preferences-vues.js';
-import { installerRegistre, cadrePanneau } from '../registre.js';
+import { installerRegistre, cadrePanneau, suivreModeDuTiers, saisieEnSerie } from '../registre.js';
 import { ouvrirPanneau } from '../panneau.js';
 import { autocompletion, surligner } from '../autocompletion.js';
 import { zoneDepot } from '../pieces.js';
@@ -170,7 +170,8 @@ export async function vueAchats(conteneur, params) {
       titre: achat ? 'Modifier l’achat' : 'Nouvel achat',
       sousTitre: modele ? 'Copie d’un achat récurrent, datée d’aujourd’hui.' : 'Un achat payé, avec son justificatif.',
       corps,
-      libelleBouton: achat ? 'Enregistrer' : 'Ajouter l’achat'
+      libelleBouton: achat ? 'Enregistrer' : 'Ajouter l’achat',
+      enchainer: achat ? '' : 'Ajouter et en saisir un autre'
     }), { idTitre: 'titre-panneau', lireEtat });
 
     const racine = panneau.element;
@@ -185,8 +186,17 @@ export async function vueAchats(conteneur, params) {
     brancherChampDate(racine.querySelector('.champ-date'), { format: formatDate });
     installerChampMontant(f);
 
+    // Le mode de paiement suit le fournisseur choisi (son dernier mode) tant
+    // que l'utilisateur ne l'a pas changé lui-même.
+    const modePaiement = suivreModeDuTiers(f.modeReglement, {
+      modes,
+      deja: Boolean(source),
+      modeDe: (nom) => fournisseurs.find((x) => normaliserTexte(x.nom) === normaliserTexte(nom))?.dernier.modeReglement
+    });
+
     const dire = (html, type = '') => { aide.className = `aide-champ ${type}`.trim(); aide.innerHTML = html; };
     f.fournisseur.addEventListener('input', (evenement) => { if (evenement.isTrusted) dire(''); });
+    f.fournisseur.addEventListener('change', () => modePaiement.proposer(f.fournisseur.value));
     autocompletion(f.fournisseur, {
       source: () => fournisseurs,
       texte: (x) => x.nom,
@@ -204,11 +214,12 @@ export async function vueAchats(conteneur, params) {
       }),
       surChoix: (x) => {
         dire(`${icone('historique', { taille: 14 })}<span>Dernier achat le ${echapperHtml(formaterDate(x.dernier.dateReglement, formatDate))} : ${echapperHtml(formaterMontant(x.dernier.montant, devise))}</span>`);
+        modePaiement.proposer(x.nom);
         f.montant.focus();
       }
     });
 
-    zoneDepot(racine.querySelector('#f-piece'), piece, (p) => { piece = p; }, {
+    const depot = zoneDepot(racine.querySelector('#f-piece'), piece, (p) => { piece = p; }, {
       quoi: 'le justificatif',
       apercu: () => ({
         url: urlPiece('achats', achat.id),
@@ -216,15 +227,33 @@ export async function vueAchats(conteneur, params) {
       })
     });
 
-    f.addEventListener('submit', (evenement) => {
+    // Saisie en série : Ctrl+Entrée (ou le lien du pied) ajoute l'achat et
+    // laisse le panneau ouvert, prêt pour le suivant, à la même date.
+    const enSerieDemandee = saisieEnSerie(f, racine, !achat);
+
+    /** Remet le panneau à zéro pour l'achat suivant ; la date et le paiement restent. */
+    function recommencer() {
+      for (const champ of [f.fournisseur, f.montant, f.referenceFacture]) champ.value = '';
+      dire('');
+      modePaiement.oublier();
+      depot.vider();
+      panneau.memoriser();
+      racine.querySelector('.panneau-corps').scrollTop = 0;
+      f.fournisseur.focus();
+      annoncer('Achat suivant');
+    }
+
+    f.addEventListener('submit', async (evenement) => {
       evenement.preventDefault();
-      registre.enregistrerSaisie(achat, {
+      const enSerie = enSerieDemandee();
+      const enregistre = await registre.enregistrerSaisie(achat, {
         dateReglement: f.dateReglement.value,
         fournisseur: f.fournisseur.value,
         referenceFacture: f.referenceFacture.value,
         montant: f.montant.value,
         modeReglement: f.modeReglement.value
-      }, { panneau, piece });
+      }, { panneau, piece, enchainer: enSerie });
+      if (enregistre && enSerie) recommencer();
     });
 
     panneau.memoriser();
@@ -242,4 +271,6 @@ export async function vueAchats(conteneur, params) {
     const bouton = conteneur.querySelector('#nouvel-achat');
     finDuFondu().then(() => { if (bouton.isConnected) ouvrirFormulaire(); });
   }
+  // Depuis la recherche dans tout le livre : l'achat, mis en avant.
+  if (params?.get('voir')) finDuFondu().then(() => registre.montrer(params.get('voir')));
 }

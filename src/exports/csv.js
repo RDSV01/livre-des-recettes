@@ -58,5 +58,5 @@ export function genererCsv(registre, parametres) {
   }
 
   // BOM UTF-8 pour Excel (U+FEFF).
-  return '﻿' + lignes.join(FIN_DE_LIGNE) + FIN_DE_LIGNE;
+  return `\ufeff${lignes.join(FIN_DE_LIGNE)}${FIN_DE_LIGNE}`;
 }

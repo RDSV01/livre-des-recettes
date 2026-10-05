@@ -51,7 +51,7 @@ export function identiteEntreprise(parametres) {
  * montant s'imprimerait « 1/500,00 € » (PDFKit ne garde alors que l'octet de
  * poids faible de U+202F, qui est celui de « / »).
  */
-const ESPACES_HORS_WINANSI = /[    ]/g;
+const ESPACES_HORS_WINANSI = /[\u202f\u00a0\u2009\u2007]/g;
 
 /** Remplace les caractères hors encodage WinAnsi par des équivalents sûrs. */
 export function texteSur(texte) {

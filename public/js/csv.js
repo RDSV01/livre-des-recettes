@@ -30,7 +30,7 @@ function detecterDelimiteur(contenu) {
  * @returns {{ entetes: string[], lignes: string[][], delimiteur: string }}
  */
 export function analyserCsv(texte) {
-  const contenu = texte.replace(/^﻿/, '');
+  const contenu = texte.replace(/^\ufeff/, '');
   const delimiteur = detecterDelimiteur(contenu);
 
   const lignes = [];

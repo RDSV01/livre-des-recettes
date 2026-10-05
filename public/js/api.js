@@ -27,14 +27,21 @@ async function requete(chemin, options = {}) {
     erreur.erreurs = corps?.erreurs ?? null;
     throw erreur;
   }
+  // Une écriture du livre a réussi : le bas du menu en donne l'heure.
+  if ((options.methode ?? 'GET') !== 'GET' && ECRITURES.test(chemin)) {
+    window.dispatchEvent(new Event('donnees-enregistrees'));
+  }
   return reponse.status === 204 ? null : reponse.json();
 }
+
+/** Routes qui écrivent dans le livre (les autres lisent, copient ou analysent). */
+const ECRITURES = /^\/api\/(recettes|achats|clients|parametres|demo|sauvegardes)\b/;
 
 /** Construit une chaîne de requête en ignorant les valeurs vides. */
 function chaineRequete(params) {
   const remplis = Object.entries(params ?? {}).filter(([, v]) => v !== '' && v != null);
   if (remplis.length === 0) return '';
-  return '?' + new URLSearchParams(remplis).toString();
+  return `?${new URLSearchParams(remplis)}`;
 }
 
 export const api = {
