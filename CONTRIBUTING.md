@@ -131,6 +131,11 @@ le modèle de pull request vous le fait confirmer.
 
 ## Signaler un bug
 
-Indiquez votre système, la version de Node (`node -v`), les étapes pour reproduire et ce que
-vous attendiez. Ne joignez jamais votre vrai `livre-des-recettes.json` à une issue publique :
-il contient vos clients et vos montants.
+Ouvrez une issue avec le formulaire « Signaler un bug » : il demande la version, le système
+et les étapes pour reproduire. Ne joignez jamais votre vrai `livre-des-recettes.json` à une
+issue publique : il contient vos clients et vos montants.
+
+Une faille de sécurité se signale en privé, jamais dans une issue : voir
+[SECURITY.md](SECURITY.md).
+
+Toute participation au projet suit le [code de conduite](CODE_OF_CONDUCT.md).

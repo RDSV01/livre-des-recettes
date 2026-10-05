@@ -1,0 +1,64 @@
+name: Signaler un bug
+description: Quelque chose ne fonctionne pas comme prévu.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de signaler ce problème. Une faille de sécurité se signale
+        en privé, jamais ici : voir [SECURITY.md](https://github.com/RDSV01/livre-des-recettes/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version de l'application
+      description: Affichée en bas du menu de gauche.
+      placeholder: "2.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: systeme
+    attributes:
+      label: Système
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation
+      options:
+        - Exécutable téléchargé
+        - Depuis les sources (npm start)
+    validations:
+      required: true
+  - type: textarea
+    id: etapes
+    attributes:
+      label: Étapes pour reproduire
+      placeholder: |
+        1. Aller dans Recettes
+        2. Cliquer sur « Nouvelle recette »
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: attendu
+    attributes:
+      label: Ce que vous attendiez, et ce qui s'est passé
+    validations:
+      required: true
+  - type: textarea
+    id: complements
+    attributes:
+      label: Captures d'écran ou message d'erreur
+      description: Masquez les noms de clients et les montants réels.
+  - type: checkboxes
+    id: donnees
+    attributes:
+      label: Données personnelles
+      options:
+        - label: Je n'ai joint ni mon vrai livre (livre-des-recettes.json), ni de vrais clients ou montants.
+          required: true

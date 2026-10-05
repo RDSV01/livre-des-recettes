@@ -1,0 +1,28 @@
+name: Proposer une idée
+description: Une amélioration ou une fonctionnalité.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Le projet tient les deux registres obligatoires du micro-entrepreneur, rien de plus.
+        Avant de proposer, voyez le périmètre dans [CONTRIBUTING.md](https://github.com/RDSV01/livre-des-recettes/blob/main/CONTRIBUTING.md#périmètre)
+        et ce qui est prévu dans [ROADMAP.md](https://github.com/RDSV01/livre-des-recettes/blob/main/ROADMAP.md).
+  - type: textarea
+    id: besoin
+    attributes:
+      label: Le besoin
+      description: Ce que vous cherchez à faire, et ce qui vous en empêche aujourd'hui.
+    validations:
+      required: true
+  - type: textarea
+    id: proposition
+    attributes:
+      label: Ce que vous proposez
+  - type: checkboxes
+    id: perimetre
+    attributes:
+      label: Périmètre
+      options:
+        - label: L'idée concerne le livre des recettes ou le registre des achats (ni facturation, ni comptabilité, ni télédéclaration).
+          required: true

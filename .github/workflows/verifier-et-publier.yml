@@ -24,11 +24,25 @@
 
 name: Vérifier et publier
 
+# Un changement qui ne touche que la documentation (textes, captures, modèles
+# d'issue) ne relance rien : il ne peut rien casser dans l'application.
 on:
   push:
     branches:
       - '**'
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/FUNDING.yml'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/FUNDING.yml'
   workflow_dispatch:
 
 # Lecture seule par défaut : seul le travail qui publie reçoit davantage.
