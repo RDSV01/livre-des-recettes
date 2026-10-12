@@ -942,8 +942,8 @@ a.btn-petit {
   --prestation: var(--carte-forte-prestation);
   --vente: var(--carte-forte-vente);
   --neutre: var(--carte-forte-neutre);
-  /* Le dégradé du menu, calé comme lui sur la fenêtre : à hauteur égale,
-     exactement le même bleu. */
+  /* Le dégradé du menu clair, calé comme lui sur la fenêtre : à hauteur
+     égale, exactement le même bleu. */
   background: linear-gradient(180deg, var(--carte-forte-haut), var(--carte-forte) 60%) fixed;
   border-color: transparent;
   color: var(--texte);
@@ -2102,9 +2102,13 @@ p.vide {
 .resume-registre:empty {
   display: none;
 }
-/* Le total défile après un geste : des chiffres de même largeur, rien ne bouge autour. */
+/* Le total défile après un geste. La police n'a pas de chiffres de même
+   chasse : registre.js lui réserve une largeur fixe (`min-width`), le texte
+   s'y cale à droite, et rien ne bouge autour, colonnes du tableau comprises. */
 [data-total] {
+  display: inline-block;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .resume-registre strong {
   color: var(--texte);

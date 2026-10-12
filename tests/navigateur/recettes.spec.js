@@ -53,6 +53,41 @@ test.describe('saisie d’une recette', () => {
     expect(clients.map((c) => c.nom)).toEqual(['Durand Rénovation']);
   });
 
+  test('le total défile sans déplacer les colonnes du registre', async ({ page, request }, info) => {
+    test.skip(info.project.name === 'mouvement-reduit', 'en mouvement réduit, le total ne défile pas');
+    await configurer(request, { typeActivite: 'mixte' });
+    for (const [montant, numeroFacture] of [[111111.11, 'F-001'], [11.11, 'F-002']]) {
+      await ajouterRecette(request, { montant, numeroFacture, categorie: 'prestations' });
+    }
+    await ouvrir(page, 'recettes');
+    await expect(total(page)).toHaveText(euros(111122.22));
+    // À chaque image, la place des colonnes et le total affiché.
+    await page.evaluate(() => {
+      window.releves = [];
+      const relever = () => {
+        window.releves.push({
+          lignes: document.querySelectorAll('#registre tbody tr[data-id]').length,
+          total: document.querySelector('#registre tfoot [data-total]')?.textContent,
+          colonnes: [...document.querySelectorAll('#registre thead th')].map((th) => Math.round(th.getBoundingClientRect().left)).join(',')
+        });
+        if (!window.finReleves) requestAnimationFrame(relever);
+      };
+      requestAnimationFrame(relever);
+    });
+    const p = await nouvelle(page);
+    await p.locator('#f-client').fill('Client Exemple');
+    // Un montant qui fait passer le total par des chiffres de chasses très différentes.
+    await p.locator('#f-montant').fill('777777,77');
+    await p.locator('#f-facture').fill('F-003');
+    await p.locator('[type="submit"]').click();
+    await expect(total(page)).toHaveText(euros(888899.99));
+    await page.evaluate(() => { window.finReleves = true; });
+    const releves = (await page.evaluate(() => window.releves)).filter((r) => r.lignes === 3);
+    // Le total a bien défilé, et les colonnes n'ont pas bougé pendant ce temps.
+    expect(new Set(releves.map((r) => r.total)).size).toBeGreaterThan(3);
+    expect([...new Set(releves.map((r) => r.colonnes))]).toHaveLength(1);
+  });
+
   test('les champs obligatoires et un montant illisible se signalent sur place', async ({ page, request }) => {
     await configurer(request);
     await ouvrir(page, 'recettes');

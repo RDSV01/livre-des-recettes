@@ -25,7 +25,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const RACINE = path.join(ICI, '..');
 const DIST = path.join(RACINE, 'dist');
 
-const { version, name, description } = JSON.parse(fs.readFileSync(path.join(RACINE, 'package.json'), 'utf8'));
+const { version, name } = JSON.parse(fs.readFileSync(path.join(RACINE, 'package.json'), 'utf8'));
 const ICONE = path.join(RACINE, 'assets', 'icone.ico');
 // Langue déclarée pour les ressources Windows. Peu importe laquelle, à
 // condition qu'il n'en reste qu'une : Windows choisit sinon selon la langue
@@ -142,9 +142,11 @@ function habillerExecutable(executable) {
   const infos = Resource.VersionInfo.createEmpty();
   infos.setFileVersion(...version.split('.').map(Number), 0, LANGUE);
   infos.setProductVersion(...version.split('.').map(Number), 0, LANGUE);
+  // FileDescription est le nom que Windows montre dans le Gestionnaire des
+  // tâches et le pare-feu : le nom de l'application, pas une phrase.
   infos.setStringValues({ lang: LANGUE, codepage: 1200 }, {
     ProductName: 'Livre des recettes',
-    FileDescription: description,
+    FileDescription: 'Livre des recettes',
     OriginalFilename: `${name}.exe`,
     LegalCopyright: '© 2026 Raphael, licence PolyForm Noncommercial 1.0.0 (voir LICENSE)'
   });

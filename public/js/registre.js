@@ -20,7 +20,8 @@ import {
   echapperHtml, toast, differer, selecteur, marquerFiltre, lienExport, accorder,
   poidsLisible, optionsCodes, OPTIONS_MOIS, afficherErreursFormulaire,
   mouvementReduit, choixAnnee, brancherChoixAnnee, preparerFlip, surlignerRecherche,
-  deplierHauteur, replierPuisRetirer, menuContextuel, ecouterPourLaPage
+  deplierHauteur, replierPuisRetirer, menuContextuel, ecouterPourLaPage,
+  largeurTexte, chiffreLePlusLarge
 } from './ui.js';
 import { annoncer, bandeauRetour, reussite, confettis, minuteur, brancherSegmentes, DUREE_RETOUR } from './retours.js';
 import { icone } from './icones.js';
@@ -473,6 +474,7 @@ export function installerRegistre(carte, registre) {
         : ligneVide(`${icone('recherche', { taille: 22 })}Aucune ligne ne correspond à ces filtres.<br>
             <button type="button" class="lien-bouton" data-effacer-filtres>Effacer les filtres</button>`));
       refs.pied.innerHTML = '';
+      reserverTotal(total);
       suivreTotal(totalPrecedent, total, anime);
       majSelection();
       return;
@@ -514,7 +516,8 @@ export function installerRegistre(carte, registre) {
       </button>`) : '');
     refs.pied.innerHTML = `<tr><td></td><td colspan="${colonnes.length - 1}">${filtre ? 'Total des lignes filtrées' : 'Total'}
       <span class="attenue">· ${accorder(affichees.length, nom.singulier, nom.pluriel)}</span></td>
-      <td class="montant" data-total>${echapperHtml(formaterMontant(total, devise))}</td><td></td></tr>`;
+      <td class="montant"><span data-total>${echapperHtml(formaterMontant(total, devise))}</span></td><td></td></tr>`;
+    reserverTotal(total);
     suivreTotal(totalPrecedent, total, anime);
     surlignerRecherche(refs.corps, 'td.client, td.libelle, .ref', filtres.q);
     // Un retour tout juste posé se déplie une fois ; redessiné ensuite (tri,
@@ -536,6 +539,23 @@ export function installerRegistre(carte, registre) {
     const texte = formaterMontant(valeur, devise);
     carte.querySelectorAll('[data-total]').forEach((c) => { c.textContent = texte; });
   };
+
+  /**
+   * Les chiffres de la police n'ont pas tous la même chasse : un total qui
+   * défile changerait de largeur à chaque image, et le tableau recalculerait
+   * ses colonnes (Facture, Paiement, Catégorie tremblaient). Chaque total
+   * réserve donc la largeur de son nombre écrit avec le chiffre le plus large ;
+   * elle ne change qu'avec le nombre de chiffres.
+   * @param {...number} valeurs les montants que le total va montrer.
+   */
+  function reserverTotal(...valeurs) {
+    const textes = valeurs.map((v) => formaterMontant(v, devise));
+    for (const element of carte.querySelectorAll('[data-total]')) {
+      const large = chiffreLePlusLarge(element);
+      const gabarit = textes.reduce((a, b) => (b.length > a.length ? b : a)).replace(/\d/g, large);
+      element.style.minWidth = `${Math.ceil(largeurTexte(element, gabarit))}px`;
+    }
+  }
 
   /** Où en est le défilement en cours, à l'instant `maintenant`. */
   const etapeDefilement = (maintenant) => {
@@ -563,11 +583,13 @@ export function installerRegistre(carte, registre) {
     if (defilement) {
       const { valeur } = etapeDefilement(performance.now());
       if (defilement.vers !== vers) defilement = { depuis: valeur, vers, debut: performance.now() };
+      reserverTotal(valeur, vers);
       ecrireTotal(valeur);
       return;
     }
     if (!anime || depuis === null || depuis === vers) return;
     defilement = { depuis, vers, debut: performance.now() };
+    reserverTotal(depuis, vers);
     refs.resume.setAttribute('aria-busy', 'true');
     // L'ancienne valeur, tout de suite : le nouveau total ne s'affiche pas une image avant de défiler.
     ecrireTotal(depuis);

@@ -25,6 +25,11 @@ locale, légère et simple.
   discrètes.
 - Nouvelle licence (PolyForm Noncommercial) : l'application reste gratuite et son code
   ouvert, sans usage commercial.
+- v2.2.1 : en thème sombre, la carte du chiffre d'affaires de l'année garde son bleu nuit
+  au lieu de passer au noir. Les colonnes du registre ne bougent plus quand le total défile
+  après un ajout, ni quand la barre de défilement apparaît. Animations réduites : tout
+  s'affiche d'un coup. « Livre des recettes » dans le Gestionnaire des tâches de Windows.
+  Modules mis à jour, dont Express (correctif de sécurité).
 
 ### v2.1
 

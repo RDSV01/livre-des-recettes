@@ -836,6 +836,33 @@ export function montantDetaille(valeur, devise) {
 }
 
 /**
+ * Largeur d'un texte dans la police et le style d'un élément, sans toucher à
+ * son contenu : un double invisible est mesuré à sa place.
+ * @param {HTMLElement} element
+ * @param {string} texte
+ */
+export function largeurTexte(element, texte) {
+  const double = document.createElement('span');
+  double.textContent = texte;
+  double.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;min-width:0';
+  element.append(double);
+  const largeur = double.getBoundingClientRect().width;
+  double.remove();
+  return largeur;
+}
+
+/** Le chiffre le plus large dans le style d'un élément (les chiffres de la police n'ont pas tous la même chasse). */
+export function chiffreLePlusLarge(element) {
+  let large = '0';
+  let max = 0;
+  for (const chiffre of '0123456789') {
+    const largeur = largeurTexte(element, chiffre.repeat(4));
+    if (largeur > max) { max = largeur; large = chiffre; }
+  }
+  return large;
+}
+
+/**
  * Réordonnancement animé (technique « FLIP ») : la place de chaque élément est
  * relevée avant la mise à jour, puis chacun glisse de l'ancienne à la
  * nouvelle ; les nouveaux venus apparaissent en fondu. Seuls les éléments à

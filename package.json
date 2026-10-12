@@ -1,7 +1,7 @@
 {
   "name": "livre-des-recettes",
-  "version": "2.2.0",
-  "description": "Tenez votre livre des recettes de micro-entrepreneur : simple, local et conforme aux obligations françaises.",
+  "version": "2.2.1",
+  "description": "Tenez votre livre des recettes de micro-entrepreneur : simple, local et conforme aux obligations franÃ§aises.",
   "type": "module",
   "private": true,
   "main": "server.js",
@@ -30,16 +30,16 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "exceljs": "^4.4.0",
-    "express": "^5.2.1",
+    "express": "^5.3.0",
     "pdfkit": "^0.20.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "esbuild": "^0.28.2",
     "postject": "^1.0.0-alpha.6",
     "resedit": "^3.1.0"
   },
   "overrides": {
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   }
 }

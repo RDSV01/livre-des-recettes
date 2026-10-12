@@ -44,7 +44,7 @@ test.describe('indicateurs', () => {
     await expect(valeur(page, 'achats')).toHaveCount(0);
   });
 
-  test('seule la carte de l’année est pleine, de la couleur du menu, dans les deux thèmes', async ({ page, request }) => {
+  test('seule la carte de l’année est pleine, en bleu nuit dans les deux thèmes', async ({ page, request }) => {
     await configurer(request, { typeActivite: 'mixte' });
     await ajouterRecette(request, { montant: 120, categorie: 'prestations' });
     await ajouterRecette(request, { montant: 80, categorie: 'ventes' });
@@ -61,7 +61,8 @@ test.describe('indicateurs', () => {
       const principal = document.querySelector('.indicateur.principal');
       const couleur = (selecteur, propriete = 'color') => getComputedStyle(principal.querySelector(selecteur))[propriete];
       return {
-        couleurDuMenu: getComputedStyle(principal).backgroundImage === getComputedStyle(document.querySelector('.rail')).backgroundImage,
+        fond: getComputedStyle(principal).backgroundImage,
+        fondDuMenu: getComputedStyle(document.querySelector('.rail')).backgroundImage,
         autresNeutres: [...document.querySelectorAll('.indicateur:not(.principal)')]
           .every((carte) => getComputedStyle(carte).backgroundImage === 'none'),
         chiffreEnClair: couleur('.indicateur-valeur') === encre('--carte-forte-texte'),
@@ -69,11 +70,16 @@ test.describe('indicateurs', () => {
         ventesLisibles: couleur('.repartition .ventes', 'backgroundColor') === encre('--carte-forte-vente')
       };
     });
-    const attendu = { couleurDuMenu: true, autresNeutres: true, chiffreEnClair: true, ventesLisibles: true };
-    await expect.poll(mesure).toEqual(attendu);
+    const lisible = { autresNeutres: true, chiffreEnClair: true, ventesLisibles: true };
+    // En clair : exactement le dégradé du menu.
+    await expect.poll(mesure).toMatchObject(lisible);
+    const clair = await mesure();
+    expect(clair.fond).toBe(clair.fondDuMenu);
     await page.locator('#bouton-theme').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await expect.poll(mesure).toEqual(attendu);
+    // En sombre, le menu passe au charbon ; la carte garde le bleu nuit.
+    await expect.poll(mesure).toMatchObject({ ...lisible, fond: clair.fond });
+    expect((await mesure()).fondDuMenu).not.toBe(clair.fond);
   });
 
   test('activité qui revend : les achats de l’année, et « Nouvel achat »', async ({ page, request }) => {

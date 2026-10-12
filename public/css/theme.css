@@ -55,9 +55,9 @@
   --logo-haut: #3b82f6;
   --logo-bas: #2563eb;
 
-  /* La carte du chiffre de l'année, seule pleine : la couleur du menu, dans
-     les deux thèmes, chiffre en blanc. Ventes et prestations s'y
-     éclaircissent pour rester lisibles. */
+  /* La carte du chiffre de l'année, seule pleine : le bleu nuit du menu, gardé
+     en thème sombre où le menu passe au charbon, chiffre en blanc. Ventes et
+     prestations s'y éclaircissent pour rester lisibles. */
   --carte-forte: var(--rail);
   --carte-forte-haut: var(--rail-haut);
   --carte-forte-texte: var(--rail-texte-fort);
@@ -195,6 +195,13 @@
   --rail-actif: rgba(96, 165, 250, 0.14);
   --rail-filet: rgba(255, 255, 255, 0.07);
 
+  /* La carte du chiffre de l'année ne suit pas le rail : en charbon, elle
+     devenait un trou noir parmi les cartes. Elle garde le bleu nuit du thème
+     clair, seule couleur pleine de l'écran. */
+  --carte-forte: #1a2f75;
+  --carte-forte-haut: #1e3683;
+  --carte-forte-texte-2: #c7d2fe;
+
   --accent: #3b82f6;
   --accent-survol: #2563eb;
   --accent-doux: rgba(59, 130, 246, 0.14);
@@ -251,11 +258,15 @@
   box-sizing: border-box;
 }
 
+/* La place de la barre de défilement est toujours réservée : quand une recette
+   ajoutée ou supprimée la fait apparaître ou disparaître, la page ne se
+   décale plus de côté. */
 html {
   font-size: 15px;
   -webkit-text-size-adjust: 100%;
   scrollbar-color: var(--bordure-controle) transparent;
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -359,12 +370,16 @@ th {
   display: block;
 }
 
+/* Mouvement réduit : tout arrive d'un coup. Les délais tombent aussi, sinon un
+   élément attendrait son tour invisible et décalé, puis sauterait en place. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
   }
 }
