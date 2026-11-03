@@ -12,7 +12,7 @@ body:
     attributes:
       label: Version de l'application
       description: Affichée en bas du menu de gauche.
-      placeholder: "2.2.1"
+      placeholder: "2.3.0"
     validations:
       required: true
   - type: dropdown

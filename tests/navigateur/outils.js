@@ -45,14 +45,16 @@ export function avecCle(debut) {
 
 /** Entreprises que l'annuaire fictif connaît. */
 export const ANNUAIRE = (() => {
-  const fiche = (debutSiren, nic, nom) => {
+  const fiche = (debutSiren, nic, nom, adresse, { active = true, creation = '2020-03-02' } = {}) => {
     const siren = avecCle(debutSiren);
-    return { siren, siret: avecCle(`${siren}${nic}`), nom };
+    return { siren, siret: avecCle(`${siren}${nic}`), nom, adresse, active, creation };
   };
   return {
-    lumen: fiche('81234567', '0001', 'STUDIO LUMEN'),
-    boulangerie: fiche('42424242', '0002', 'BOULANGERIE DES HALLES'),
-    atelier: fiche('53311122', '0003', 'ATELIER DU CANAL')
+    lumen: fiche('81234567', '0001', 'STUDIO LUMEN', '12 RUE DES ARTISTES 75011 PARIS'),
+    boulangerie: fiche('42424242', '0002', 'BOULANGERIE DES HALLES', '3 PLACE DU MARCHE 69002 LYON'),
+    atelier: fiche('53311122', '0003', 'ATELIER DU CANAL', '45 QUAI DE VALMY 75010 PARIS'),
+    // Homonyme fermé : la recherche par nom doit le montrer comme tel.
+    boulangerieFermee: fiche('42424243', '0001', 'BOULANGERIE DES HALLES', '8 RUE BASSE 33000 BORDEAUX', { active: false, creation: '2008-06-10' })
   };
 })();
 
@@ -66,10 +68,16 @@ globalThis.fetch = async (cible, options) => {
   const adresse = String(cible instanceof Request ? cible.url : cible);
   if (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(adresse)) return fetchLocal(cible, options);
   if (adresse.startsWith('https://recherche-entreprises.api.gouv.fr/')) {
+    // Par numéro, l'entreprise de ce SIREN ; par nom, celles dont le nom le contient.
     const q = new URL(adresse).searchParams.get('q') ?? '';
-    const trouvee = Object.values(ANNUAIRE).find((e) => e.siren === q.slice(0, 9));
-    const results = trouvee ? [{ siren: trouvee.siren, nom_complet: trouvee.nom, siege: { siret: trouvee.siret } }] : [];
-    return new Response(JSON.stringify({ results }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const trouvees = /^\d+$/.test(q)
+      ? Object.values(ANNUAIRE).filter((e) => e.siren === q.slice(0, 9))
+      : Object.values(ANNUAIRE).filter((e) => e.nom.includes(q.toUpperCase()));
+    const results = trouvees.map((e) => ({
+      siren: e.siren, nom_complet: e.nom, date_creation: e.creation, etat_administratif: e.active ? 'A' : 'F',
+      siege: { siret: e.siret, adresse: e.adresse, etat_administratif: e.active ? 'A' : 'F' }
+    }));
+    return new Response(JSON.stringify({ results, total_results: results.length }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
   // GitHub (mises à jour) et tout le reste : hors ligne, comme un ordinateur sans réseau.
   throw new TypeError(`Réseau extérieur coupé pendant les tests : ${adresse}`);

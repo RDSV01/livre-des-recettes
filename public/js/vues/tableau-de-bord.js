@@ -18,7 +18,7 @@ import {
 import { reussite, halo, bandeauRetour, brancherSegmentes, copierDansPressePapiers } from '../retours.js';
 import { icone } from '../icones.js';
 import { graphiqueMensuel, tableauMensuel, brancherGraphique, hauteursBarres } from '../graphique.js';
-import { pastilleEtat } from '../declarations.js';
+import { pastilleEtat, blocSansChiffreAffaires } from '../declarations.js';
 import { pastilleCategorie } from './recettes.js';
 import { etatFiltres } from '../preferences-vues.js';
 import { formaterMontant, formaterMontantEntier, sommeMontants } from '/partage/montants.js';
@@ -199,7 +199,8 @@ function carteDeclaration(periode, bilan, devise) {
     <div class="declaration-corps">
       <p class="declaration-periode">${libellePeriode(periode)}</p>
       ${quand}
-      ${bilan ? `<div class="lignes-montants">
+      ${bilan?.chiffreAffaires === 0 ? blocSansChiffreAffaires(periode.etat)
+        : bilan ? `<div class="lignes-montants">
         ${ligne(declarable ? 'Chiffre d’affaires à déclarer' : 'Encaissé à ce jour', formaterMontantEntier(bilan.aDeclarer, devise), { classe: 'principal', copier: bilan.aDeclarer })}
         ${c ? `${ligne('Sera prélevé par l’URSSAF', formaterMontantEntier(c.totalPreleve, devise))}
         ${ligne('Il vous restera', formaterMontantEntier(c.reste, devise), { classe: 'reste' })}` : ''}

@@ -1,6 +1,6 @@
 /**
  * API des clients : liste (avec le chiffre d'affaires généré par chacun),
- * CRUD et recherche par SIRET.
+ * CRUD et recherche dans l'annuaire des entreprises (par nom ou par numéro).
  *
  * Le carnet de clients sert uniquement à fiabiliser la saisie des recettes
  * (choisir un client existant évite les fautes de frappe sur le nom). Une
@@ -9,7 +9,7 @@
 
 import express from 'express';
 import { validerClient, cleSirenValide } from '../validation.js';
-import { rechercherEntreprise } from '../entreprises.js';
+import { rechercherEntreprise, rechercherEntreprises, estIdentifiant } from '../entreprises.js';
 import { normaliserTexte } from '../partage/texte.js';
 import { enEuros } from '../partage/montants.js';
 import { regrouper } from '../totaux.js';
@@ -49,7 +49,7 @@ export function routesClients(stockage) {
     // Clé de contrôle vérifiée avant tout appel réseau : une faute de frappe
     // est signalée immédiatement, sans interroger l'annuaire pour rien.
     if (!cleSirenValide(siret)) {
-      return res.status(400).json({ erreur: 'Ce numéro ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.' });
+      return res.status(400).json({ erreur: 'Ce numéro n’est pas valide : vérifiez la saisie.' });
     }
     try {
       const entreprise = await rechercherEntreprise(siret);
@@ -60,6 +60,24 @@ export function routesClients(stockage) {
     } catch (erreur) {
       // Indisponibilité du service externe : ce n'est pas une erreur du serveur local.
       res.status(502).json({ erreur: erreur.message });
+    }
+  });
+
+  /**
+   * Recherche dans l'annuaire public par nom, SIREN ou SIRET.
+   * GET /api/clients/recherche-entreprises?q=boulangerie%20des%20halles
+   * Ne crée rien : renvoie les entreprises trouvées (nom, SIRET, adresse,
+   * état), que l'utilisateur vérifie avant d'en choisir une.
+   */
+  routeur.get('/recherche-entreprises', async (req, res) => {
+    const q = String(req.query.q ?? '').trim();
+    if (estIdentifiant(q) && !cleSirenValide(q.replace(/\s/g, ''))) {
+      return res.status(400).json({ erreur: 'Ce numéro n’est pas valide : vérifiez la saisie.' });
+    }
+    try {
+      res.json(await rechercherEntreprises(q));
+    } catch (erreur) {
+      res.status(erreur.code === 'FORMAT' ? 400 : 502).json({ erreur: erreur.message });
     }
   });
 

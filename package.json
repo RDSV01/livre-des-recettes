@@ -1,6 +1,6 @@
 {
   "name": "livre-des-recettes",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Tenez votre livre des recettes de micro-entrepreneur : simple, local et conforme aux obligations franÃ§aises.",
   "type": "module",
   "private": true,
@@ -34,7 +34,7 @@
     "pdfkit": "^0.20.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.0",
+    "@playwright/test": "^1.64.1",
     "esbuild": "^0.28.2",
     "postject": "^1.0.0-alpha.6",
     "resedit": "^3.1.0"

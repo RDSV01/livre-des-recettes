@@ -77,8 +77,8 @@ code et des tests quand une API change.
 - `src/validation.js` : toute donnée entrante passe par là.
 - `src/totaux.js`, `src/cotisations.js`, `src/rapport-annuel.js`, `src/controle-export.js` :
   calculs, estimation des prélèvements URSSAF, rapport annuel, contrôle avant export.
-- `src/entreprises.js` et `src/maj.js` : les deux seuls appels réseau (recherche par SIRET,
-  nouvelle version). N'en ajoutez pas d'autre.
+- `src/entreprises.js` et `src/maj.js` : les deux seuls appels réseau (annuaire des
+  entreprises, par nom ou SIRET ; nouvelle version). N'en ajoutez pas d'autre.
 - `src/partage/` : modules communs au serveur et au navigateur, sans dépendance.
 - `src/exports/` : PDF, Excel, CSV et .zip ; chaque registre décrit ses colonnes dans
   `registre.js`.

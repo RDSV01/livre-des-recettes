@@ -80,11 +80,51 @@ async function verifierActions() {
   }
 }
 
-/** Les modules embarqués dans l'exécutable : aucune faille connue n'y est tolérée. */
+/**
+ * Avis de sécurité écartés après examen, parce que la faille n'existe pas
+ * dans les versions installées. Chacun dit pourquoi, et à quelle condition :
+ * dès qu'elle cesse d'être vraie, l'avis compte de nouveau.
+ */
+const AVIS_ECARTES = [
+  {
+    id: 'GHSA-g3hv-75wg-m249',
+    module: 'minimatch',
+    // Déni de service dans firstPhasePreProcess() avec optimizationLevel ≥ 2,
+    // code apparu dans minimatch 7 ; l'avis vise pourtant tout ce qui précède
+    // 11.0.1. exceljs (par archiver) n'embarque que les versions 3 et 5, et
+    // l'application ne lui passe jamais de motif venu de l'utilisateur.
+    tantQue: (versions) => versions.every((v) => majeure(v) < 7),
+    raison: 'code fautif absent avant minimatch 7'
+  }
+];
+
+/** Versions d'un module livré avec l'application, d'après package-lock.json. */
+function versionsLivrees(module) {
+  const verrou = JSON.parse(fs.readFileSync(path.join(RACINE, 'package-lock.json'), 'utf8'));
+  return [...new Set(Object.entries(verrou.packages ?? {})
+    .filter(([chemin, p]) => chemin.endsWith(`node_modules/${module}`) && !p.dev)
+    .map(([, p]) => p.version))];
+}
+
+/** Les modules embarqués dans l'exécutable : aucune faille connue n'y est tolérée, hors avis écartés. */
 async function verifierFailles() {
   const rapport = JSON.parse((await npm('audit', '--omit=dev', '--json')) || '{}');
-  const { total = 0 } = rapport.metadata?.vulnerabilities ?? {};
-  if (total > 0) retards.push(`${total} faille(s) connue(s) dans les modules livrés : npm audit --omit=dev, puis mise à jour`);
+  // Un avis par adresse : un module touché par ricochet ne le compte pas deux fois.
+  const avis = new Map();
+  for (const faille of Object.values(rapport.vulnerabilities ?? {})) {
+    for (const via of faille.via ?? []) if (typeof via === 'object') avis.set(via.url, via);
+  }
+  const restants = [...avis.values()].filter((a) => {
+    const ecarte = AVIS_ECARTES.find((e) => a.url?.endsWith(e.id));
+    if (!ecarte) return true;
+    const versions = versionsLivrees(ecarte.module);
+    if (!ecarte.tantQue(versions)) return true;
+    avertissements.push(`avis ${ecarte.id} (${ecarte.module} ${versions.join(', ')}) écarté : ${ecarte.raison}.`);
+    return false;
+  });
+  if (restants.length > 0) {
+    retards.push(`${restants.length} faille(s) connue(s) dans les modules livrés (${[...new Set(restants.map((a) => a.name))].join(', ')}) : npm audit --omit=dev, puis mise à jour`);
+  }
 }
 
 async function signalerNode() {

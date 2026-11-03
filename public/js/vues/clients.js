@@ -4,15 +4,17 @@
  * Une fiche ne contient que le nom et, facultativement, le SIRET : le carnet
  * sert à fiabiliser la saisie des recettes.
  *
- * Deux façons d'ajouter un client : par recherche SIRET (le nom exact vient
- * de l'annuaire public des entreprises), ou par le nom seul.
+ * Deux façons d'ajouter un client : par une recherche dans l'annuaire public
+ * des entreprises, par nom, SIREN ou SIRET (nom exact, SIRET et adresse à
+ * vérifier avant de choisir), ou par le nom seul.
  */
 
 import { api, urlPiece } from '../api.js';
 import { etat } from '../etat.js';
 import {
   echapperHtml, toast, accorder, initiales, teinteDe, siretLisible, resultatSiret, poidsLisible,
-  afficherErreursFormulaire, effacerErreursFormulaire, montantDetaille, preparerFlip
+  afficherErreursFormulaire, effacerErreursFormulaire, montantDetaille, preparerFlip, confirmer,
+  listeEntreprises, entrepriseEnLigne
 } from '../ui.js';
 import { bandeauRetour, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
@@ -203,12 +205,13 @@ export async function vueClients(conteneur, params) {
       </div>
       <div class="formulaire-fiche">
         ${client ? '' : `<div class="champ">
-          <label for="c-recherche">Rechercher par SIRET</label>
+          <label for="c-recherche">Rechercher dans l’annuaire des entreprises</label>
           <div class="ligne-siret">
-            <input class="champ-texte" id="c-recherche" inputmode="numeric" autocomplete="off" placeholder="14 chiffres">
+            <input class="champ-texte" id="c-recherche" autocomplete="off" placeholder="Nom, SIREN ou SIRET">
             <button type="button" class="btn" id="c-chercher">${icone('recherche', { taille: 16 })}Rechercher</button>
           </div>
           <p class="aide-champ" id="c-resultat" aria-live="polite"></p>
+          <div id="c-entreprises" aria-live="polite" hidden></div>
         </div>
         <p class="sous-titre">Ou saisissez directement le nom :</p>`}
         <div class="grille-champs">
@@ -242,21 +245,40 @@ export async function vueClients(conteneur, params) {
 
     form.querySelector('#c-annuler').addEventListener('click', () => { rendreFiche(); animerFiche(); });
     const champRecherche = form.querySelector('#c-recherche');
+    const zoneEntreprises = form.querySelector('#c-entreprises');
+    /** Une entreprise retenue remplit le nom et le SIRET ; son adresse est rappelée pour vérifier. */
+    const retenir = (entreprise) => {
+      zoneEntreprises.hidden = true;
+      zoneEntreprises.innerHTML = '';
+      form.nom.value = entreprise.nom;
+      form.siret.value = entreprise.siret;
+      resultatSiret(form.querySelector('#c-resultat'), { nom: entreprise.nom, texte: `Trouvé : ${entrepriseEnLigne(entreprise)}` });
+    };
     const chercher = async () => {
-      const siret = champRecherche.value.replace(/\s/g, '');
+      const saisie = champRecherche.value.trim();
       const resultat = form.querySelector('#c-resultat');
-      if (!/^\d{9}$|^\d{14}$/.test(siret)) {
+      zoneEntreprises.hidden = true;
+      const chiffres = saisie.replace(/\s/g, '');
+      if (/^\d+$/.test(chiffres) && !/^\d{9}$|^\d{14}$/.test(chiffres)) {
         resultatSiret(resultat, { erreur: 'Un SIRET compte 14 chiffres (un SIREN, 9).' });
+        return;
+      }
+      if (saisie.length < 3) {
+        resultatSiret(resultat, { erreur: 'Tapez au moins 3 lettres du nom, ou un SIREN ou un SIRET.' });
         return;
       }
       const bouton = form.querySelector('#c-chercher');
       bouton.disabled = true;
       resultatSiret(resultat);
       try {
-        const { entreprise } = await api.rechercherSiret(siret);
-        form.nom.value = entreprise.nom;
-        form.siret.value = entreprise.siret || (siret.length === 14 ? siret : '');
-        resultatSiret(resultat, { nom: entreprise.nom });
+        const trouves = await api.rechercherEntreprises(saisie);
+        // Un numéro désigne une seule entreprise : elle est reprise d'emblée.
+        if (/^\d+$/.test(chiffres) && trouves.entreprises.length === 1) {
+          retenir(trouves.entreprises[0]);
+        } else {
+          resultat.hidden = true;
+          listeEntreprises(zoneEntreprises, trouves, retenir);
+        }
       } catch (erreur) {
         resultatSiret(resultat, { erreur: erreur.message });
       } finally {
@@ -342,6 +364,15 @@ export async function vueClients(conteneur, params) {
     const supprimer = evenement.target.closest('#supprimer-client');
     if (supprimer) {
       const retire = clientChoisi();
+      const nombre = recettesDe(retire).length;
+      const accord = await confirmer({
+        titre: `Retirer ${retire.nom} du carnet ?`,
+        message: nombre
+          ? `Seule sa fiche disparaît : ${nombre === 1 ? 'sa recette reste' : `ses ${nombre} recettes restent`} dans le livre, à son nom.`
+          : 'Sa fiche disparaît du carnet. Aucune recette n’est enregistrée à son nom.',
+        boutonOk: 'Retirer du carnet'
+      });
+      if (!accord) return;
       supprimer.disabled = true;
       try {
         await api.supprimerClient(retire.id);

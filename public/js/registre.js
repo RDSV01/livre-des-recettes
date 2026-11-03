@@ -972,8 +972,10 @@ export function installerRegistre(carte, registre) {
         if (celebrer && !resultat.erreur && !mouvementReduit()) {
           reussite(bouton, `Ajouté${e}`, { duree: enchainer ? 1400 : 2000 });
           confettis(bouton);
-          // En série, la saisie suivante n'attend pas la fin de la fête.
-          if (!enchainer) await new Promise((fin) => { setTimeout(fin, 750); });
+          // Le panneau s'efface juste après le départ des confettis, qui
+          // retombent par-dessus le registre (leur couche survit au panneau).
+          // En série, la saisie suivante n'attend pas du tout.
+          if (!enchainer) await new Promise((fin) => { setTimeout(fin, 200); });
         }
       }
       if (!(enchainer && !enEdition)) await panneau.fermer(true);

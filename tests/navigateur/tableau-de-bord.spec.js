@@ -256,6 +256,20 @@ test.describe('déclaration URSSAF', () => {
     await expect(page).toHaveURL(new RegExp(`#/urssaf\\?periode=${idMois(-2)}`));
   });
 
+  test('une période sans chiffre d’affaires se dit en mots, pas en « 0 € »', async ({ page, request }) => {
+    await configurer(request, { periodiciteUrssaf: 'mois', dernierePeriodeDeclaree: idMois(-2), typeActivite: 'liberal' });
+    await ajouterRecette(request, { montant: 100, dateEncaissement: dansMois(-3, 5) });
+    await ouvrir(page);
+    const carte = page.locator('#declaration');
+    await expect(carte.locator('.declaration-periode')).toHaveText(libellePeriode(periodeDepuisId(idMois(-1))));
+    await expect(carte.locator('.sans-chiffre-affaires')).toContainText('Aucun chiffre d’affaires sur cette période');
+    // La déclaration reste due, à zéro : elle le dit, et « C’est fait » reste là.
+    await expect(carte.locator('.sans-chiffre-affaires')).toContainText('indiquez 0');
+    await expect(carte.locator('.lignes-montants')).toHaveCount(0);
+    await expect(carte).not.toContainText(eurosEntiers(0));
+    await expect(carte.locator('#declarer')).toBeVisible();
+  });
+
   test('sans type d’activité, pas d’estimation mais une invitation', async ({ page, request }) => {
     await configurer(request, { typeActivite: '', periodiciteUrssaf: 'mois', dernierePeriodeDeclaree: idMois(-1) });
     await ajouterRecette(request);

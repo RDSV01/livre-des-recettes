@@ -86,8 +86,11 @@ test('l’année se change depuis l’en-tête', async ({ page, request }) => {
 test('une période à déclarer : chiffres clés, copie, case à reporter, détail du calcul', async ({ page, request }) => {
   await configurer(request, { periodiciteUrssaf: 'mois', dernierePeriodeDeclaree: idMois(-2), typeActivite: 'liberal' });
   await ajouterRecette(request, { montant: 2000.4, dateEncaissement: dansMois(-1, 5) });
-  await ouvrir(page, 'urssaf');
   const periode = periodeDepuisId(idMois(-1));
+  // Un autre mois encaissé, où le détail du calcul doit rester déplié.
+  const autreMois = periode.valeur === 1 ? 2 : 1;
+  await ajouterRecette(request, { montant: 300, dateEncaissement: `${periode.annee}-${String(autreMois).padStart(2, '0')}-10` });
+  await ouvrir(page, 'urssaf');
   await expect(page.locator('#titre-periode')).toHaveText(libellePeriode(periode));
   await expect(page.locator('.statut-ligne .etat')).toHaveText('À déclarer');
   await expect(page.locator('.chiffre-cle.principal .valeur')).toContainText(eurosEntiers(2000));
@@ -106,8 +109,26 @@ test('une période à déclarer : chiffres clés, copie, case à reporter, déta
   await expect(details).toContainText('Encaissé sur la période');
   await expect(details).toContainText('Cotisations sociales');
   await expect(details).toContainText('La déclaration se fait en euros entiers');
-  await page.locator(`#periodes .periode[data-valeur="${periode.valeur === 1 ? 2 : 1}"]`).click();
+  await page.locator(`#periodes .periode[data-valeur="${autreMois}"]`).click();
   await expect(page.locator('.details-calcul')).toHaveAttribute('open', '');
+});
+
+test('une période sans chiffre d’affaires se dit en mots, pas en « 0 € »', async ({ page, request }) => {
+  await configurer(request, { periodiciteUrssaf: 'mois', dernierePeriodeDeclaree: idMois(-2), typeActivite: 'mixte', naturePrestations: 'liberal' });
+  await ajouterRecette(request, { montant: 100, dateEncaissement: dansMois(-3, 5) });
+  await ouvrir(page, 'urssaf');
+  await expect(page.locator('#titre-periode')).toHaveText(libellePeriode(periodeDepuisId(idMois(-1))));
+  const detail = page.locator('#detail');
+  await expect(detail.locator('.sans-chiffre-affaires')).toContainText('Aucun chiffre d’affaires sur cette période');
+  await expect(detail.locator('.sans-chiffre-affaires')).toContainText('La déclaration reste obligatoire');
+  await expect(detail.locator('.bloc-note')).toContainText('Indiquez 0 dans chaque case');
+  // Ni montants nuls, ni cases à 0, ni calcul.
+  await expect(detail.locator('.chiffre-cle, .case-urssaf, .details-calcul')).toHaveCount(0);
+  await expect(detail).not.toContainText(eurosEntiers(0));
+  // Déclarée, elle le reste en mots.
+  await page.locator('#declarer').click();
+  await expect(page.locator('.statut-ligne .etat')).toHaveText('Déclarée');
+  await expect(detail.locator('.sans-chiffre-affaires')).toContainText('Déclarée sans chiffre d’affaires');
 });
 
 test('marquer comme déclarée, puis annuler la déclaration et revenir dessus', async ({ page, request }) => {

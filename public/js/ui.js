@@ -598,6 +598,40 @@ export function resultatSiret(zone, { nom, erreur, texte } = {}) {
   }
 }
 
+/** Une entreprise de l'annuaire en une ligne : nom, puis adresse si elle est diffusée. */
+export const entrepriseEnLigne = (e) => (e.adresse ? `${e.nom}, ${e.adresse}` : e.nom);
+
+/**
+ * Les entreprises trouvées dans l'annuaire, sous le champ de recherche : pour
+ * chacune, le nom, le SIRET, l'adresse, sa date de création et si elle est
+ * fermée, de quoi reconnaître la bonne avant de la choisir.
+ *
+ * @param {HTMLElement} zone
+ * @param {{ entreprises: object[], total: number }} resultat réponse de l'API
+ * @param {(entreprise: object) => void} surChoix
+ */
+export function listeEntreprises(zone, { entreprises, total }, surChoix) {
+  zone.hidden = false;
+  if (!entreprises.length) {
+    zone.className = 'aide-champ erreur';
+    zone.innerHTML = `${icone('cercle-alerte', { taille: 14 })}<span>Aucune entreprise trouvée dans l’annuaire. Vérifiez l’orthographe, ou saisissez le nom tel quel.</span>`;
+    return;
+  }
+  zone.className = 'resultats-annuaire';
+  zone.innerHTML = `
+    <p class="resultats-annuaire-tete">${total > entreprises.length
+      ? `${total} entreprises correspondent : les ${entreprises.length} premières. Ajoutez la ville pour affiner.`
+      : `${accorder(entreprises.length, 'entreprise trouvée', 'entreprises trouvées')} : choisissez la bonne.`}</p>
+    <ul>${entreprises.map((e, i) => `<li><button type="button" class="entreprise-annuaire" data-entreprise="${i}">
+      <span class="entreprise-nom"><strong>${echapperHtml(e.nom)}</strong>${e.active ? '' : '<span class="etat-fermee">Fermée</span>'}</span>
+      <span>${e.siret ? `SIRET ${siretLisible(e.siret)}` : `SIREN ${siretLisible(e.siren)}`}${e.creation ? ` · créée en ${e.creation.slice(0, 4)}` : ''}</span>
+      <span>${e.adresse ? echapperHtml(e.adresse) : 'Adresse non diffusée'}</span>
+    </button></li>`).join('')}</ul>`;
+  zone.querySelectorAll('[data-entreprise]').forEach((bouton) => bouton.addEventListener('click', () => {
+    surChoix(entreprises[Number(bouton.dataset.entreprise)]);
+  }));
+}
+
 // ---- Bulles d'aide ----------------------------------------------------------------------
 
 /**

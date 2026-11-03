@@ -5,6 +5,20 @@ locale, légère et simple.
 
 ## Déjà livré
 
+### v2.3
+
+- Annuaire des entreprises par nom : un nouveau client se cherche par son nom, son SIREN
+  ou son SIRET, depuis la saisie d'une recette comme depuis le carnet de clients. Chaque
+  entreprise trouvée montre son SIRET, son adresse et sa date de création, et dit si elle
+  est fermée : on choisit la bonne en connaissance de cause.
+- URSSAF : une période sans chiffre d'affaires se dit en mots plutôt qu'en « 0 € », et
+  rappelle que la déclaration à zéro reste obligatoire.
+- Les « Annuler » éphémères comptent les secondes qui restent (5, 4, 3, 2, 1).
+- Après « Ajouter la recette », le panneau s'efface pendant que les confettis retombent.
+- Retirer un client du carnet demande confirmation.
+- Importer et Exports, gestes rares, passent en bas du menu.
+- Messages d'erreur plus simples, sans détail technique.
+
 ### v2.2
 
 - Recherche dans tout le livre (Ctrl+K) : clients, recettes, achats et pages. Raccourcis

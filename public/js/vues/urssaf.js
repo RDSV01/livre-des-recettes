@@ -15,7 +15,7 @@ import { etat, modifierParametres } from '../etat.js';
 import { echapperHtml, toast, accorder, choixAnnee, brancherChoixAnnee, mouvementReduit, enFondu } from '../ui.js';
 import { reussite, halo, bandeauRetour, brancherSegmentes, copierDansPressePapiers } from '../retours.js';
 import { icone } from '../icones.js';
-import { pastilleEtat } from '../declarations.js';
+import { pastilleEtat, blocSansChiffreAffaires } from '../declarations.js';
 import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
 import {
   formaterDate, dateEnFrancaisLong, aujourdHuiIso, idPeriode, periodeDepuisId, nomMois, trimestreDe,
@@ -232,6 +232,8 @@ export async function vueUrssaf(conteneur, params) {
     const aPayer = ['a-declarer', 'en-retard', 'en-cours', 'a-venir'].includes(etatP);
     const libellePreleve = aPayer ? 'Sera prélevé par l’URSSAF' : 'Prélevé par l’URSSAF';
     const libelleReste = aPayer ? 'Il vous restera' : 'Il vous reste';
+    // Rien encaissé sur la période : des mots plutôt qu'une rangée de « 0 € ».
+    const sansCA = bilan.chiffreAffaires === 0;
     const caseDeclaration = (etiquette, cle, montant) => `<div class="case-urssaf">
         <span>${etiquette}</span>
         <strong>${echapperHtml(formaterMontantEntier(montant, devise))}</strong>
@@ -242,7 +244,7 @@ export async function vueUrssaf(conteneur, params) {
       <div class="carte-tete">
         <div>
           <h2 id="titre-periode">${libellePeriode(choix)}</h2>
-          <div class="statut-ligne">${etatP ? pastilleEtat(etatP) : ''}${quand ? `<span>${quand}</span>` : ''}<span class="attenue">${accorder(bilan.nombreEncaissements, 'encaissement')}</span></div>
+          <div class="statut-ligne">${etatP ? pastilleEtat(etatP) : ''}${quand ? `<span>${quand}</span>` : ''}${bilan.nombreEncaissements ? `<span class="attenue">${accorder(bilan.nombreEncaissements, 'encaissement')}</span>` : ''}</div>
         </div>
         <div class="actions">
           ${declarable && choix.type === p().periodiciteUrssaf ? `<button type="button" class="btn btn-principal" id="declarer">${icone('coche', { taille: 16 })}<span>Marquer comme déclarée</span></button>` : ''}
@@ -250,6 +252,8 @@ export async function vueUrssaf(conteneur, params) {
         </div>
       </div>
 
+      ${sansCA ? `<div class="chiffres-cles seul">${blocSansChiffreAffaires(etatP)}</div>
+      ${estMixte && declarable ? '<p class="notes bloc-note">Indiquez 0 dans chaque case de votre déclaration, ventes comme prestations.</p>' : ''}` : `
       <div class="chiffres-cles${c ? '' : ' seul'}">
         <div class="chiffre-cle principal">
           <span class="libelle">${libelleTotal}${estMixte ? ' (total)' : ''}</span>
@@ -283,7 +287,7 @@ export async function vueUrssaf(conteneur, params) {
         sans catégorie (${echapperHtml(formaterMontant(bilan.nonCategorise.chiffreAffaires, devise))}) :
         classez-les en vente ou en prestation pour une ventilation et une estimation exactes.</span></p>` : ''}
 
-      ${detailCalcul(bilan, devise, formatDate, libelleReste, p())}`;
+      ${detailCalcul(bilan, devise, formatDate, libelleReste, p())}`}`;
 
     if (detailOuvert) zone.querySelector('.details-calcul')?.setAttribute('open', '');
   }

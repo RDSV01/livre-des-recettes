@@ -636,7 +636,7 @@ test('hors activité mixte, la recette prend d’office la catégorie de l’act
 test('la recherche SIRET refuse une clé de contrôle invalide sans appel réseau', async () => {
   const reponse = await appeler('/api/clients/recherche-siret?siret=123456789');
   assert.equal(reponse.status, 400);
-  assert.match((await reponse.json()).erreur, /clé de contrôle/);
+  assert.match((await reponse.json()).erreur, /n’est pas valide/);
 });
 
 test('GET /api/systeme signale la première utilisation, puis plus', async () => {

@@ -25,7 +25,7 @@ import { etat, modifierParametres } from '../etat.js';
 import {
   echapperHtml, toast, formaterChampMontant, effacerErreursFormulaire, afficherErreursFormulaire,
   installerChampMontant, optionsCodes, selecteur, accorder, initiales, teinteDe,
-  siretLisible, resultatSiret, finDuFondu, deplierHauteur, replierPuisRetirer
+  siretLisible, resultatSiret, finDuFondu, deplierHauteur, replierPuisRetirer, listeEntreprises
 } from '../ui.js';
 import { annoncer, bandeauRetour, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
@@ -350,6 +350,7 @@ export async function vueRecettes(conteneur, params) {
         <input class="champ-texte" id="f-client" name="client" autocomplete="off"
           placeholder="Nom du client, ou SIRET pour un nouveau" aria-describedby="f-client-aide">
         <p class="aide-champ" id="f-client-aide"></p>
+        <div id="f-client-annuaire" aria-live="polite" hidden></div>
         <span class="erreur-champ message-erreur"></span>
       </div>
       <div class="champ" data-champ="libelle" style="--i:1">
@@ -480,10 +481,13 @@ export async function vueRecettes(conteneur, params) {
 
     // ---- Autocomplétion du client
     const dire = (html, type = '') => { aide.className = `aide-champ ${type}`.trim(); aide.innerHTML = html; };
+    const zoneAnnuaire = racine.querySelector('#f-client-annuaire');
+    const fermerAnnuaire = () => { zoneAnnuaire.hidden = true; zoneAnnuaire.innerHTML = ''; };
     f.client.addEventListener('input', (evenement) => {
       if (!evenement.isTrusted) return;
       siretResolu = null;
       dire('');
+      fermerAnnuaire();
     });
     // Un client tapé en entier, sans passer par la liste, compte aussi.
     f.client.addEventListener('change', () => modePaiement.proposer(f.client.value));
@@ -505,7 +509,7 @@ export async function vueRecettes(conteneur, params) {
         }
         const exact = trouves.some((c) => normaliserTexte(c.nom) === normaliserTexte(saisie));
         if (!saisie.trim() || exact) return null;
-        return {
+        const nouveau = {
           extra: true,
           rendu: `<span class="tuile petit">${icone('client-plus', { taille: 15 })}</span><span class="sugg-texte">
             <strong>Nouveau client « ${echapperHtml(saisie.trim())} »</strong><span>sera ajouté à vos clients</span></span>`,
@@ -514,6 +518,14 @@ export async function vueRecettes(conteneur, params) {
             f.libelle.focus();
           }
         };
+        // Une entreprise : son nom exact, son SIRET et son adresse viennent de l'annuaire.
+        if (saisie.trim().length < 3) return nouveau;
+        return [nouveau, {
+          extra: true,
+          rendu: `<span class="tuile petit">${icone('recherche', { taille: 15 })}</span><span class="sugg-texte">
+            <strong>Rechercher « ${echapperHtml(saisie.trim())} » dans l’annuaire</strong><span>nom exact, SIRET et adresse de l’entreprise</span></span>`,
+          action: () => chercherNom(saisie.trim())
+        }];
       },
       surChoix: (c) => {
         if (c.derniere) {
@@ -524,20 +536,46 @@ export async function vueRecettes(conteneur, params) {
       }
     });
 
+    /**
+     * Une entreprise choisie dans l'annuaire devient le client de la recette :
+     * son nom exact, son SIRET, et son adresse rappelée pour vérifier.
+     */
+    function retenirEntreprise(entreprise, chiffres = '') {
+      siretResolu = { nom: entreprise.nom, siret: entreprise.siret || (chiffres.length === 14 ? chiffres : '') };
+      f.client.value = entreprise.nom;
+      eclairer(f.client);
+      modePaiement.proposer(entreprise.nom);
+      const connu = proposes.some((c) => normaliserTexte(c.nom) === normaliserTexte(entreprise.nom));
+      const adresse = entreprise.adresse ? ` · ${entreprise.adresse}` : '';
+      resultatSiret(aide, { nom: entreprise.nom, texte: `${connu ? `${entreprise.nom}, déjà dans vos clients` : `${entreprise.nom} : sera ajouté à vos clients`}${adresse}` });
+      f.libelle.focus();
+    }
+
     /** Un SIREN ou un SIRET : le nom exact vient de l'annuaire des entreprises. */
     async function chercherSiret(chiffres) {
+      fermerAnnuaire();
       resultatSiret(aide);
       try {
         const { entreprise } = await api.rechercherSiret(chiffres);
-        siretResolu = { nom: entreprise.nom, siret: entreprise.siret || (chiffres.length === 14 ? chiffres : '') };
-        f.client.value = entreprise.nom;
-        eclairer(f.client);
-        modePaiement.proposer(entreprise.nom);
-        const connu = proposes.some((c) => normaliserTexte(c.nom) === normaliserTexte(entreprise.nom));
-        resultatSiret(aide, { nom: entreprise.nom, texte: connu ? `${entreprise.nom}, déjà dans vos clients` : `${entreprise.nom} : sera ajouté à vos clients` });
-        f.libelle.focus();
+        retenirEntreprise(entreprise, chiffres);
       } catch (erreur) {
         siretResolu = null;
+        resultatSiret(aide, { erreur: erreur.message });
+      }
+    }
+
+    /** Un nom : les entreprises qui le portent, à vérifier (SIRET, adresse) avant d'en choisir une. */
+    async function chercherNom(nom) {
+      fermerAnnuaire();
+      resultatSiret(aide);
+      try {
+        const resultat = await api.rechercherEntreprises(nom);
+        dire('');
+        listeEntreprises(zoneAnnuaire, resultat, (entreprise) => {
+          fermerAnnuaire();
+          retenirEntreprise(entreprise);
+        });
+      } catch (erreur) {
         resultatSiret(aide, { erreur: erreur.message });
       }
     }
@@ -624,6 +662,7 @@ export async function vueRecettes(conteneur, params) {
       for (const champ of [f.client, f.libelle, f.montant, f.numeroFacture]) champ.value = '';
       effacerErreursFormulaire(f);
       dire('');
+      fermerAnnuaire();
       siretResolu = null;
       saisieAvertie = '';
       avertissement.hidden = true;

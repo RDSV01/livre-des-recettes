@@ -47,7 +47,7 @@ test.describe('identité', () => {
     await expect(form.locator('#p-prenom')).toBeFocused();
     await form.locator('#p-siret').fill('12345678901234');
     await form.locator('[type="submit"]').click();
-    await expect(form.locator('[data-champ="siret"] .erreur-champ')).toContainText('clé de contrôle incorrecte');
+    await expect(form.locator('[data-champ="siret"] .erreur-champ')).toContainText('n’est pas valide');
     await form.locator('#p-annuler').click();
     await expect(page.locator('#zone-identite .identite')).toBeVisible();
     await expect(page.locator('#modifier-identite')).toBeFocused();

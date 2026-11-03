@@ -225,6 +225,29 @@
   gap: var(--e3);
   padding-top: var(--e4);
 }
+/* Importer et Exports : des gestes rares (un import au départ, un export de
+   temps en temps). Plus petits et plus estompés, en bas du menu, sans
+   quitter la navigation au clavier ni la surbrillance de la page ouverte. */
+.liens-rares {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.liens-rares .lien-nav {
+  height: 32px;
+  font-size: 13.5px;
+  font-weight: 480;
+  opacity: 0.8;
+}
+.liens-rares .lien-nav:hover,
+.liens-rares .lien-nav[aria-current='page'] {
+  opacity: 1;
+}
+.liens-rares .lien-nav .icone {
+  width: 16px;
+  height: 16px;
+}
+
 /* Paramètres, et le thème à côté : une icône suffit à une action rare. */
 .ligne-reglages {
   display: flex;
@@ -3019,6 +3042,66 @@ kbd {
 .aide-champ.erreur {
   color: var(--danger-texte);
 }
+/* « Trouvé : STUDIO LUMEN, 12 RUE… » : une adresse longue passe à la ligne. */
+.aide-champ.ok {
+  align-items: flex-start;
+}
+.aide-champ.ok .icone {
+  margin-top: 2px;
+}
+
+/* Les entreprises trouvées dans l'annuaire : une ligne chacune (nom, SIRET,
+   adresse), séparées d'un filet, à vérifier puis choisir d'un clic. */
+.resultats-annuaire {
+  margin-top: 2px;
+}
+.resultats-annuaire-tete {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  color: var(--texte-3);
+}
+.resultats-annuaire ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--bordure-douce);
+}
+.entreprise-annuaire {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--bordure-douce);
+  background: none;
+  color: var(--texte-2);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  transition: background var(--rapide);
+}
+.entreprise-annuaire:hover,
+.entreprise-annuaire:focus-visible {
+  background: var(--survol);
+}
+.entreprise-nom {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+.entreprise-annuaire strong {
+  color: var(--texte);
+  font-size: 13.5px;
+  font-weight: 640;
+}
+.etat-fermee {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--danger-doux);
+  color: var(--danger-texte);
+  font-size: 11.5px;
+  font-weight: 620;
+}
 /* Recette très similaire : non bloquant, dit avant d'enregistrer. */
 .avertissement {
   display: flex;
@@ -3586,14 +3669,16 @@ kbd {
 }
 
 /* Minuteur d'un « Annuler » éphémère : l'anneau se vide jusqu'à la
-   disparition du bouton. Il prend la couleur du texte qui l'entoure. */
+   disparition du bouton, les secondes qui restent en son centre. Il prend la
+   couleur du texte qui l'entoure. */
 .minuteur {
+  position: relative;
   display: inline-grid;
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   margin-left: 6px;
-  vertical-align: -2px;
+  vertical-align: -6px;
 }
 .minuteur svg {
   width: 100%;
@@ -3601,11 +3686,42 @@ kbd {
   rotate: -90deg;
   overflow: visible;
 }
+/* Les secondes : un entier animé par paliers (5, 4, 3, 2, 1), sur la même
+   durée et le même départ que l'anneau, écrit par un compteur CSS. */
+@property --secondes {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+/* Posées par-dessus l'anneau, hors du flux : le soulignement d'un lien
+   « Annuler » ne s'étend pas jusqu'à elles. */
+.minuteur .secondes {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  counter-reset: secondes var(--secondes);
+  animation: secondes-restantes var(--duree) steps(var(--secondes-total), end) var(--ecoule) forwards;
+}
+.minuteur .secondes::before {
+  content: counter(secondes);
+}
+@keyframes secondes-restantes {
+  from {
+    --secondes: var(--secondes-total);
+  }
+  to {
+    --secondes: 0;
+  }
+}
 /* Le cercle de fond, toujours visible, le distingue d'une roue de chargement. */
 .minuteur circle {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.6;
   opacity: 0.3;
 }
 .minuteur .reste {
@@ -3617,15 +3733,27 @@ kbd {
 .btn .minuteur {
   margin-left: 0;
 }
+/* « Annuler » et son anneau centrés l'un sur l'autre : l'anneau, plus haut
+   que le texte, ne fait pas descendre le mot. */
+.lien-bouton:has(.minuteur) {
+  display: inline-flex;
+  align-items: center;
+}
 @keyframes decompter {
   to {
     stroke-dashoffset: 100;
   }
 }
-/* Mouvement réduit : l'anneau reste plein plutôt que de se vider d'un coup. */
+/* Mouvement réduit : l'anneau reste plein plutôt que de se vider d'un coup.
+   Les secondes, elles, ne bougent pas : elles changent de chiffre. Elles
+   gardent leur vraie durée, que la règle générale ramènerait à 1 ms. */
 @media (prefers-reduced-motion: reduce) {
   .minuteur .reste {
     animation-name: none;
+  }
+  .minuteur .secondes {
+    animation-duration: var(--duree) !important;
+    animation-delay: var(--ecoule) !important;
   }
 }
 
@@ -3766,6 +3894,43 @@ kbd {
   margin-top: 2px;
   font-size: 12.5px;
   color: var(--texte-3);
+}
+
+/* Une période sans chiffre d'affaires : une phrase à la place d'une rangée
+   de « 0 € » (écran URSSAF et carte du tableau de bord). */
+.sans-chiffre-affaires {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e3);
+  color: var(--texte-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.sans-chiffre-affaires .icone {
+  margin-top: 1px;
+  color: var(--texte-3);
+}
+.sans-chiffre-affaires strong {
+  display: block;
+  color: var(--texte);
+  font-size: 15px;
+  font-weight: 640;
+}
+.sans-chiffre-affaires p {
+  margin: 2px 0 0;
+}
+.declaration .sans-chiffre-affaires {
+  margin-top: var(--e4);
+  padding-top: var(--e4);
+  border-top: 1px solid var(--bordure-douce);
+}
+.chiffres-cles > .sans-chiffre-affaires {
+  padding: var(--e5);
+  font-size: 14px;
+}
+.chiffres-cles > .sans-chiffre-affaires strong {
+  font-size: 18px;
+  letter-spacing: -0.015em;
 }
 .bloc {
   padding: var(--e5) var(--e5) 0;

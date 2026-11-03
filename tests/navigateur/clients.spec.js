@@ -84,6 +84,31 @@ test('ajouter un client par son SIRET, retrouvé dans l’annuaire', async ({ pa
   expect(clients).toEqual([expect.objectContaining({ nom: ANNUAIRE.boulangerie.nom, siret: ANNUAIRE.boulangerie.siret })]);
 });
 
+test('chercher un client par son nom : SIRET, adresse et état à vérifier, puis le choisir', async ({ page, request }) => {
+  await configurer(request);
+  await ouvrir(page, 'clients');
+  await page.locator('#nouveau-client').click();
+  const form = page.locator('#form-client');
+  await form.locator('#c-recherche').fill('bo');
+  await form.locator('#c-chercher').click();
+  await expect(form.locator('#c-resultat')).toContainText('au moins 3 lettres');
+  await form.locator('#c-recherche').fill('boulangerie des halles');
+  await form.locator('#c-recherche').press('Enter');
+  // Deux homonymes : on les distingue par l'adresse, et le fermé le dit.
+  const resultats = form.locator('.entreprise-annuaire');
+  await expect(resultats).toHaveCount(2);
+  await expect(form.locator('.resultats-annuaire-tete')).toContainText('2 entreprises trouvées');
+  const ouverte = resultats.filter({ hasText: ANNUAIRE.boulangerie.adresse });
+  await expect(ouverte).toContainText(`SIRET ${ANNUAIRE.boulangerie.siret.replace(/^(\d{3})(\d{3})(\d{3})(\d*)$/, '$1 $2 $3 $4')}`);
+  await expect(ouverte.locator('.etat-fermee')).toHaveCount(0);
+  await expect(resultats.filter({ hasText: ANNUAIRE.boulangerieFermee.adresse }).locator('.etat-fermee')).toHaveText('Fermée');
+  await ouverte.click();
+  await expect(form.locator('.entreprise-annuaire')).toHaveCount(0);
+  await expect(form.locator('#c-nom')).toHaveValue(ANNUAIRE.boulangerie.nom);
+  await expect(form.locator('#c-siret')).toHaveValue(ANNUAIRE.boulangerie.siret);
+  await expect(form.locator('#c-resultat')).toContainText(`Trouvé : ${ANNUAIRE.boulangerie.nom}, ${ANNUAIRE.boulangerie.adresse}`);
+});
+
 test('un SIRET à la clé fausse ou inconnu de l’annuaire est dit', async ({ page, request }) => {
   await configurer(request);
   await ouvrir(page, 'clients');
@@ -92,7 +117,7 @@ test('un SIRET à la clé fausse ou inconnu de l’annuaire est dit', async ({ p
   const faux = `${ANNUAIRE.lumen.siret.slice(0, 13)}${(Number(ANNUAIRE.lumen.siret[13]) + 1) % 10}`;
   await form.locator('#c-recherche').fill(faux);
   await form.locator('#c-chercher').click();
-  await expect(form.locator('#c-resultat')).toContainText('clé de contrôle incorrecte');
+  await expect(form.locator('#c-resultat')).toContainText('Ce numéro n’est pas valide');
 });
 
 test('ajouter par le nom ; un doublon et un SIRET invalide sont refusés', async ({ page, request }) => {
@@ -142,12 +167,21 @@ test('renommer un client renomme aussi ses recettes', async ({ page, request }) 
   expect(recettes.map((r) => r.client)).toEqual(['Nouveau Nom', 'Nouveau Nom']);
 });
 
-test('retirer un client du carnet garde ses recettes, et s’annule', async ({ page, request }) => {
+test('retirer un client du carnet se confirme, garde ses recettes, et s’annule', async ({ page, request }) => {
   await configurer(request);
   await ajouterClient(request, { nom: 'À Retirer', siret: ANNUAIRE.atelier.siret });
   await ajouterRecette(request, { client: 'À Retirer' });
   await ouvrir(page, 'clients');
+  // Une confirmation d'abord : « Annuler » ne retire rien.
   await page.locator('#supprimer-client').click();
+  const boite = page.locator('dialog.boite[open]');
+  await expect(boite).toContainText('Retirer À Retirer du carnet ?');
+  await expect(boite).toContainText('sa recette reste dans le livre');
+  await boite.locator('[data-role="annuler"]').click();
+  await expect(boite).toHaveCount(0);
+  expect((await lister(request, '/api/clients')).clients).toHaveLength(1);
+  await page.locator('#supprimer-client').click();
+  await page.locator('dialog.boite[open] [data-role="ok"]').click();
   await expect(page.locator('#liste-clients .bandeau-retour')).toContainText('À Retirer retiré du carnet, ses recettes sont conservées');
   expect((await lister(request, '/api/clients')).clients).toHaveLength(0);
   expect((await lister(request, '/api/recettes')).recettes).toHaveLength(1);

@@ -95,6 +95,7 @@ export const api = {
   // Clients
   listerClients: () => requete('/api/clients'),
   rechercherSiret: (siret) => requete(`/api/clients/recherche-siret${chaineRequete({ siret })}`),
+  rechercherEntreprises: (q) => requete(`/api/clients/recherche-entreprises${chaineRequete({ q })}`),
   creerClient: (client) => requete('/api/clients', { methode: 'POST', corps: client }),
   modifierClient: (id, client) => requete(`/api/clients/${id}`, { methode: 'PUT', corps: client }),
   supprimerClient: (id) => requete(`/api/clients/${id}`, { methode: 'DELETE' }),

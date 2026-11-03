@@ -20,7 +20,8 @@ Saisie guidée, totaux automatiques, exports conformes, et vos données restent 
 ## Fonctionnalités
 
 - Livre des recettes aux six colonnes légales, lu mois par mois avec sous-totaux, recherche,
-  filtres et tri. À la saisie : client retrouvé par son nom ou son SIRET, mode de règlement
+  filtres et tri. À la saisie : client retrouvé par son nom ou son SIRET, nouveau client
+  vérifié dans l'annuaire des entreprises (nom exact, SIRET, adresse), mode de règlement
   repris, numéro de facture suivant proposé, doublon signalé, saisie en série, facture PDF
   jointe. La numérotation des factures est surveillée.
 - Registre des achats aux cinq colonnes légales, avec les justificatifs en PDF.
@@ -75,7 +76,8 @@ seulement depuis votre machine.
   sauvegarde » sur le nouveau.
 
 Tout fonctionne hors ligne. Deux fonctions seulement contactent l'extérieur : la recherche
-d'une entreprise par SIRET quand vous la lancez (seul le numéro cherché est envoyé, à
+d'une entreprise dans l'annuaire, par son nom ou son SIRET, quand vous la lancez (seul ce que
+vous cherchez est envoyé, à
 [recherche-entreprises.api.gouv.fr](https://recherche-entreprises.api.gouv.fr)), et la
 vérification des nouvelles versions sur GitHub, désactivable. Une mise à jour est contrôlée
 par son empreinte SHA-256 avant d'être installée.

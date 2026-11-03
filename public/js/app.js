@@ -36,8 +36,9 @@ import { vueParametres } from './vues/parametres.js';
 
 /**
  * Définition unique des pages : sert à la fois au menu et au routage, dans
- * l'ordre et les groupes du menu (le suivi, les documents, les réglages). Une
- * page peut porter une condition d'affichage (`utile`).
+ * l'ordre et les groupes du menu : le suivi de tous les jours en tête ;
+ * l'import et les exports, gestes rares, plus discrets en bas, au-dessus des
+ * réglages. Une page peut porter une condition d'affichage (`utile`).
  */
 const ROUTES = [
   { chemin: '', label: 'Tableau de bord', icone: 'tableau-de-bord', vue: vueTableauDeBord, forme: 'tableau-de-bord', groupe: 1 },
@@ -80,11 +81,12 @@ function construireRail() {
       ${icone('recherche', { taille: 16 })}<span>Rechercher</span><span class="touches"><kbd>Ctrl</kbd><kbd>K</kbd></span>
     </button>
     <span class="indicateur-nav" aria-hidden="true"></span>
-    <div class="nav-principale">${groupe(1)}${groupe(2)}</div>
+    <div class="nav-principale">${groupe(1)}</div>
     <div class="pied-rail">
       <a class="etat-copie" id="etat-copie" href="#/parametres?section=securite" hidden>
         ${icone('disque', { taille: 18 })}<span class="texte-etat-copie"></span>
       </a>
+      <div class="liens-rares">${liens(2)}</div>
       <div class="ligne-reglages">
         ${liens(3)}
         <button type="button" class="bascule-theme" id="bouton-theme"></button>

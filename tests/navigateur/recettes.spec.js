@@ -32,7 +32,8 @@ test.describe('saisie d’une recette', () => {
     await expect(p.locator('#f-mode')).toHaveValue('virement');
 
     await p.locator('#f-client').fill('Durand Rénovation');
-    await expect(p.locator('.suggestions .sugg.extra')).toContainText('Nouveau client « Durand Rénovation »');
+    await expect(p.locator('.suggestions .sugg.extra').first()).toContainText('Nouveau client « Durand Rénovation »');
+    await expect(p.locator('.suggestions .sugg.extra').nth(1)).toContainText('Rechercher « Durand Rénovation » dans l’annuaire');
     await p.locator('#f-libelle').fill('Site vitrine');
     await p.locator('#f-montant').fill('1200,5');
     await p.locator('#f-montant').blur();
@@ -51,6 +52,35 @@ test.describe('saisie d’une recette', () => {
     // Le client a rejoint le carnet.
     const { clients } = await lister(request, '/api/clients');
     expect(clients.map((c) => c.nom)).toEqual(['Durand Rénovation']);
+  });
+
+  test('le minuteur d’« Annuler » compte les secondes : 5, 4, 3…', async ({ page, request }) => {
+    await configurer(request);
+    await ouvrir(page, 'recettes');
+    const p = await nouvelle(page);
+    await p.locator('#f-client').fill('Client Exemple');
+    await p.locator('#f-montant').fill('40');
+    await p.locator('[type="submit"]').click();
+    // Le chiffre est un compteur CSS : sa valeur se lit dans la propriété animée.
+    // Le décompte part du clic : la ligne peut s'afficher quand il en est déjà à 4.
+    const secondes = page.locator('#registre .minuteur .secondes').first();
+    await expect(secondes).toBeAttached();
+    // Relevé à chaque image pendant 2,6 s, dans la page : aucune valeur ne peut échapper.
+    const suite = await secondes.evaluate((e) => new Promise((fin) => {
+      const vues = [];
+      const debut = performance.now();
+      const relever = () => {
+        const valeur = Number(getComputedStyle(e).getPropertyValue('--secondes'));
+        if (vues.at(-1) !== valeur) vues.push(valeur);
+        if (performance.now() - debut < 2600) requestAnimationFrame(relever);
+        else fin(vues);
+      };
+      relever();
+    }));
+    // Une seconde de moins à chaque palier : 5, 4, 3 (ou 4, 3, 2 si la ligne arrive tard).
+    expect(suite.length).toBeGreaterThanOrEqual(3);
+    expect([4, 5]).toContain(suite[0]);
+    suite.forEach((valeur, i) => { if (i > 0) expect(valeur).toBe(suite[i - 1] - 1); });
   });
 
   test('le total défile sans déplacer les colonnes du registre', async ({ page, request }, info) => {
@@ -198,6 +228,28 @@ test.describe('saisie d’une recette', () => {
     await expect(p.locator('#f-client')).toHaveValue(ANNUAIRE.lumen.nom);
     await expect(p.locator('#f-client-aide')).toContainText(`${ANNUAIRE.lumen.nom} : sera ajouté à vos clients`);
     await p.locator('#f-montant').fill('90');
+    await p.locator('[type="submit"]').click();
+    await expect(page.locator('dialog.panneau')).toHaveCount(0);
+    const { clients } = await lister(request, '/api/clients');
+    expect(clients).toEqual([expect.objectContaining({ nom: ANNUAIRE.lumen.nom, siret: ANNUAIRE.lumen.siret })]);
+  });
+
+  test('un nouveau client cherché par son nom : choisi dans l’annuaire, avec son SIRET et son adresse', async ({ page, request }) => {
+    await configurer(request);
+    await ouvrir(page, 'recettes');
+    const p = await nouvelle(page);
+    await p.locator('#f-client').fill('lumen');
+    const recherche = p.locator('.suggestions .sugg.extra', { hasText: 'Rechercher « lumen » dans l’annuaire' });
+    await expect(p.locator('.suggestions .sugg.extra', { hasText: 'Nouveau client « lumen »' })).toBeVisible();
+    await recherche.click();
+    const resultat = p.locator('#f-client-annuaire .entreprise-annuaire');
+    await expect(resultat).toHaveCount(1);
+    await expect(resultat).toContainText(ANNUAIRE.lumen.adresse);
+    await resultat.click();
+    await expect(p.locator('#f-client')).toHaveValue(ANNUAIRE.lumen.nom);
+    await expect(p.locator('#f-client-aide')).toContainText(`${ANNUAIRE.lumen.nom} : sera ajouté à vos clients · ${ANNUAIRE.lumen.adresse}`);
+    await expect(p.locator('#f-client-annuaire')).toBeHidden();
+    await p.locator('#f-montant').fill('120');
     await p.locator('[type="submit"]').click();
     await expect(page.locator('dialog.panneau')).toHaveCount(0);
     const { clients } = await lister(request, '/api/clients');

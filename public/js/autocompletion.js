@@ -38,9 +38,9 @@ export function eclairer(champ) {
  * @param {(e: object) => string} options.texte texte cherché et inscrit dans le champ
  * @param {(e: object, saisie: string) => string} options.rendu contenu HTML d'une suggestion
  * @param {(e: object) => void} [options.surChoix]
- * @param {(saisie: string, trouves: object[]) => object|null} [options.extra]
- *   suggestion ajoutée en fin de liste (`{ extra: true, rendu, action }` :
- *   créer, rechercher).
+ * @param {(saisie: string, trouves: object[]) => object|object[]|null} [options.extra]
+ *   suggestion (ou suggestions) ajoutée en fin de liste
+ *   (`{ extra: true, rendu, action }` : créer, rechercher).
  * @param {number} [options.max]
  * @returns {{ fermer: () => void }}
  */
@@ -78,8 +78,9 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
       if (debut.length >= max) break;
     }
     elements = [...debut, ...dedans].slice(0, max);
+    // Une ou plusieurs suggestions d'action (créer, rechercher) en fin de liste.
     const ajout = extra?.(saisie, elements);
-    if (ajout) elements.push(ajout);
+    if (ajout) elements.push(...[ajout].flat());
   }
 
   function dessiner() {

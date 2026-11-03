@@ -25,17 +25,20 @@ export const DUREE_RETOUR = 5000;
 
 /**
  * Minuteur d'un « Annuler » éphémère : un petit anneau qui se vide au rythme
- * du temps restant, pour qu'on voie qu'il va disparaître. `debut` (le
- * `Date.now()` du départ) le fait reprendre au même point quand la ligne qui
- * le porte est redessinée (tri, filtre).
+ * du temps restant, avec les secondes qui restent en son centre (5, 4, 3, 2,
+ * 1), pour qu'on voie qu'il va disparaître. Anneau et chiffres sont animés
+ * par la feuille de style, sur la même horloge : `debut` (le `Date.now()` du
+ * départ) les fait reprendre au même point quand la ligne qui les porte est
+ * redessinée (tri, filtre).
  *
  * @param {number} duree en millisecondes.
  * @param {number} [debut]
  */
 export function minuteur(duree, debut = Date.now()) {
   const ecoule = Math.min(duree, Math.max(0, Date.now() - debut));
-  return `<span class="minuteur" aria-hidden="true" style="--duree:${duree}ms;--ecoule:-${ecoule}ms"><svg viewBox="0 0 16 16">
-    <circle cx="8" cy="8" r="6"/><circle class="reste" cx="8" cy="8" r="6" pathLength="100"/></svg></span>`;
+  const secondes = Math.max(1, Math.round(duree / 1000));
+  return `<span class="minuteur" aria-hidden="true" style="--duree:${duree}ms;--ecoule:-${ecoule}ms;--secondes-total:${secondes}"><svg viewBox="0 0 16 16">
+    <circle cx="8" cy="8" r="7"/><circle class="reste" cx="8" cy="8" r="7" pathLength="100"/></svg><span class="secondes"></span></span>`;
 }
 
 /** Message lu par les lecteurs d'écran, sans rien afficher. */

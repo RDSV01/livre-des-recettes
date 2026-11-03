@@ -109,7 +109,7 @@ function verifierIdentifiant(erreurs, cle, valeur, type) {
   if (chiffres && !new RegExp(`^\\d{${longueur}}$`).test(chiffres)) {
     erreurs[cle] = `Un ${type} comporte exactement ${longueur} chiffres.`;
   } else if (chiffres && !cleSirenValide(chiffres)) {
-    erreurs[cle] = `Ce ${type} ne semble pas valide (clé de contrôle incorrecte) : vérifiez la saisie.`;
+    erreurs[cle] = `Ce ${type} n’est pas valide : vérifiez la saisie.`;
   }
   return chiffres;
 }

@@ -138,8 +138,8 @@ test('cleSirenValide accepte l’exception historique de La Poste', () => {
 });
 
 test('un SIREN ou SIRET à clé invalide est refusé avec un message clair', () => {
-  assert.match(validerParametres({ siren: '123456789' }).erreurs.siren, /clé de contrôle/);
-  assert.match(validerClient({ nom: 'X', siret: '12345678900012' }).erreurs.siret, /clé de contrôle/);
+  assert.match(validerParametres({ siren: '123456789' }).erreurs.siren, /n’est pas valide/);
+  assert.match(validerClient({ nom: 'X', siret: '12345678900012' }).erreurs.siret, /n’est pas valide/);
 });
 
 // ---- Achats -------------------------------------------------------------------
