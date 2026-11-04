@@ -71,7 +71,7 @@ export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
       ? `<div class="piece-jointe${nouvelle ? ' arrive-piece' : ''}">
           <span class="piece-icone">${icone('fichier-texte', { taille: 18 })}<em>PDF</em></span>
           <span class="piece-infos"><strong>${echapperHtml(nomDe(actuelle))}</strong>
-            <span>${tailleDe(actuelle) ? poidsLisible(tailleDe(actuelle)) : 'PDF'}${nouvelle ? ' · sera joint à l’enregistrement' : ''}</span></span>
+            <span>${tailleDe(actuelle) ? poidsLisible(tailleDe(actuelle)) : 'PDF'}${nouvelle ? ', sera joint à l’enregistrement' : ''}</span></span>
           <span class="piece-progression" aria-hidden="true"></span>
           <button type="button" class="btn-icone" data-piece="voir" aria-label="Voir ${quoi}" title="Voir">${icone('oeil', { taille: 16 })}</button>
           <button type="button" class="btn-icone danger" data-piece="retirer" aria-label="Retirer ${quoi}" title="Retirer">${icone('croix', { taille: 16 })}</button>

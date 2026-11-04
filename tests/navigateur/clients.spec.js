@@ -26,7 +26,7 @@ test('la liste, classée par chiffre d’affaires, par nom ou par récence', asy
   await ajouterRecette(request, { client: 'Zénith', montant: 900, dateEncaissement: dansJours(-60) });
   await ajouterRecette(request, { client: 'Milieu', montant: 300, dateEncaissement: dansJours(-1) });
   await ouvrir(page, 'clients');
-  await expect(page.locator('#resume-clients')).toHaveText('3 clients·1 avec SIRET');
+  await expect(page.locator('#resume-clients')).toHaveText('3 clients, dont 1 avec SIRET');
   const noms = page.locator('#liste-clients .client-ligne .nom');
   await expect(noms).toHaveText(['Zénith', 'Milieu', 'Alpha']);
   // Le plus gros client est montré d'emblée.

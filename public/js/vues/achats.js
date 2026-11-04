@@ -223,7 +223,7 @@ export async function vueAchats(conteneur, params) {
       quoi: 'le justificatif',
       apercu: () => ({
         url: urlPiece('achats', achat.id),
-        details: [achat.fournisseur, formaterMontant(achat.montant, devise), formaterDate(achat.dateReglement, formatDate)].join(' · ')
+        details: [achat.fournisseur, formaterMontant(achat.montant, devise), formaterDate(achat.dateReglement, formatDate)].join(', ')
       })
     });
 

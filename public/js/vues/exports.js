@@ -207,7 +207,8 @@ export async function vueExports(conteneur, params) {
 
     boutons.forEach((b) => { b.disabled = true; });
     const reprendre = patienter(bouton, 'Contrôle…');
-    zone.innerHTML = `<div class="controle-tete"><strong>Contrôle avant export · ${echapperHtml(titrePeriode(periode))}</strong>
+    const titre = titrePeriode(periode);
+    zone.innerHTML = `<div class="controle-tete"><strong>Contrôle avant export : ${echapperHtml(titre.charAt(0).toLowerCase() + titre.slice(1))}</strong>
         <button type="button" class="btn-icone" data-fermer-controle aria-label="Revenir à l’aperçu" title="Revenir à l’aperçu">${icone('croix', { taille: 15 })}</button></div>
       <ul class="points"></ul><p class="conclusion-controle" hidden></p>`;
     cadre.classList.add('en-controle');

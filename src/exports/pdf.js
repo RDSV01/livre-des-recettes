@@ -61,16 +61,15 @@ export function genererPdf(registre, parametres, flux) {
       doc.font('Helvetica-Bold').fontSize(15).fillColor(COULEUR_TEXTE)
         .text(texteSur(parametres.nomEntreprise), MARGE, MARGE);
     }
-    const identite = identiteEntreprise(parametres).join('  ·  ');
+    const identite = identiteEntreprise(parametres).join(', ');
     if (identite) {
       doc.font('Helvetica').fontSize(9).fillColor(COULEUR_SECONDAIRE)
         .text(texteSur(identite), { width: LARGEUR_TABLEAU });
     }
     doc.moveDown(0.8);
     doc.font('Helvetica-Bold').fontSize(13).fillColor(COULEUR_TEXTE).text(titreComplet);
-    const sousTitre = `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}` +
-      `  ·  ${registre.resume}` +
-      `  ·  total ${texteSur(formaterMontant(registre.total, parametres.devise))}`;
+    const sousTitre = `${registre.resume}, total ${texteSur(formaterMontant(registre.total, parametres.devise))}` +
+      `, édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}`;
     doc.font('Helvetica').fontSize(9).fillColor(COULEUR_SECONDAIRE).text(texteSur(sousTitre));
     doc.moveDown(0.8);
   }

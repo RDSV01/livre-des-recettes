@@ -83,7 +83,7 @@ function regle({ titre, ca, progression, devise, messageAttention, messageDepass
           aria-label="${echapperHtml(titre)} : ${pourcentage} % du seuil">
           <span class="rempli" style="width:${ca > 0 ? `max(10px, ${Math.min(100, (ca / reference) * 100)}%)` : '0'}"></span>
           ${majore ? `<span class="repere" style="left:calc(${(progression.seuil / majore) * 100}% - 1px)"
-            title="Seuil de base : ${echapperHtml(formaterMontant(progression.seuil, devise))} · seuil majoré : ${echapperHtml(formaterMontant(majore, devise))}"></span>` : ''}
+            title="Seuil de base : ${echapperHtml(formaterMontant(progression.seuil, devise))} ; seuil majoré : ${echapperHtml(formaterMontant(majore, devise))}"></span>` : ''}
         </div>
         ${niveau === 'depasse' ? '' : `<span class="reste" title="${pourcentage} % du seuil atteints">Il reste ${echapperHtml(formaterMontantEntier(progression.restant, devise))}</span>`}
       </div>

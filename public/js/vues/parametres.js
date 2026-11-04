@@ -228,7 +228,7 @@ export async function vueParametres(conteneur, params) {
       ${etat.systeme.premierLancement ? `
       <section class="carte bienvenue" id="carte-bienvenue">
         <div class="carte-corps">
-          <h2>Bienvenue !</h2>
+          <h2>Bienvenue</h2>
           <p>Laissez-vous guider : quelques questions, deux minutes, et votre entreprise, votre activité et votre
           rythme de déclaration sont en place. Vous pouvez aussi tout renseigner ci-dessous, section par section.</p>
           <div class="actions">
@@ -642,7 +642,7 @@ export async function vueParametres(conteneur, params) {
           <div class="supports">${supports.map((s) => `
             <button type="button" class="support${s.choisi ? ' choisi' : ''}" data-support="${echapperHtml(s.chemin)}">
               ${icone('disque', { taille: 18 })}<span><strong>${echapperHtml(s.libelle)}</strong>
-              <small>${s.libre != null ? `${poidsLisible(s.libre)} libres` : 'Place libre inconnue'}${s.amovible ? ' · amovible' : ''}${s.choisi ? ' · support actuel' : ''}</small></span>
+              <small>${s.libre != null ? `${poidsLisible(s.libre)} libres` : 'Place libre inconnue'}${s.amovible ? ', amovible' : ''}${s.choisi ? ', support actuel' : ''}</small></span>
             </button>`).join('')}</div>`;
     } catch (erreur) {
       zone.innerHTML = `<p class="message-erreur">${icone('cercle-alerte', { taille: 14 })}<span>${echapperHtml(erreur.message)}</span></p>`;

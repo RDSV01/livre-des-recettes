@@ -14,13 +14,13 @@ test.describe('menu et routage', () => {
     await ouvrir(page);
     const pages = [
       ['Tableau de bord', '', 'Livre des recettes'],
-      ['Recettes', 'recettes', 'Recettes · Livre des recettes'],
-      ['Achats', 'achats', 'Achats · Livre des recettes'],
-      ['URSSAF', 'urssaf', 'URSSAF · Livre des recettes'],
-      ['Clients', 'clients', 'Clients · Livre des recettes'],
-      ['Importer', 'import', 'Importer · Livre des recettes'],
-      ['Exports', 'exports', 'Exports · Livre des recettes'],
-      ['Paramètres', 'parametres', 'Paramètres · Livre des recettes']
+      ['Recettes', 'recettes', 'Recettes - Livre des recettes'],
+      ['Achats', 'achats', 'Achats - Livre des recettes'],
+      ['URSSAF', 'urssaf', 'URSSAF - Livre des recettes'],
+      ['Clients', 'clients', 'Clients - Livre des recettes'],
+      ['Importer', 'import', 'Importer - Livre des recettes'],
+      ['Exports', 'exports', 'Exports - Livre des recettes'],
+      ['Paramètres', 'parametres', 'Paramètres - Livre des recettes']
     ];
     for (const [libelle, route, titre] of pages) {
       await page.locator('#navigation .lien-nav', { hasText: libelle }).click();

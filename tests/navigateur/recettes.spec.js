@@ -226,7 +226,7 @@ test.describe('saisie d’une recette', () => {
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await expect(p.locator('#f-client')).toHaveValue(ANNUAIRE.lumen.nom);
-    await expect(p.locator('#f-client-aide')).toContainText(`${ANNUAIRE.lumen.nom} : sera ajouté à vos clients`);
+    await expect(p.locator('#f-client-aide')).toContainText(`${ANNUAIRE.lumen.nom}, ${ANNUAIRE.lumen.adresse} : sera ajouté à vos clients`);
     await p.locator('#f-montant').fill('90');
     await p.locator('[type="submit"]').click();
     await expect(page.locator('dialog.panneau')).toHaveCount(0);
@@ -247,7 +247,7 @@ test.describe('saisie d’une recette', () => {
     await expect(resultat).toContainText(ANNUAIRE.lumen.adresse);
     await resultat.click();
     await expect(p.locator('#f-client')).toHaveValue(ANNUAIRE.lumen.nom);
-    await expect(p.locator('#f-client-aide')).toContainText(`${ANNUAIRE.lumen.nom} : sera ajouté à vos clients · ${ANNUAIRE.lumen.adresse}`);
+    await expect(p.locator('#f-client-aide')).toContainText(`${ANNUAIRE.lumen.nom}, ${ANNUAIRE.lumen.adresse} : sera ajouté à vos clients`);
     await expect(p.locator('#f-client-annuaire')).toBeHidden();
     await p.locator('#f-montant').fill('120');
     await p.locator('[type="submit"]').click();
@@ -490,7 +490,7 @@ test.describe('sélection et actions groupées', () => {
     await ligne(page, b.id).locator('[data-cocher]').check();
     const barre = page.locator('#barre-selection');
     await expect(barre).toBeVisible();
-    await expect(barre.locator('.compte')).toHaveText(`2 recettes sélectionnées · ${euros(30)}`.replace(/\s/g, ' '));
+    await expect(barre.locator('.compte')).toHaveText(`2 recettes sélectionnées (${euros(30)})`.replace(/\s/g, ' '));
     await expect(page.locator('#tout-selectionner')).toHaveJSProperty('indeterminate', true);
     await barre.locator('[data-lot="supprimer"]').click();
     await expect(barre.locator('.compte')).toHaveText('2 recettes supprimées');

@@ -52,7 +52,7 @@ export function ressort({ duree = 0.4, rebond = 0 } = {}) {
   };
 }
 
-/** Les surbrillances qui rejoignent l'élément choisi : un léger dépassement. */
-export const RESSORT_SURBRILLANCE = ressort({ duree: 0.42, rebond: 0.25 });
+/** Les surbrillances qui rejoignent l'élément choisi, sans dépassement. */
+export const RESSORT_SURBRILLANCE = ressort({ duree: 0.42, rebond: 0 });
 /** Les déplacements vifs, sans dépassement (glissements dans une liste). */
 export const RESSORT_VIF = ressort({ duree: 0.3, rebond: 0 });

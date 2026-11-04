@@ -79,7 +79,7 @@ export async function vueClients(conteneur, params) {
     const avecSiret = clients.filter((c) => c.siret).length;
     page.querySelector('#resume-clients').innerHTML = clients.length === 0
       ? 'Votre carnet de clients.'
-      : `${accorder(clients.length, 'client')}${avecSiret ? `<span class="point">·</span>${avecSiret} avec SIRET` : ''}`;
+      : `${accorder(clients.length, 'client')}${avecSiret ? `, dont ${avecSiret} avec SIRET` : ''}`;
   }
 
   /** Dernier encaissement de chaque client (date ISO), pour l'ordre « Récents ». */
@@ -352,7 +352,7 @@ export async function vueClients(conteneur, params) {
       apercuPiece({
         nom: recette.pieceJointe.nom,
         details: [recette.client, formaterMontant(recette.montant, devise), formaterDate(recette.dateEncaissement, formatDate),
-          recette.pieceJointe.taille ? poidsLisible(recette.pieceJointe.taille) : ''].filter(Boolean).join(' · '),
+          recette.pieceJointe.taille ? poidsLisible(recette.pieceJointe.taille) : ''].filter(Boolean).join(', '),
         url: urlPiece('recettes', recette.id)
       });
       return;

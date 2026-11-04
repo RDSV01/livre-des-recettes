@@ -135,13 +135,13 @@ export async function ouvrirRechercheGlobale({ pages }) {
         aller: `#/clients?client=${encodeURIComponent(c.id)}`
       })));
       ajouter('Recettes', 'recettes', trouves(indexRecettes, 'recettes').map((r) => ({
-        icone: 'recettes', texte: [r.client, r.libelle].filter(Boolean).join(' · '),
-        detail: [formaterDate(r.dateEncaissement, formatDate), r.numeroFacture, formaterMontant(r.montant, devise)].filter(Boolean).join(' · '),
+        icone: 'recettes', texte: [r.client, r.libelle].filter(Boolean).join(', '),
+        detail: [formaterDate(r.dateEncaissement, formatDate), r.numeroFacture, formaterMontant(r.montant, devise)].filter(Boolean).join(', '),
         aller: `#/recettes?voir=${encodeURIComponent(r.id)}`
       })));
       ajouter('Achats', 'achats', trouves(indexAchats, 'achats').map((a) => ({
         icone: 'achats', texte: a.fournisseur,
-        detail: [formaterDate(a.dateReglement, formatDate), a.referenceFacture, formaterMontant(a.montant, devise)].filter(Boolean).join(' · '),
+        detail: [formaterDate(a.dateReglement, formatDate), a.referenceFacture, formaterMontant(a.montant, devise)].filter(Boolean).join(', '),
         aller: `#/achats?voir=${encodeURIComponent(a.id)}`
       })));
     }

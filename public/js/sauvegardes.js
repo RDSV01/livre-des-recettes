@@ -26,7 +26,7 @@ export function listeSauvegardes(sauvegardes) {
     const quand = new Date(s.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     return `<div class="ligne-gestion">
       ${icone(nomIcone, { taille: 17 })}
-      <span class="quoi" title="${echapperHtml(s.fichier)}"><strong>${quoi}</strong> <span class="attenue">· ${precision || poidsLisible(s.taille)}</span></span>
+      <span class="quoi" title="${echapperHtml(s.fichier)}"><strong>${quoi}</strong><span class="attenue">, ${precision || poidsLisible(s.taille)}</span></span>
       <span class="quand">${echapperHtml(quand)}</span>
       <button type="button" class="btn btn-petit" data-fichier="${echapperHtml(s.fichier)}">${icone('restaurer', { taille: 15 })}Restaurer</button>
     </div>`;

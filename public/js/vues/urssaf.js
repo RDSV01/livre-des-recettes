@@ -142,18 +142,17 @@ export async function vueUrssaf(conteneur, params) {
   const rythme = () => {
     const periodicite = p().periodiciteUrssaf;
     const acre = periodeAcre(p());
+    const activite = libelleActivite(p());
     const morceaux = [
       periodicite === 'mois' ? 'Déclaration mensuelle' : periodicite === 'trimestre' ? 'Déclaration trimestrielle' : 'Rythme de déclaration non renseigné',
-      p().typeActivite ? echapperHtml(libelleActivite(p())) : 'activité non renseignée',
+      // Au fil de la phrase, le libellé de l'activité perd sa majuscule.
+      activite ? echapperHtml(activite.charAt(0).toLowerCase() + activite.slice(1)) : 'activité non renseignée',
       `${p().versementLiberatoire ? 'avec' : 'sans'} versement libératoire`,
       // L'ACRE en cours se rappelle ; terminée, elle n'a plus rien à dire ici.
       // Espaces insécables : la mention ne se coupe pas en fin de ligne.
       ...(acre && acre.fin >= aujourdHui ? [`ACRE\u00a0jusqu’au\u00a0${echapperHtml(formaterDate(acre.fin, p().formatDate))}`] : [])
     ];
-    // Chaque morceau reste d'un seul tenant : la ligne ne se coupe qu'après un
-    // point (`<wbr>`, sans ajouter d'espace).
-    const point = '<span class="point">·</span><wbr>';
-    return `${morceaux.map((m) => `<span class="morceau">${m}</span>`).join(point)}${point}<a href="#/parametres?section=regime">Modifier</a>`;
+    return `${morceaux.join(', ')} <a class="lien-modifier" href="#/parametres?section=regime">Modifier</a>`;
   };
 
   conteneur.innerHTML = `

@@ -105,7 +105,7 @@ test('« Configurer plus tard » referme l’accueil pour de bon ; les paramètr
   // Rien n'est configuré : la carte de bienvenue des paramètres relance l'accueil.
   await ouvrir(page, 'parametres');
   const bienvenue = page.locator('#carte-bienvenue');
-  await expect(bienvenue).toContainText('Bienvenue !');
+  await expect(bienvenue).toContainText('Bienvenue');
   await bienvenue.locator('#reprendre-accueil').click();
   await expect(accueil(page)).toBeVisible();
 });

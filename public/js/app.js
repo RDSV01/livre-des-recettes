@@ -260,7 +260,7 @@ async function afficherVue() {
     }, 180);
     try {
       await route.vue(conteneur, params);
-      document.title = route.chemin ? `${route.label} · Livre des recettes` : 'Livre des recettes';
+      document.title = route.chemin ? `${route.label} - Livre des recettes` : 'Livre des recettes';
       rendreBandeaux();
     } catch (erreur) {
       console.error(erreur);

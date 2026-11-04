@@ -515,7 +515,7 @@ export function installerRegistre(carte, registre) {
         Afficher ${restantes > 1 ? `les ${restantes} ${nom.pluriel} restant${e}s` : `${nom.feminin ? 'la dernière' : 'le dernier'} ${nom.singulier}`}
       </button>`) : '');
     refs.pied.innerHTML = `<tr><td></td><td colspan="${colonnes.length - 1}">${filtre ? 'Total des lignes filtrées' : 'Total'}
-      <span class="attenue">· ${accorder(affichees.length, nom.singulier, nom.pluriel)}</span></td>
+      <span class="attenue">(${accorder(affichees.length, nom.singulier, nom.pluriel)})</span></td>
       <td class="montant"><span data-total>${echapperHtml(formaterMontant(total, devise))}</span></td><td></td></tr>`;
     reserverTotal(total);
     suivreTotal(totalPrecedent, total, anime);
@@ -718,7 +718,7 @@ export function installerRegistre(carte, registre) {
     // dit quand d'autres restent hors du lot, juste avant « Supprimer ».
     const horsLot = affichees.length - idsVisibles.length;
     barre.hidden = false;
-    barre.innerHTML = `<span class="compte">${accorder(choisies.length, `${nom.singulier} sélectionné${e}`, `${nom.pluriel} sélectionné${e}s`)} · ${echapperHtml(formaterMontant(total, devise))}</span>
+    barre.innerHTML = `<span class="compte">${accorder(choisies.length, `${nom.singulier} sélectionné${e}`, `${nom.pluriel} sélectionné${e}s`)} (${echapperHtml(formaterMontant(total, devise))})</span>
       ${horsLot > 0 && refs.toutSelectionner.checked ? `<span class="note-selection">${horsLot} autres non affiché${e}s, hors du lot</span>` : ''}
       ${(registre.actionsLot ?? []).map((a) => `<button type="button" class="btn" data-lot="${a.code}">${echapperHtml(a.libelle)}</button>`).join('')}
       <button type="button" class="btn danger" data-lot="supprimer">${icone('corbeille', { taille: 15 })}Supprimer</button>
@@ -878,7 +878,7 @@ export function installerRegistre(carte, registre) {
     apercuPiece({
       nom: p.nom,
       details: [ligne[registre.cleTiers], formaterMontant(ligne.montant, devise),
-        formaterDate(ligne[registre.cleDate], formatDate), p.taille ? poidsLisible(p.taille) : ''].filter(Boolean).join(' · '),
+        formaterDate(ligne[registre.cleDate], formatDate), p.taille ? poidsLisible(p.taille) : ''].filter(Boolean).join(', '),
       url: urlPiece(registre.id, ligne.id),
       remplacer: (fichier) => joindre(ligne, fichier),
       retirer: () => retirerPiece(ligne)

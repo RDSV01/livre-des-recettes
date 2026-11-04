@@ -94,7 +94,7 @@ export function genererRapportPdf(rapport, parametres, flux) {
       doc.font('Helvetica-Bold').fontSize(16).fillColor(COULEURS.texte)
         .text(texteSur(parametres.nomEntreprise), MARGE, MARGE, { width: LARGEUR });
     }
-    const identite = identiteEntreprise(parametres).join('  ·  ');
+    const identite = identiteEntreprise(parametres).join(', ');
     if (identite) {
       doc.font('Helvetica').fontSize(9).fillColor(COULEURS.secondaire)
         .text(texteSur(identite), { width: LARGEUR });
@@ -105,10 +105,11 @@ export function genererRapportPdf(rapport, parametres, flux) {
 
     // Le libellé de l'activité porte déjà sa catégorie de bénéfices
     // (« Activité libérale (BNC) ») : la répéter n'apprendrait rien.
+    // Une ligne chacun : le libellé de l'activité porte déjà ses deux-points.
     const sousTitre = [
-      `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}`,
-      libelleActivite(parametres)
-    ].filter(Boolean).join('  ·  ');
+      libelleActivite(parametres),
+      `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}`
+    ].filter(Boolean).join('\n');
     doc.font('Helvetica').fontSize(9).fillColor(COULEURS.secondaire).text(texteSur(sousTitre));
     doc.moveDown(0.3);
     commentaire(
@@ -383,7 +384,7 @@ export function genererRapportPdf(rapport, parametres, flux) {
     );
   }
 
-  numeroterPages(doc, { largeur: LARGEUR, mention: `${titre}  ·  document de gestion interne` });
+  numeroterPages(doc, { largeur: LARGEUR, mention: `${titre}, document de gestion interne` });
 
   doc.end();
 }

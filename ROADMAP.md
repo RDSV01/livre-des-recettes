@@ -18,6 +18,7 @@ locale, légère et simple.
 - Retirer un client du carnet demande confirmation.
 - Importer et Exports, gestes rares, passent en bas du menu.
 - Messages d'erreur plus simples, sans détail technique.
+- v2.3.1 : correction design.
 
 ### v2.2
 
@@ -69,7 +70,7 @@ locale, légère et simple.
   ajoutés aux exports sur demande.
 - Saisie dans un panneau latéral, la liste restant visible, avec autocomplétion du client
   et du libellé.
-- Retours sur place (« Ajoutée · Annuler », « Enregistré ») plutôt que des notifications.
+- Retours sur place (« Ajoutée » avec « Annuler », « Enregistré ») plutôt que des notifications.
 - Champ de date maison : saisie au clavier, ou calendrier aux couleurs de l'application.
 - Tableau de bord refait : chiffre d'affaires en tête, graphique mensuel, carte de la
   déclaration URSSAF à faire.

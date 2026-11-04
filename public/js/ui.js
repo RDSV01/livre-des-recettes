@@ -624,7 +624,7 @@ export function listeEntreprises(zone, { entreprises, total }, surChoix) {
       : `${accorder(entreprises.length, 'entreprise trouvée', 'entreprises trouvées')} : choisissez la bonne.`}</p>
     <ul>${entreprises.map((e, i) => `<li><button type="button" class="entreprise-annuaire" data-entreprise="${i}">
       <span class="entreprise-nom"><strong>${echapperHtml(e.nom)}</strong>${e.active ? '' : '<span class="etat-fermee">Fermée</span>'}</span>
-      <span>${e.siret ? `SIRET ${siretLisible(e.siret)}` : `SIREN ${siretLisible(e.siren)}`}${e.creation ? ` · créée en ${e.creation.slice(0, 4)}` : ''}</span>
+      <span>${e.siret ? `SIRET ${siretLisible(e.siret)}` : `SIREN ${siretLisible(e.siren)}`}${e.creation ? `, créée en ${e.creation.slice(0, 4)}` : ''}</span>
       <span>${e.adresse ? echapperHtml(e.adresse) : 'Adresse non diffusée'}</span>
     </button></li>`).join('')}</ul>`;
   zone.querySelectorAll('[data-entreprise]').forEach((bouton) => bouton.addEventListener('click', () => {

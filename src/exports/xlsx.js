@@ -35,15 +35,14 @@ export async function genererXlsx(registre, parametres) {
     const ligne = feuille.addRow([parametres.nomEntreprise]);
     ligne.font = { bold: true, size: 14 };
   }
-  const identite = identiteEntreprise(parametres).join(' · ');
+  const identite = identiteEntreprise(parametres).join(', ');
   if (identite) {
     feuille.addRow([identite]).font = { color: { argb: COULEUR_SECONDAIRE }, size: 10 };
   }
   const titre = feuille.addRow([`${registre.titreDocument} - ${registre.titrePeriode}`]);
   titre.font = { bold: true, size: 12 };
   feuille.addRow([
-    `Édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}` +
-    ` · ${registre.resume}`
+    `${registre.resume}, édité le ${formaterDate(aujourdHuiIso(), parametres.formatDate)}`
   ]).font = { color: { argb: COULEUR_SECONDAIRE }, size: 10 };
   feuille.addRow([]);
 

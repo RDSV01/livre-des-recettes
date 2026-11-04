@@ -53,14 +53,13 @@
   width: 34px;
   height: 34px;
   border-radius: var(--rayon-groupe);
-  background: linear-gradient(145deg, var(--logo-haut), var(--logo-bas));
+  background: var(--logo);
   color: var(--sur-plein);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
 }
 .marque-nom {
   min-width: 0;
   font-size: 15.5px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
@@ -178,14 +177,13 @@
 }
 .lien-nav[aria-current='page'] {
   color: var(--rail-texte-fort);
-  font-weight: 620;
+  font-weight: 600;
 }
 .lien-nav .icone {
-  transition: color var(--rapide), scale var(--moyen) var(--sortie);
+  transition: color var(--rapide);
 }
 .lien-nav[aria-current='page'] .icone {
   color: var(--rail-icone-active);
-  scale: 1.08;
 }
 .lien-nav[data-route='recettes'][aria-current='page'] .icone {
   color: var(--sarcelle-rail);
@@ -211,7 +209,7 @@
   background: var(--rail-alerte-fond);
   color: var(--rail-alerte-texte);
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .alerte-nav.retard {
   background: var(--rail-retard-fond);
@@ -379,7 +377,7 @@
   font-size: 27px;
   line-height: 1.2;
   letter-spacing: -0.022em;
-  font-weight: 700;
+  font-weight: 600;
 }
 /* Date posée au-dessus de la salutation du tableau de bord. */
 .surtitre {
@@ -394,13 +392,8 @@
   font-size: 14.5px;
   text-wrap: pretty;
 }
-.point {
-  margin: 0 7px;
-  color: var(--bordure-controle);
-}
-/* Morceau d'une ligne à points (écran URSSAF) : on ne le coupe pas en deux. */
-.morceau {
-  white-space: nowrap;
+.lien-modifier {
+  margin-left: 6px;
 }
 .actions {
   display: flex;
@@ -484,7 +477,7 @@
   background: var(--accent);
   border-color: var(--accent);
   color: var(--sur-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(37, 99, 235, 0.3);
+  box-shadow: var(--ombre-carte);
 }
 .btn-principal .icone {
   color: inherit;
@@ -928,7 +921,7 @@ a.btn-petit {
   margin: auto 0 var(--e2);
   padding-top: var(--e2);
   font-size: 25px;
-  font-weight: 680;
+  font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.025em;
   white-space: nowrap;
@@ -1073,7 +1066,7 @@ a.btn-petit {
 }
 .cle strong {
   color: var(--texte);
-  font-weight: 620;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .legende .compteurs {
@@ -1082,7 +1075,7 @@ a.btn-petit {
 }
 .legende .compteurs strong {
   color: var(--texte-2);
-  font-weight: 620;
+  font-weight: 600;
 }
 
 .grille-tableau {
@@ -1130,7 +1123,7 @@ a.btn-petit {
 }
 .graphique .axe-courant {
   fill: var(--texte);
-  font-weight: 650;
+  font-weight: 600;
 }
 .graphique .colonne .zone {
   fill: transparent;
@@ -1174,7 +1167,7 @@ a.btn-petit {
 }
 .graphique .etiquette-valeur.meilleur {
   fill: var(--texte);
-  font-weight: 700;
+  font-weight: 600;
 }
 .barres {
   transform-box: fill-box;
@@ -1270,7 +1263,7 @@ a.btn-petit {
 .bulle-graphique strong {
   display: block;
   margin-bottom: 6px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .bulle-graphique .ligne {
   display: flex;
@@ -1302,7 +1295,7 @@ a.btn-petit {
   border-top: 0;
 }
 .bulle-graphique .total span:last-child {
-  font-weight: 680;
+  font-weight: 600;
 }
 
 /* Le tableau des chiffres prend la place du graphique, sans agrandir la carte :
@@ -1373,7 +1366,7 @@ a.btn-petit {
 }
 .declaration-periode {
   font-size: 18px;
-  font-weight: 680;
+  font-weight: 600;
   letter-spacing: -0.015em;
 }
 .echeance {
@@ -1416,7 +1409,7 @@ a.btn-petit {
 }
 .declaration .ligne-montant.principal .valeur {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 .note-estimation {
@@ -1444,11 +1437,11 @@ a.btn-petit {
 }
 .ligne-montant.reste {
   color: var(--texte);
-  font-weight: 620;
+  font-weight: 600;
 }
 .ligne-montant.reste .valeur {
   color: var(--succes-texte);
-  font-weight: 700;
+  font-weight: 600;
 }
 .ligne-montant small {
   font-size: 12px;
@@ -1535,7 +1528,7 @@ a.btn-petit {
   min-width: 0;
 }
 .texte-renouveler strong {
-  font-weight: 620;
+  font-weight: 600;
 }
 .texte-renouveler small {
   display: block;
@@ -1612,7 +1605,7 @@ a.btn-petit {
 }
 .regime h3 {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .regime .explication {
   margin-top: 2px;
@@ -1663,7 +1656,7 @@ a.btn-petit {
 }
 .regle-tete .valeurs strong {
   color: var(--texte);
-  font-weight: 650;
+  font-weight: 600;
 }
 .piste {
   position: relative;
@@ -1766,7 +1759,7 @@ a.btn-petit {
   white-space: nowrap;
 }
 .tableau td.montant {
-  font-weight: 620;
+  font-weight: 600;
 }
 .tableau .date {
   white-space: nowrap;
@@ -1813,7 +1806,7 @@ a.btn-petit {
   padding-bottom: 14px;
   border-bottom: 0;
   background: var(--carte-2);
-  font-weight: 650;
+  font-weight: 600;
 }
 .tableau tfoot tr:last-child td:first-child {
   border-bottom-left-radius: var(--rayon-carte);
@@ -1884,7 +1877,7 @@ p.vide {
   background: var(--accent);
   color: var(--sur-accent);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .filtres-actifs {
@@ -2093,7 +2086,7 @@ p.vide {
   color: var(--alerte);
 }
 .avis strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 .avis p + p:not(.aide-avis) {
   margin-top: 3px;
@@ -2135,7 +2128,7 @@ p.vide {
 }
 .resume-registre strong {
   color: var(--texte);
-  font-weight: 680;
+  font-weight: 600;
 }
 .lien-discret {
   display: inline-flex;
@@ -2243,7 +2236,7 @@ th.montant .tri {
   font-size: 13px;
 }
 .separateur-mois .mois {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--texte);
 }
 .separateur-mois .compte {
@@ -2251,7 +2244,7 @@ th.montant .tri {
   color: var(--texte-3);
 }
 .separateur-mois td.montant {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--texte-2);
 }
 .tableau tbody tr.separateur-mois:hover {
@@ -2311,15 +2304,7 @@ th.montant .tri {
   color: var(--accent-texte);
 }
 .piece-oui.pop {
-  animation: pop 480ms var(--sortie);
-}
-@keyframes pop {
-  0% {
-    scale: 0.3;
-  }
-  55% {
-    scale: 1.15;
-  }
+  animation: apparaitre 240ms ease-out;
 }
 .piece-non {
   opacity: 0;
@@ -2334,7 +2319,7 @@ th.montant .tri {
 .tableau tr.cible-depot .piece-non {
   opacity: 1;
   color: var(--accent-texte);
-  animation: pop 400ms var(--sortie);
+  animation: apparaitre 200ms ease-out;
 }
 
 /* Retour sur une ligne : « Ajoutée · Annuler », sous le libellé. Son cadre ne
@@ -2386,7 +2371,7 @@ th.montant .tri {
   padding: 1px 6px;
   border-radius: 999px;
   color: inherit;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
 }
 .retour-ligne .lien-bouton:hover {
@@ -2459,7 +2444,7 @@ th.montant .tri {
   color: var(--barre-texte);
   box-shadow: var(--ombre-haute);
   translate: -50% 0;
-  transition: translate 300ms var(--sortie), opacity 180ms, visibility 0s;
+  transition: translate 300ms var(--sortie), opacity 180ms, visibility 0s, background-color 240ms ease-out, border-color 240ms ease-out;
 }
 /* Cachée, elle glisse hors de l'écran puis disparaît pour de bon : ses
    boutons ne se reçoivent plus au clavier ni ne se lisent. */
@@ -2516,18 +2501,9 @@ th.montant .tri {
 .barre-selection.resultat {
   background: var(--barre-resultat);
   border-color: var(--barre-resultat-bordure);
-  animation: rebond 420ms var(--sortie);
 }
 .barre-selection.resultat .btn {
   border-color: rgba(255, 255, 255, 0.35);
-}
-@keyframes rebond {
-  0% {
-    scale: 0.94;
-  }
-  60% {
-    scale: 1.02;
-  }
 }
 
 /* ---- Menu contextuel « … » ----------------------------------------------------- */
@@ -2568,7 +2544,7 @@ th.montant .tri {
   visibility: hidden;
 }
 .menu-choix [aria-checked='true'] {
-  font-weight: 650;
+  font-weight: 600;
 }
 .menu-choix [aria-checked='true'] .marque-choix {
   visibility: visible;
@@ -2851,7 +2827,7 @@ kbd {
   height: 56px;
   padding-right: 48px;
   font-size: 28px;
-  font-weight: 680;
+  font-weight: 600;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -2916,7 +2892,7 @@ kbd {
 }
 .calendrier-titre {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .calendrier-grille {
   width: 100%;
@@ -2955,13 +2931,13 @@ kbd {
 .calendrier-grille button.aujourdhui {
   box-shadow: inset 0 0 0 1.5px var(--accent);
   color: var(--accent-texte);
-  font-weight: 650;
+  font-weight: 600;
 }
 .calendrier-grille button.choisi,
 .calendrier-grille button.choisi:hover {
   background: var(--accent);
   color: var(--sur-accent);
-  font-weight: 650;
+  font-weight: 600;
   opacity: 1;
 }
 .calendrier-grille button:focus-visible {
@@ -3092,7 +3068,7 @@ kbd {
 .entreprise-annuaire strong {
   color: var(--texte);
   font-size: 13.5px;
-  font-weight: 640;
+  font-weight: 600;
 }
 .etat-fermee {
   padding: 0 7px;
@@ -3100,7 +3076,7 @@ kbd {
   background: var(--danger-doux);
   color: var(--danger-texte);
   font-size: 11.5px;
-  font-weight: 620;
+  font-weight: 600;
 }
 /* Recette très similaire : non bloquant, dit avant d'enregistrer. */
 .avertissement {
@@ -3185,19 +3161,11 @@ kbd {
 .case:checked::after {
   scale: 1;
 }
-/* Cochée d'un geste : la case se gonfle un instant, puis la coche se trace,
-   la petite branche d'abord (réglages du composant « Task List » de Rare UI). */
-.case.coche-anime:checked {
-  animation: gonfler-case 340ms cubic-bezier(0.22, 1, 0.36, 1);
-}
+/* Cochée d'un geste : la coche se trace, la petite branche d'abord
+   (réglages du composant « Task List » de Rare UI). */
 .case.coche-anime:checked::after {
   transition: none;
   animation: tracer-case 220ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both;
-}
-@keyframes gonfler-case {
-  40% {
-    scale: 1.08;
-  }
 }
 @keyframes tracer-case {
   0% {
@@ -3333,7 +3301,7 @@ kbd {
   padding: 0 8px;
   color: var(--texte);
   font-size: 13.5px;
-  font-weight: 620;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .choix-annee .annee-choisie[aria-expanded='true'] {
@@ -3440,7 +3408,7 @@ kbd {
 .sugg-meta {
   text-align: right;
   font-size: 13px;
-  font-weight: 620;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -3461,7 +3429,7 @@ kbd {
   background: var(--accent-doux);
   color: var(--accent-texte);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .monogramme.petit {
   width: 28px;
@@ -3558,8 +3526,8 @@ kbd {
   color: var(--sur-plein);
   font-size: 9px;
   font-style: normal;
-  font-weight: 750;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 .piece-infos {
   flex: 1;
@@ -3627,7 +3595,7 @@ kbd {
 }
 .bandeau-retour .lien-bouton {
   color: inherit;
-  font-weight: 650;
+  font-weight: 600;
 }
 .fiche-client > .bandeau-retour,
 #liste-clients > .bandeau-retour {
@@ -3701,7 +3669,7 @@ kbd {
   display: grid;
   place-items: center;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   counter-reset: secondes var(--secondes);
   animation: secondes-restantes var(--duree) steps(var(--secondes-total), end) var(--ecoule) forwards;
@@ -3810,7 +3778,7 @@ kbd {
 }
 .periode .nom {
   font-size: 14.5px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .periode .montant {
   margin-bottom: 8px;
@@ -3874,7 +3842,7 @@ kbd {
   gap: var(--e3);
   margin-top: 4px;
   font-size: 26px;
-  font-weight: 680;
+  font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.15;
   white-space: nowrap;
@@ -3914,7 +3882,7 @@ kbd {
   display: block;
   color: var(--texte);
   font-size: 15px;
-  font-weight: 640;
+  font-weight: 600;
 }
 .sans-chiffre-affaires p {
   margin: 2px 0 0;
@@ -3956,7 +3924,7 @@ kbd {
 }
 .case-urssaf strong {
   font-size: 16px;
-  font-weight: 680;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 /* Le détail se déplie dans la carte, sous un simple filet. */
@@ -4078,7 +4046,7 @@ kbd {
 }
 .client-ligne .ca {
   text-align: right;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .client-ligne .ca small {
@@ -4098,19 +4066,7 @@ kbd {
   align-items: center;
   padding: var(--e5);
   border-bottom: 1px solid var(--bordure-douce);
-  background:
-    radial-gradient(120% 160% at 0% 0%, var(--accent-doux) 0%, transparent 60%),
-    var(--carte);
-}
-/* La fiche s'éclaire de la teinte du client choisi. */
-.fiche-tete:has(.monogramme[data-teinte='0']) {
-  background: radial-gradient(120% 160% at 0% 0%, var(--framboise-doux) 0%, transparent 60%), var(--carte);
-}
-.fiche-tete:has(.monogramme[data-teinte='1']) {
-  background: radial-gradient(120% 160% at 0% 0%, var(--sarcelle-doux) 0%, transparent 60%), var(--carte);
-}
-.fiche-tete:has(.monogramme[data-teinte='2']) {
-  background: radial-gradient(120% 160% at 0% 0%, var(--or-doux) 0%, transparent 60%), var(--carte);
+  background: var(--carte);
 }
 .fiche-tete .monogramme {
   width: 52px;
@@ -4145,7 +4101,7 @@ kbd {
 }
 .fiche-chiffres strong {
   font-size: 20px;
-  font-weight: 680;
+  font-weight: 600;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -4215,25 +4171,8 @@ kbd {
   height: 232px;
   flex: none;
   border-bottom: 1px solid var(--bordure-douce);
-  background:
-    radial-gradient(90% 120% at 50% 0%, var(--accent-doux), transparent 70%),
-    var(--carte-2);
+  background: var(--carte-2);
   overflow: hidden;
-}
-.document.recette .apercu {
-  background:
-    radial-gradient(90% 120% at 50% 0%, var(--sarcelle-doux), transparent 70%),
-    var(--carte-2);
-}
-.document.achat .apercu {
-  background:
-    radial-gradient(90% 120% at 50% 0%, var(--achat-doux), transparent 70%),
-    var(--carte-2);
-}
-.document.analyse .apercu {
-  background:
-    radial-gradient(90% 120% at 50% 0%, var(--or-doux), transparent 70%),
-    var(--carte-2);
 }
 .pages {
   position: absolute;
@@ -4357,7 +4296,7 @@ kbd {
   color: var(--texte-2);
 }
 .controle-tete strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 .controle-tete .btn-icone {
   width: 26px;
@@ -4525,7 +4464,7 @@ p.option-pieces {
   border-radius: 50%;
   border: 1px solid var(--bordure-controle);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .etape.active {
   color: var(--texte);
@@ -4601,7 +4540,7 @@ p.option-pieces {
   padding-top: var(--e4);
 }
 .fichier-importe strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 .col-correspondance {
   width: 300px;
@@ -4657,7 +4596,7 @@ p.option-pieces {
   background: var(--succes);
   color: var(--sur-plein);
   box-shadow: 0 0 0 8px var(--succes-doux);
-  animation: rebond 520ms var(--sortie);
+  animation: apparaitre 300ms ease-out;
 }
 .sceau-reussite .trace-coche path {
   animation-delay: 180ms;
@@ -4697,7 +4636,7 @@ p.option-pieces {
   gap: var(--e3);
   color: var(--rail-texte-fort);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 .accueil-marque .marque-logo {
@@ -4758,7 +4697,7 @@ p.option-pieces {
 .accueil-etapes li.courante {
   opacity: 1;
   color: var(--rail-texte-fort);
-  font-weight: 650;
+  font-weight: 600;
 }
 .accueil-repere {
   position: relative;
@@ -4772,7 +4711,7 @@ p.option-pieces {
   border-radius: 50%;
   background: var(--rail);
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
   transition: border-color var(--moyen), background var(--moyen), box-shadow var(--moyen);
 }
 .accueil-repere .icone {
@@ -4825,7 +4764,7 @@ p.option-pieces {
 }
 .accueil-etape h1 {
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.025em;
   outline: none;
@@ -4834,7 +4773,7 @@ p.option-pieces {
   margin-bottom: -8px;
   color: var(--accent-texte);
   font-size: 13px;
-  font-weight: 620;
+  font-weight: 600;
 }
 .etape-intro {
   margin-top: -6px;
@@ -4960,7 +4899,7 @@ p.option-pieces {
 .choix-texte strong {
   color: var(--texte);
   font-size: 14.5px;
-  font-weight: 620;
+  font-weight: 600;
 }
 .choix-coche {
   display: grid;
@@ -4977,7 +4916,6 @@ p.option-pieces {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--sur-accent);
-  animation: pop 360ms var(--sortie);
 }
 .choix-cartes.compactes .choix-carte {
   padding: 9px 12px;
@@ -5001,7 +4939,7 @@ p.option-pieces {
 .option-accueil strong {
   display: block;
   font-size: 14.5px;
-  font-weight: 620;
+  font-weight: 600;
 }
 .option-accueil span {
   color: var(--texte-2);
@@ -5048,11 +4986,6 @@ p.option-pieces {
   gap: var(--e3);
   padding-top: var(--e5);
 }
-.bienvenue {
-  background:
-    radial-gradient(120% 160% at 0% 0%, var(--accent-doux) 0%, transparent 60%),
-    var(--carte);
-}
 .bienvenue h2 {
   font-size: 19px;
 }
@@ -5089,7 +5022,7 @@ p.option-pieces {
 .sommaire a.actif {
   background: var(--accent-doux);
   color: var(--accent-texte);
-  font-weight: 620;
+  font-weight: 600;
 }
 .sections {
   display: flex;
@@ -5138,7 +5071,7 @@ p.option-pieces {
 }
 .titre-sous-section {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .carte-corps > .titre-sous-section {
   margin-bottom: var(--e3);
@@ -5165,7 +5098,7 @@ p.option-pieces {
 .groupe-raccourcis h3 {
   margin-bottom: var(--e2);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--texte-2);
 }
 .groupe-raccourcis dl {
@@ -5477,7 +5410,7 @@ dialog.boite-recherche {
 .titre-groupe {
   padding: 8px 10px 4px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--texte-3);
 }
 .resultat {
@@ -5719,9 +5652,7 @@ body:has(.barre-selection:not([hidden])) .toasts {
 .sq-grille > div,
 .sq-tableau > div {
   border-radius: var(--rayon-carte);
-  background: linear-gradient(90deg, var(--bordure-douce) 25%, var(--carte-2) 50%, var(--bordure-douce) 75%);
-  background-size: 200% 100%;
-  animation: miroiter 1.4s ease-in-out infinite;
+  background: var(--bordure-douce);
 }
 .sq-titre {
   width: 260px;
@@ -5732,7 +5663,6 @@ body:has(.barre-selection:not([hidden])) .toasts {
   display: grid;
   gap: var(--e4);
   background: none;
-  animation: none;
 }
 .sq-grille {
   grid-template-columns: 1.7fr 1fr 1fr 1fr;
@@ -5750,15 +5680,6 @@ body:has(.barre-selection:not([hidden])) .toasts {
   height: 48px;
   border-radius: var(--rayon) !important;
 }
-@keyframes miroiter {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-
 /* ---- Transitions ------------------------------------------------------------------------ */
 
 @keyframes entrer {
@@ -6007,7 +5928,7 @@ dialog.boite-reprise {
 }
 .apercu-reprise strong {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .apercu-reprise span {
   font-size: 13.5px;

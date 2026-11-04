@@ -330,6 +330,6 @@ export function installerReponsesControles() {
   });
   document.addEventListener('animationend', (evenement) => {
     const element = evenement.target;
-    if (element.classList?.contains('case') && evenement.animationName === 'gonfler-case') element.classList.remove('coche-anime');
+    if (element.classList?.contains('case') && evenement.animationName === 'tracer-case') element.classList.remove('coche-anime');
   });
 }

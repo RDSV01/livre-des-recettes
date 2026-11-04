@@ -25,7 +25,7 @@ test('registre des recettes en CSV : contrôle affiché, puis le fichier', async
   expect(texte.split(/\r?\n/)[0]).toContain(';');
   // Le contrôle s'est affiché point par point, conclusion comprise.
   const controle = carte.locator('.controle-apercu');
-  await expect(controle).toContainText(`Contrôle avant export · Année ${annee}`);
+  await expect(controle).toContainText(`Contrôle avant export : année ${annee}`);
   await expect(controle.locator('.points li')).not.toHaveCount(0);
   await expect(controle.locator('.points li.ok', { hasText: 'Continuité de la numérotation' })).toBeVisible();
   await expect(controle.locator('.conclusion-controle')).toHaveText('Tout est en ordre : le registre est complet et cohérent.');

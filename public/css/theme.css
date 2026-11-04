@@ -52,8 +52,7 @@
   --rail-alerte-texte: #fed7aa;
   --rail-retard-fond: rgba(248, 113, 113, 0.2);
   --rail-retard-texte: #fecaca;
-  --logo-haut: #3b82f6;
-  --logo-bas: #2563eb;
+  --logo: #2563eb;
 
   /* La carte du chiffre de l'année, seule pleine : le bleu nuit du menu, gardé
      en thème sombre où le menu passe au charbon, chiffre en blanc. Ventes et
@@ -316,7 +315,7 @@ h1,
 h2,
 h3 {
   text-wrap: balance;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: -0.012em;
 }
 

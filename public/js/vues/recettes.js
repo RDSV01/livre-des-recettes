@@ -25,7 +25,7 @@ import { etat, modifierParametres } from '../etat.js';
 import {
   echapperHtml, toast, formaterChampMontant, effacerErreursFormulaire, afficherErreursFormulaire,
   installerChampMontant, optionsCodes, selecteur, accorder, initiales, teinteDe,
-  siretLisible, resultatSiret, finDuFondu, deplierHauteur, replierPuisRetirer, listeEntreprises
+  siretLisible, resultatSiret, finDuFondu, deplierHauteur, replierPuisRetirer, listeEntreprises, entrepriseEnLigne
 } from '../ui.js';
 import { annoncer, bandeauRetour, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
@@ -496,7 +496,7 @@ export async function vueRecettes(conteneur, params) {
       texte: (c) => c.nom,
       rendu: (c, saisie) => `<span class="monogramme petit" data-teinte="${teinteDe(c.nom)}" aria-hidden="true">${echapperHtml(initiales(c.nom))}</span>
         <span class="sugg-texte"><strong>${surligner(c.nom, saisie)}</strong>
-          <span>${c.siret ? `SIRET ${siretLisible(c.siret)} · ` : ''}${c.nombre > 0 ? accorder(c.nombre, 'encaissement') : 'aucun encaissement'}</span></span>`,
+          <span>${c.siret ? `SIRET ${siretLisible(c.siret)}, ` : ''}${c.nombre > 0 ? accorder(c.nombre, 'encaissement') : 'aucun encaissement'}</span></span>`,
       extra: (saisie, trouves) => {
         const chiffres = saisie.replace(/\s/g, '');
         if (estIdentifiant(chiffres)) {
@@ -546,8 +546,7 @@ export async function vueRecettes(conteneur, params) {
       eclairer(f.client);
       modePaiement.proposer(entreprise.nom);
       const connu = proposes.some((c) => normaliserTexte(c.nom) === normaliserTexte(entreprise.nom));
-      const adresse = entreprise.adresse ? ` · ${entreprise.adresse}` : '';
-      resultatSiret(aide, { nom: entreprise.nom, texte: `${connu ? `${entreprise.nom}, déjà dans vos clients` : `${entreprise.nom} : sera ajouté à vos clients`}${adresse}` });
+      resultatSiret(aide, { nom: entreprise.nom, texte: `${entrepriseEnLigne(entreprise)} : ${connu ? 'déjà dans vos clients' : 'sera ajouté à vos clients'}` });
       f.libelle.focus();
     }
 
@@ -600,7 +599,7 @@ export async function vueRecettes(conteneur, params) {
       quoi: 'la facture',
       apercu: () => ({
         url: urlPiece('recettes', recette.id),
-        details: [recette.client, formaterMontant(recette.montant, devise), formaterDate(recette.dateEncaissement, formatDate)].join(' · ')
+        details: [recette.client, formaterMontant(recette.montant, devise), formaterDate(recette.dateEncaissement, formatDate)].join(', ')
       })
     });
 

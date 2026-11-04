@@ -148,7 +148,7 @@ export function ouvrirReprise() {
               <button type="button" class="support" data-copie="${echapperHtml(c.chemin)}">
                 ${icone('disque', { taille: 18 })}<span><strong>${echapperHtml(c.libelle)}</strong>
                 <small>${[c.sauvegarde.entreprise, accorder(c.sauvegarde.recettes, 'recette'), `copie ${dateLongue(c.date)}`]
-                  .filter(Boolean).map(echapperHtml).join(' · ')}</small></span>
+                  .filter(Boolean).map(echapperHtml).join(', ')}</small></span>
               </button>`).join('')}</div>`;
         sources.querySelectorAll('[data-copie]').forEach((bouton) => bouton.addEventListener('click', () =>
           lire(bouton, () => api.lireCopieSurSupport(bouton.dataset.copie))));
@@ -164,7 +164,7 @@ export function ouvrirReprise() {
       etape.innerHTML = `
         <div class="apercu-reprise">
           <strong>${echapperHtml(s.entreprise ?? 'Livre sans nom d’entreprise')}</strong>
-          <span>${decompte(s).join(' · ')}</span>
+          <span>${decompte(s).join(', ')}</span>
           <span>${s.derniereSaisie ? `Dernière saisie ${dateLongue(s.derniereSaisie)}, ` : ''}depuis ${echapperHtml(source.libelle)}</span>
         </div>
         ${s.pdfManquants ? `<p class="avis">${icone('cercle-alerte', { taille: 17 })}<span>${accorder(s.pdfManquants, 'PDF joint manque', 'PDF joints manquent')} dans cette

@@ -61,7 +61,7 @@ export const champDate = ({ id, nom, format = 'JJ/MM/AAAA' }) => `
     <input class="champ-texte" type="text" id="${id}" inputmode="numeric" autocomplete="off" spellcheck="false"
       placeholder="${format}" role="combobox" aria-haspopup="dialog" aria-expanded="false"
       aria-controls="${id}-calendrier" aria-describedby="${id}-apercu" aria-keyshortcuts="+ - A"
-      title="+ ou − : jour suivant ou précédent · A : aujourd’hui · flèche bas : calendrier">
+      title="+ ou − : jour suivant ou précédent ; A : aujourd’hui ; flèche bas : calendrier">
     <button type="button" class="btn-icone champ-date-bouton" tabindex="-1" aria-label="Ouvrir le calendrier"
       title="Calendrier">${icone('calendrier', { taille: 16 })}</button>
     <input type="hidden" name="${nom}">
