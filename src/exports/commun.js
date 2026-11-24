@@ -20,6 +20,7 @@ export const COULEURS = {
   accent: '#2563eb',
   fondEntete: '#e9edf5',
   fondTotal: '#f3f5fa',
+  papier: '#ffffff',
   bordure: '#d7dbe4',
   // Langage de couleur des activités, identique à l'interface : bleu pour la
   // vente, vert pour la prestation, gris pour le non catégorisé.

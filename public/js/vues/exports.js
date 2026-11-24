@@ -18,9 +18,10 @@ import { api, urlExport, urlRapportAnnuel, telechargerFichier } from '../api.js'
 import { registreAchatsUtile } from '../etat.js';
 import { icone } from '../icones.js';
 import {
-  infobulle, echapperHtml, selecteur, OPTIONS_MOIS, accorder, mouvementReduit, choixAnnee, brancherChoixAnnee
+  infobulle, echapperHtml, selecteur, OPTIONS_MOIS, accorder, mouvementReduit, choixAnnee, brancherChoixAnnee, toast
 } from '../ui.js';
 import { reussite, patienter, annoncer } from '../retours.js';
+import { ouvrirRetrospective } from '../retrospective.js';
 import { titrePeriode, anneeDe, moisDe } from '/partage/dates.js';
 
 /** Temps entre deux points du contrôle, assez long pour suivre des yeux. */
@@ -112,7 +113,7 @@ export async function vueExports(conteneur, params) {
         <div>
           <h1>Exports${infobulle(
             'Besoin de savoir quel montant déclarer ? L’écran « URSSAF » calcule le chiffre ' +
-            'd’affaires encaissé par mois, trimestre ou année.',
+            'd’affaires encaissé à chaque période de déclaration.',
             'les exports'
           )}</h1>
           <p class="sous-titre">Le PDF se présente en cas de contrôle. Excel et CSV servent à retravailler les mêmes lignes dans un tableur.</p>
@@ -127,9 +128,10 @@ export async function vueExports(conteneur, params) {
             <p>Chiffre d’affaires et sa répartition, panier moyen, évolution mois par mois, moyens de paiement, meilleurs clients. Document de gestion sans valeur légale : seuls les registres font foi.</p>
             <div class="document-reglages">
               <div class="document-periode">${choixAnnee({ id: 'rapport-annee', etiquette: 'Année' })}</div>
-              <p class="option-pieces attenue">Une page de synthèse, puis le détail des encaissements.</p>
+              <p class="option-pieces attenue">Une synthèse, puis chaque encaissement.</p>
               <div class="formats">
-                <button type="button" class="btn btn-principal pleine" id="telecharger-rapport">${icone('fichier-texte', { taille: 16 })}Rapport annuel (PDF)</button>
+                <button type="button" class="btn btn-principal" id="telecharger-rapport" aria-label="Télécharger le rapport annuel en PDF">${icone('fichier-texte', { taille: 16 })}PDF</button>
+                <button type="button" class="btn double" id="voir-retrospective">${icone('lecture', { taille: 15 })}Rétrospective</button>
               </div>
             </div>
           </div>
@@ -271,18 +273,22 @@ export async function vueExports(conteneur, params) {
       exporter(format);
       return;
     }
+    if (evenement.target.closest('#voir-retrospective')) {
+      ouvrirRetrospective(annees.rapport).catch((erreur) => toast(erreur.message, 'erreur'));
+      return;
+    }
     const rapport = evenement.target.closest('#telecharger-rapport');
     if (rapport && !rapport.disabled) {
       // Le rapport « sort de l'imprimante » : la page remonte, puis redescend.
       const cadre = page.querySelector('#carte-rapport .apercu');
-      const reprendre = patienter(rapport, 'Préparation…');
+      const reprendre = patienter(rapport, 'Création…');
       cadre.classList.remove('imprime');
       void cadre.offsetWidth;
       cadre.classList.add('imprime');
       try {
         await telechargerFichier(urlRapportAnnuel(String(annees.rapport)));
         reprendre();
-        reussite(rapport, 'Rapport prêt', { duree: 2200, nomIcone: 'fichier-valide' });
+        reussite(rapport, 'Exporté', { duree: 2200, nomIcone: 'fichier-valide' });
       } catch (erreur) {
         reprendre();
         reussite(rapport, 'Échec', { duree: 2600, nomIcone: 'cercle-alerte', echec: true });

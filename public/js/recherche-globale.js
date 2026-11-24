@@ -6,16 +6,22 @@
  * chaque frappe filtre en mémoire. Flèches pour choisir, Entrée pour y aller,
  * Échap pour fermer. Une recette ou un achat s'ouvre dans son registre, la
  * ligne mise en avant ; un client, sur sa fiche.
+ *
+ * À droite des résultats, un aperçu montre le résultat choisi en entier
+ * (montant, facture, paiement, PDF, ou le bilan d'un client) : on vérifie
+ * une recette sans quitter la page où l'on est. Ctrl+Entrée lance l'action
+ * secondaire de l'aperçu (dupliquer une recette, en saisir une pour un client).
  */
 
 import { api } from './api.js';
 import { etat, registreAchatsUtile } from './etat.js';
-import { echapperHtml, identifiantUnique, accorder, allerA, fermerAuClicSurLeVoile } from './ui.js';
+import { echapperHtml, identifiantUnique, accorder, allerA, fermerAuClicSurLeVoile, initiales, teinteDe, siretLisible } from './ui.js';
 import { icone } from './icones.js';
 import { surlignageGlissant } from './glisseur.js';
 import { surligner } from './autocompletion.js';
-import { formaterMontant, analyserMontant, enCentimes } from '/partage/montants.js';
-import { formaterDate } from '/partage/dates.js';
+import { formaterMontant, formaterMontantEntier, analyserMontant, enCentimes, sommeMontants } from '/partage/montants.js';
+import { formaterDate, anneeDe } from '/partage/dates.js';
+import { libelleMode, libelleCategorieCourt } from '/partage/constantes.js';
 import { normaliserTexte } from '/partage/texte.js';
 
 /** Au plus, par groupe : la liste reste lisible d'un coup d'œil. */
@@ -54,11 +60,16 @@ export async function ouvrirRechercheGlobale({ pages }) {
         aria-controls="${idListe}" aria-autocomplete="list" placeholder="Client, libellé, facture, montant, page…">
       <kbd>Échap</kbd>
     </label>
-    <div class="resultats-recherche" id="${idListe}" role="listbox" aria-label="Résultats"></div>
-    <p class="pied-recherche"><span><kbd>↑</kbd><kbd>↓</kbd> pour choisir</span><span><kbd>Entrée</kbd> pour y aller</span></p>`;
+    <div class="corps-recherche">
+      <div class="resultats-recherche" id="${idListe}" role="listbox" aria-label="Résultats"></div>
+      <aside class="apercu-recherche" aria-label="Aperçu du résultat choisi" aria-live="polite"></aside>
+    </div>
+    <p class="pied-recherche"><span><kbd>↑</kbd><kbd>↓</kbd> pour choisir</span><span><kbd>Entrée</kbd> pour y aller</span><span class="pied-secondaire" hidden><kbd>Ctrl</kbd><kbd>Entrée</kbd> <span></span></span></p>`;
   document.body.append(dialogue);
   const champ = dialogue.querySelector('input');
   const zone = dialogue.querySelector('.resultats-recherche');
+  const apercu = dialogue.querySelector('.apercu-recherche');
+  const piedSecondaire = dialogue.querySelector('.pied-secondaire');
   // Un seul surlignage, qui glisse d'un résultat à l'autre.
   const surlignage = surlignageGlissant(zone, { classe: 'choix' });
   const origine = document.activeElement;
@@ -88,6 +99,53 @@ export async function ouvrirRechercheGlobale({ pages }) {
   let indexRecettes = [];
   let indexAchats = [];
   let indexClients = [];
+  let recettesParClient = new Map(); // par nom normalisé, rangées au chargement
+  const modes = etat.parametres.modesPersonnalises ?? [];
+  const mixte = etat.parametres.typeActivite === 'mixte';
+
+  // ---- Aperçus --------------------------------------------------------------------------
+  const monogramme = (nom) => `<span class="monogramme" data-teinte="${teinteDe(nom)}">${echapperHtml(initiales(nom))}</span>`;
+  const ligneDl = (terme, valeur) => (valeur ? `<div><dt>${terme}</dt><dd>${valeur}</dd></div>` : '');
+  const piece = (p) => (p ? 'Jointe' : '<span class="attenue">Pas encore</span>');
+  const apercuRecette = (r) => `
+    <div class="apercu-tete">${monogramme(r.client)}<div><strong>${echapperHtml(r.client)}</strong><span>${echapperHtml(r.libelle || 'Sans libellé')}</span></div></div>
+    <p class="apercu-montant">${echapperHtml(formaterMontant(r.montant, devise))}</p>
+    <p class="apercu-sous">encaissés le ${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</p>
+    <dl class="apercu-details">
+      ${ligneDl('Facture', echapperHtml(r.numeroFacture || 'Sans facture'))}
+      ${ligneDl('Paiement', echapperHtml(libelleMode(r.modeReglement, modes)))}
+      ${mixte && r.categorie ? ligneDl('Catégorie', `<span class="categorie${r.categorie === 'ventes' ? ' vente' : ''}"><i></i>${echapperHtml(libelleCategorieCourt(r.categorie))}</span>`) : ''}
+      ${ligneDl('Facture PDF', piece(r.pieceJointe))}
+    </dl>`;
+  const apercuAchat = (a) => `
+    <div class="apercu-tete"><span class="monogramme achat">${echapperHtml(initiales(a.fournisseur))}</span><div><strong>${echapperHtml(a.fournisseur)}</strong><span>${echapperHtml(a.referenceFacture || 'Sans référence')}</span></div></div>
+    <p class="apercu-montant">${echapperHtml(formaterMontant(a.montant, devise))}</p>
+    <p class="apercu-sous">réglés le ${echapperHtml(formaterDate(a.dateReglement, formatDate))}</p>
+    <dl class="apercu-details">
+      ${ligneDl('Paiement', echapperHtml(libelleMode(a.modeReglement, modes)))}
+      ${ligneDl('Justificatif PDF', piece(a.pieceJointe))}
+    </dl>`;
+  const apercuClient = (c) => {
+    // Un client se reconnaît à son nom sans casse ni accents, comme pour son
+    // total (calculé ainsi par le serveur) : barres et date s'y accordent.
+    const siennes = recettesParClient.get(normaliserTexte(c.nom)) ?? [];
+    const derniere = siennes.reduce((a, r) => (!a || r.dateEncaissement > a.dateEncaissement ? r : a), null);
+    const parAnnee = new Map();
+    siennes.forEach((r) => {
+      const a = anneeDe(r.dateEncaissement);
+      if (!parAnnee.has(a)) parAnnee.set(a, []);
+      parAnnee.get(a).push(r.montant);
+    });
+    const annees = [...parAnnee.entries()].sort((x, y) => y[0] - x[0]).slice(0, 3).map(([a, m]) => [a, sommeMontants(m)]);
+    const plus = Math.max(...annees.map(([, m]) => m), 0);
+    return `
+      <div class="apercu-tete">${monogramme(c.nom)}<div><strong>${echapperHtml(c.nom)}</strong><span>${c.siret ? `SIRET ${echapperHtml(siretLisible(c.siret))}` : 'Sans SIRET'}</span></div></div>
+      <p class="apercu-montant">${echapperHtml(formaterMontant(c.totalRecettes ?? 0, devise))}</p>
+      <p class="apercu-sous">${c.nombreRecettes ? `encaissés en ${c.nombreRecettes} fois` : 'aucun encaissement pour l’instant'}</p>
+      ${annees.length ? `<div class="apercu-annees">${annees.map(([a, m]) => `<div><span>${a}</span><i><b style="width:${plus ? Math.round((m / plus) * 100) : 0}%"></b></i><span>${echapperHtml(formaterMontantEntier(m, devise))}</span></div>`).join('')}</div>` : ''}
+      ${derniere ? `<dl class="apercu-details">${ligneDl('Dernier encaissement', echapperHtml(formaterDate(derniere.dateEncaissement, formatDate)))}</dl>` : ''}`;
+  };
+  const apercuPage = (e) => `<div class="apercu-page">${icone(e.icone, { taille: 22 })}<strong>${echapperHtml(e.texte)}</strong><span>Entrée pour y aller</span></div>`;
 
   const actions = [
     { libelle: 'Nouvelle recette', icone: 'plus', aller: '#/recettes?nouvelle=1', touche: 'N' },
@@ -123,26 +181,30 @@ export async function ouvrirRechercheGlobale({ pages }) {
     };
 
     ajouter('Pages', 'pages', pages.filter((p) => !mot || contient(p.label)).map((p) => ({
-      icone: p.icone, texte: p.label, aller: `#/${p.chemin}`
+      icone: p.icone, texte: p.label, aller: `#/${p.chemin}`, apercu: apercuPage
     })));
     ajouter('Actions', 'actions', actions.filter((a) => !mot || contient(a.libelle)).map((a) => ({
-      icone: a.icone, texte: a.libelle, aller: a.aller, touche: a.touche
+      icone: a.icone, texte: a.libelle, aller: a.aller, touche: a.touche, apercu: apercuPage
     })));
     if (mot) {
       ajouter('Clients', 'clients', trouves(indexClients, 'clients').map((c) => ({
         icone: 'clients', texte: c.nom,
         detail: c.nombreRecettes ? `${accorder(c.nombreRecettes, 'encaissement')}, ${formaterMontant(c.totalRecettes, devise)}` : 'aucun encaissement',
-        aller: `#/clients?client=${encodeURIComponent(c.id)}`
+        aller: `#/clients?client=${encodeURIComponent(c.id)}`,
+        apercu: () => apercuClient(c)
       })));
       ajouter('Recettes', 'recettes', trouves(indexRecettes, 'recettes').map((r) => ({
         icone: 'recettes', texte: [r.client, r.libelle].filter(Boolean).join(', '),
         detail: [formaterDate(r.dateEncaissement, formatDate), r.numeroFacture, formaterMontant(r.montant, devise)].filter(Boolean).join(', '),
-        aller: `#/recettes?voir=${encodeURIComponent(r.id)}`
+        aller: `#/recettes?voir=${encodeURIComponent(r.id)}`,
+        apercu: () => apercuRecette(r),
+        secondaire: { libelle: 'pour la dupliquer', aller: `#/recettes?modele=${encodeURIComponent(r.id)}` }
       })));
       ajouter('Achats', 'achats', trouves(indexAchats, 'achats').map((a) => ({
         icone: 'achats', texte: a.fournisseur,
         detail: [formaterDate(a.dateReglement, formatDate), a.referenceFacture, formaterMontant(a.montant, devise)].filter(Boolean).join(', '),
-        aller: `#/achats?voir=${encodeURIComponent(a.id)}`
+        aller: `#/achats?voir=${encodeURIComponent(a.id)}`,
+        apercu: () => apercuAchat(a)
       })));
     }
 
@@ -175,6 +237,10 @@ export async function ouvrirRechercheGlobale({ pages }) {
     } else {
       champ.removeAttribute('aria-activedescendant');
     }
+    const resultat = resultats[actif];
+    apercu.innerHTML = resultat?.apercu ? `<div class="apercu-contenu">${resultat.apercu(resultat)}</div>` : '';
+    piedSecondaire.hidden = !resultat?.secondaire;
+    if (resultat?.secondaire) piedSecondaire.querySelector('span').textContent = resultat.secondaire.libelle;
   }
 
   function aller(rang) {
@@ -192,6 +258,10 @@ export async function ouvrirRechercheGlobale({ pages }) {
       if (resultats.length === 0) return;
       actif = (actif + (evenement.key === 'ArrowDown' ? 1 : -1) + resultats.length) % resultats.length;
       majActif();
+    } else if (evenement.key === 'Enter' && (evenement.ctrlKey || evenement.metaKey)) {
+      evenement.preventDefault();
+      const secondaire = resultats[actif]?.secondaire;
+      if (secondaire) { fermer(); allerA(secondaire.aller); }
     } else if (evenement.key === 'Enter') {
       evenement.preventDefault();
       aller(actif);
@@ -222,6 +292,12 @@ export async function ouvrirRechercheGlobale({ pages }) {
       avecAchats ? api.listerAchats() : { achats: [] },
       api.listerClients()
     ]);
+    recettesParClient = new Map();
+    for (const r of recettes) {
+      const cle = normaliserTexte(r.client);
+      if (!recettesParClient.has(cle)) recettesParClient.set(cle, []);
+      recettesParClient.get(cle).push(r);
+    }
     indexRecettes = indexer(recettes, (r) => [r.client, r.libelle ?? '', r.numeroFacture ?? '']);
     indexAchats = indexer(achats, (a) => [a.fournisseur, a.referenceFacture ?? '']);
     indexClients = indexer(clients, (c) => [c.nom, c.siret ?? '']);

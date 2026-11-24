@@ -12,17 +12,17 @@ import { etat, modifierParametres } from '../etat.js';
 import {
   toast, echapperHtml, infobulle, selecteur, afficherErreursFormulaire, effacerErreursFormulaire,
   accorder, poidsLisible, siretLisible, mouvementReduit, optionsCodes, interrupteur,
-  deplierHauteur, replierPuisRetirer, confirmer, ecouterPourLaPage, heureLisible
+  deplierHauteur, replierPuisRetirer, confirmer, ecouterPourLaPage, heureLisible, preparerFlip
 } from '../ui.js';
 import {
   annoncer, reussite, patienter, bandeauRetour, brancherSegmentes, copierDansPressePapiers
 } from '../retours.js';
 import { icone } from '../icones.js';
-import { listeSauvegardes, brancherRestauration } from '../sauvegardes.js';
+import { listeSauvegardes, brancherRestauration, barreConservation } from '../sauvegardes.js';
 import { basculerTheme } from '../theme.js';
 import { champDate, brancherChampDate } from '../calendrier.js';
 import { listeRaccourcis } from '../raccourcis.js';
-import { DEVISES, FORMATS_DATE, MODES_REGLEMENT } from '/partage/constantes.js';
+import { DEVISES, FORMATS_DATE, MODES_REGLEMENT, modesDansLOrdre } from '/partage/constantes.js';
 import { TYPES_ACTIVITE, NATURES_PRESTATIONS } from '/partage/seuils.js';
 import { periodeAcre } from '/partage/acre.js';
 import { dateEnFrancaisLong, aujourdHuiIso } from '/partage/dates.js';
@@ -89,8 +89,10 @@ export async function vueParametres(conteneur, params) {
     api.securite()
   ]);
   let securite = securiteInitiale;
-  const usagesMode = (code) => recettes.filter((r) => r.modeReglement === code).length +
-    achats.filter((a) => a.modeReglement === code).length;
+  // Combien de lignes utilisent chaque mode de règlement, comptées en un passage.
+  const lignesParMode = new Map();
+  for (const l of [...recettes, ...achats]) lignesParMode.set(l.modeReglement, (lignesParMode.get(l.modeReglement) ?? 0) + 1);
+  const usagesMode = (code) => lignesParMode.get(code) ?? 0;
   const sombre = document.documentElement.dataset.theme === 'dark';
   const identiteVide = !p().nomEntreprise && !p().siren && !p().siret;
 
@@ -123,6 +125,24 @@ export async function vueParametres(conteneur, params) {
         </div>
       </form>`;
   }
+
+  /**
+   * L'ordre des modes dans la saisie, rangé à la main : glissés par leur
+   * poignée, ou montés et descendus aux flèches. Chacun dit combien de
+   * lignes l'utilisent.
+   */
+  const ordreModesHtml = () => modesDansLOrdre(p().modesPersonnalises, p().ordreModes).map((m, i, tous) => {
+    const usages = usagesMode(m.code);
+    return `<li class="mode-ordonne" data-code="${echapperHtml(m.code)}" draggable="true">
+        <span class="poignee" aria-hidden="true">${icone('poignee', { taille: 16 })}</span>
+        <span class="nom-mode">${echapperHtml(m.libelle)}</span>
+        <span class="usages-mode">${usages ? accorder(usages, 'ligne') : 'jamais utilisé'}</span>
+        <span class="fleches-mode">
+          <button type="button" class="btn-icone" data-bouger="-1" aria-label="Monter ${echapperHtml(m.libelle)}" title="Monter" ${i === 0 ? 'disabled' : ''}>${icone('chevron-haut', { taille: 15 })}</button>
+          <button type="button" class="btn-icone" data-bouger="1" aria-label="Descendre ${echapperHtml(m.libelle)}" title="Descendre" ${i === tous.length - 1 ? 'disabled' : ''}>${icone('chevron-bas', { taille: 15 })}</button>
+        </span>
+      </li>`;
+  }).join('');
 
   const ligneMode = ({ code = '', libelle = '' } = {}) => {
     const usages = code ? usagesMode(code) : 0;
@@ -306,7 +326,11 @@ export async function vueParametres(conteneur, params) {
 
           </div>`)}
 
-          ${section('modes', 'Modes de règlement personnalisés', `<div class="carte-corps">
+          ${section('modes', 'Modes de règlement', `<div class="carte-corps">
+            <h3 class="titre-sous-section">Leur ordre dans la saisie</h3>
+            <p class="sous-titre">Vos modes habituels en premier : glissez-les par la poignée, ou utilisez les flèches.</p>
+            <ol class="ordre-modes" id="ordre-modes">${ordreModesHtml()}</ol>
+            <h3 class="titre-sous-section">Vos modes ajoutés</h3>
             <p class="sous-titre">${MODES_REGLEMENT.map((m) => m.libelle).join(', ')} restent toujours disponibles. Un mode déjà utilisé peut être renommé, pas supprimé.</p>
             <div id="liste-modes">${p().modesPersonnalises.map(ligneMode).join('')}</div>
             <p class="erreur-panneau" id="erreur-modes" role="alert"></p>
@@ -317,7 +341,8 @@ export async function vueParametres(conteneur, params) {
             ${OPTIONS.map(([groupe, options]) => `<div class="groupe-options">
               <h3 class="titre-sous-section">${groupe}</h3>
               <div>${options.map(([cle, titre, texte]) => `<div class="option">
-                <div><strong>${titre}</strong><span>${texte}</span></div>${interrupteur(`o-${cle}`, p()[cle], titre)}</div>`).join('')}</div>
+                <div><strong>${titre}</strong><span>${texte}</span>
+                  ${cle === 'verifierMisesAJour' && systeme?.version ? `<span class="version-installee">Version installée : ${echapperHtml(systeme.version)}</span>` : ''}</div>${interrupteur(`o-${cle}`, p()[cle], titre)}</div>`).join('')}</div>
               ${groupe === 'Saisie' ? '<div id="numeros-ignores"></div>' : ''}
             </div>`).join('')}
           </div>`)}
@@ -337,14 +362,14 @@ export async function vueParametres(conteneur, params) {
             ${chemin(pieces.dossier, 'du dossier des pièces jointes')}
             <p class="sous-titre">Les sauvegardes vivent en dehors, pour survivre à la perte du dossier de données :</p>
             ${chemin(systeme.dossierSauvegardes, 'des sauvegardes')}
-            <p class="notes">Une sauvegarde est créée chaque jour, avant chaque import et avant chaque restauration : tout pendant
-            14 jours, puis une par semaine pendant 2 mois, puis une par mois pendant 1 an, plus une copie de secours mise à jour à
-            chaque saisie. Chaque PDF joint y est aussi doublé. Pour changer d’ordinateur : «\u00a0Sauvegarder maintenant\u00a0» ici, puis
+            <p class="notes">Une sauvegarde est créée chaque jour, avant chaque import et avant chaque restauration, plus une copie
+            de secours mise à jour à chaque saisie. Chaque PDF joint y est aussi doublé. Pour changer d’ordinateur : «\u00a0Sauvegarder maintenant\u00a0» ici, puis
             «\u00a0Reprendre une sauvegarde\u00a0» sur le nouveau.</p>
           </div>
           <div class="sous-section">
             <div class="tete-sous-section"><h3 class="titre-sous-section">Sauvegardes disponibles</h3>
               <span class="note">De la plus récente à la plus ancienne</span></div>
+            ${barreConservation()}
             <div class="carte-corps" id="liste-sauvegardes">
             ${sauvegardes.length === 0
               ? '<p class="sous-titre">Aucune sauvegarde pour l’instant : la première sera créée à la prochaine modification.</p>'
@@ -525,6 +550,72 @@ export async function vueParametres(conteneur, params) {
   // ---- Modes de règlement ----------------------------------------------------------------------
   const listeModes = page.querySelector('#liste-modes');
   const erreurModes = page.querySelector('#erreur-modes');
+  const listeOrdre = page.querySelector('#ordre-modes');
+
+  /** Les flèches du premier et du dernier mode ne mènent nulle part. */
+  const majFleches = () => {
+    const lignes = [...listeOrdre.querySelectorAll('[data-code]')];
+    lignes.forEach((li, i) => {
+      li.querySelector('[data-bouger="-1"]').disabled = i === 0;
+      li.querySelector('[data-bouger="1"]').disabled = i === lignes.length - 1;
+    });
+  };
+  /** L'ordre affiché devient celui de la saisie. */
+  async function enregistrerOrdre() {
+    const codes = [...listeOrdre.querySelectorAll('[data-code]')].map((li) => li.dataset.code);
+    try {
+      await modifierParametres({ ordreModes: codes });
+      annoncer('Ordre des modes enregistré');
+    } catch (erreur) {
+      toast(erreur.message, 'erreur');
+      listeOrdre.innerHTML = ordreModesHtml();
+    }
+  }
+  /** Déplace un mode ; les autres glissent jusqu'à leur nouvelle place. */
+  const deplacerMode = (deplacer) => {
+    const jouer = preparerFlip(listeOrdre, '[data-code]', (li) => li.dataset.code);
+    deplacer();
+    jouer();
+    majFleches();
+  };
+  listeOrdre.addEventListener('click', (evenement) => {
+    const bouton = evenement.target.closest('[data-bouger]');
+    if (!bouton || bouton.disabled) return;
+    const li = bouton.closest('[data-code]');
+    const vers = bouton.dataset.bouger === '-1' ? li.previousElementSibling : li.nextElementSibling;
+    if (!vers) return;
+    deplacerMode(() => (bouton.dataset.bouger === '-1' ? vers.before(li) : vers.after(li)));
+    // Le focus suit le mode déplacé, sur la même flèche quand elle sert encore.
+    const meme = li.querySelector(`[data-bouger="${bouton.dataset.bouger}"]`);
+    (meme.disabled ? li.querySelector('[data-bouger]:not(:disabled)') : meme)?.focus();
+    enregistrerOrdre();
+  });
+  let tenu = null;
+  let ordreAvant = '';
+  listeOrdre.addEventListener('dragstart', (evenement) => {
+    tenu = evenement.target.closest('[data-code]');
+    if (!tenu) return;
+    ordreAvant = [...listeOrdre.children].map((li) => li.dataset.code).join(',');
+    tenu.classList.add('tenu');
+    evenement.dataTransfer.effectAllowed = 'move';
+  });
+  listeOrdre.addEventListener('dragover', (evenement) => {
+    if (!tenu) return;
+    evenement.preventDefault();
+    const cible = evenement.target.closest('[data-code]');
+    if (!cible || cible === tenu) return;
+    const r = cible.getBoundingClientRect();
+    const avant = evenement.clientY < r.top + r.height / 2;
+    if ((avant && cible.previousElementSibling === tenu) || (!avant && cible.nextElementSibling === tenu)) return;
+    deplacerMode(() => (avant ? cible.before(tenu) : cible.after(tenu)));
+  });
+  listeOrdre.addEventListener('drop', (evenement) => evenement.preventDefault());
+  listeOrdre.addEventListener('dragend', () => {
+    if (!tenu) return;
+    tenu.classList.remove('tenu');
+    tenu = null;
+    if ([...listeOrdre.children].map((li) => li.dataset.code).join(',') !== ordreAvant) enregistrerOrdre();
+  });
 
   /** Relit la liste affichée et l'enregistre ; en cas de refus, la liste revient à l'état enregistré. */
   async function enregistrerModes(controle) {
@@ -535,6 +626,8 @@ export async function vueParametres(conteneur, params) {
     try {
       const enregistres = await modifierParametres({ modesPersonnalises: modes });
       listeModes.innerHTML = enregistres.modesPersonnalises.map(ligneMode).join('');
+      // Un mode ajouté, renommé ou retiré : l'ordre de la saisie le suit.
+      listeOrdre.innerHTML = ordreModesHtml();
       if (controle) annoncer('Enregistré');
       return true;
     } catch (erreur) {
@@ -567,6 +660,7 @@ export async function vueParametres(conteneur, params) {
           const presents = new Set([...listeModes.querySelectorAll('.ligne-gestion')].map((l) => l.dataset.code));
           listeModes.querySelectorAll('.ligne-gestion').forEach((l) => l.remove());
           listeModes.insertAdjacentHTML('beforeend', enregistres.modesPersonnalises.map(ligneMode).join(''));
+          listeOrdre.innerHTML = ordreModesHtml();
           listeModes.querySelectorAll('.ligne-gestion').forEach((l) => { if (!presents.has(l.dataset.code)) deplierHauteur(l); });
         } catch (erreur) {
           toast(erreur.message, 'erreur');

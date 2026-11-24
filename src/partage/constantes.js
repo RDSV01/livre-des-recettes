@@ -85,6 +85,9 @@ export const PARAMETRES_DEFAUT = {
   devise: 'EUR',
   formatDate: 'JJ/MM/AAAA',
   modesPersonnalises: [],
+  // L'ordre des modes de règlement dans les listes de saisie (codes), rangé à
+  // la main dans les paramètres. Un mode absent de la liste vient après.
+  ordreModes: [],
   // Rappel de déclaration URSSAF : périodicité choisie et dernière période
   // marquée « déclarée » depuis le tableau de bord (« 2026-06 », « 2026-T2 »).
   periodiciteUrssaf: '',
@@ -129,4 +132,19 @@ export function libelleMode(code, modesPersonnalises = []) {
   const mode = MODES_REGLEMENT.find((m) => m.code === code) ??
     modesPersonnalises.find((m) => m.code === code);
   return mode ? mode.libelle : code;
+}
+
+/**
+ * Tous les modes de règlement (ceux par défaut, puis ceux de l'utilisateur),
+ * dans l'ordre qu'il a choisi dans les paramètres. Un mode que l'ordre ne
+ * nomme pas garde sa place d'origine, après les autres.
+ *
+ * @param {Array<{code: string, libelle: string}>} [modesPersonnalises]
+ * @param {string[]} [ordre] codes, du premier au dernier.
+ */
+export function modesDansLOrdre(modesPersonnalises = [], ordre = []) {
+  const rangs = new Map((ordre ?? []).map((code, i) => [code, i]));
+  const rang = (mode) => rangs.get(mode.code) ?? Number.MAX_SAFE_INTEGER;
+  // Le tri est stable : les modes non nommés gardent leur ordre d'origine.
+  return MODES_REGLEMENT.concat(modesPersonnalises).sort((a, b) => rang(a) - rang(b));
 }

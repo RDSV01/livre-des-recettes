@@ -338,7 +338,9 @@ test('GET /api/urssaf/periodes donne toutes les périodes de l’année', async 
 });
 
 test('GET /api/urssaf exige des paramètres valides', async () => {
-  assert.equal((await appeler('/api/urssaf?type=annee')).status, 400);
+  assert.equal((await appeler('/api/urssaf?type=mois&valeur=1')).status, 400);
+  assert.equal((await appeler('/api/urssaf?annee=2026&type=annee')).status, 400, 'l’année entière n’est pas une période de déclaration');
+  assert.equal((await appeler('/api/urssaf?annee=2026&type=trimestre')).status, 400);
   assert.equal((await appeler('/api/urssaf?annee=2026&type=nimporte')).status, 400);
   assert.equal((await appeler('/api/urssaf?annee=2026&type=mois&valeur=13')).status, 400);
 });
@@ -573,7 +575,7 @@ test('activité mixte : bilan URSSAF ventilé et exports avec catégorie', async
     corps: { ...RECETTE, client: 'Client mixte bis', numeroFacture: 'MIX-3', montant: 200, categorie: 'prestations' }
   })).status, 201);
 
-  const bilan = await (await appeler('/api/urssaf?annee=2026&type=annee')).json();
+  const bilan = await (await appeler('/api/urssaf?annee=2026&type=trimestre&valeur=3')).json();
   assert.ok(bilan.ventes.chiffreAffaires >= 300);
   assert.ok(bilan.prestations.chiffreAffaires >= 200);
   assert.ok(bilan.nonCategorise.nombreEncaissements >= 1);
@@ -900,12 +902,12 @@ test('GET /api/urssaf estime aussi la formation, le versement libératoire et le
   });
 
   await regler({ typeActivite: 'liberal', versementLiberatoire: false });
-  const sans = (await (await appeler('/api/urssaf?annee=2026&type=annee')).json()).cotisations;
+  const sans = (await (await appeler('/api/urssaf?annee=2026&type=trimestre&valeur=3')).json()).cotisations;
   assert.ok(sans.formationPro.total > 0);
   assert.equal(sans.versementLiberatoire, null);
 
   await regler({ typeActivite: 'liberal', versementLiberatoire: true });
-  const avec = (await (await appeler('/api/urssaf?annee=2026&type=annee')).json()).cotisations;
+  const avec = (await (await appeler('/api/urssaf?annee=2026&type=trimestre&valeur=3')).json()).cotisations;
   assert.ok(avec.versementLiberatoire.total > 0);
   assert.ok(avec.reste < sans.reste, 'l’impôt payé d’avance réduit ce qui reste');
   const somme = avec.total + avec.formationPro.total + avec.versementLiberatoire.total;

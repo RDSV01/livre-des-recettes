@@ -132,8 +132,9 @@ export function genererRapportPdf(rapport, parametres, flux) {
       const y = doc.y;
       rangee.forEach((entree, i) => {
         const x = MARGE + i * (largeur + ECART);
+        // Fond blanc, bordé d'un filet : la tuile se détache sans teinte.
         doc.roundedRect(x, y, largeur, hauteur, 6)
-          .fillAndStroke(COULEURS.fondTotal, COULEURS.bordure);
+          .lineWidth(0.75).fillAndStroke(COULEURS.papier, COULEURS.bordure);
         doc.font('Helvetica').fontSize(8).fillColor(COULEURS.secondaire)
           .text(texteSur(entree.etiquette.toUpperCase()), x + 10, y + 9, {
             width: largeur - 20, lineBreak: false
@@ -294,13 +295,16 @@ export function genererRapportPdf(rapport, parametres, flux) {
     ])
   ]);
 
+  // L'année en cours se compare à la même période de l'année d'avant.
+  const anneeComparee = comparaison.memePeriode ? `la même période de ${comparaison.annee}` : String(comparaison.annee);
   const reperes = [
     synthese.meilleurMois && `Meilleur mois : ${synthese.meilleurMois.nom} (${formaterMontant(synthese.meilleurMois.montant, parametres.devise)}).`,
     // L'évolution d'une année sur l'autre, sauf si l'utilisateur a choisi de ne pas comparer.
     parametres.comparerAnneePrecedente === false ? null
       : comparaison.evolution === null
-        ? (comparaison.nombreEncaissements === 0 ? `Aucun encaissement en ${comparaison.annee} : pas de comparaison possible.` : null)
-        : `Par rapport à ${comparaison.annee} (${formaterMontant(comparaison.chiffreAffaires, parametres.devise)}) : ` +
+        ? (comparaison.nombreEncaissements === 0
+          ? `Aucun encaissement ${comparaison.memePeriode ? 'sur' : 'en'} ${anneeComparee} : pas de comparaison possible.` : null)
+        : `Par rapport à ${anneeComparee} (${formaterMontant(comparaison.chiffreAffaires, parametres.devise)}) : ` +
           `${comparaison.evolution >= 0 ? '+' : ''}${String(comparaison.evolution).replace('.', ',')} %.`
   ].filter(Boolean).join(' ');
   if (reperes) commentaire(reperes);

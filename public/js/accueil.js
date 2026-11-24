@@ -27,11 +27,11 @@ const ETAPES = ['Vous', 'Votre entreprise', 'Votre activité', 'Vos déclaration
 const DERNIERE = ETAPES.length - 1;
 
 const ACTIVITES = [
-  { code: 'prestations', icone: 'outil', titre: 'Prestations de services commerciales ou artisanales', texte: 'Dépannage, travaux, transport, coiffure… (BIC)' },
-  { code: 'ventes', icone: 'colis', titre: 'Ventes de marchandises', texte: 'Achat-revente, vente de vos fabrications, restauration, hébergement (BIC)' },
-  { code: 'liberal', icone: 'mallette', titre: 'Autres prestations de services : activité libérale', texte: 'Conseil, formation, informatique, graphisme, rédaction… (BNC)' },
-  { code: 'liberalCipav', icone: 'mallette', titre: 'Profession libérale relevant de la Cipav', texte: 'Architecte, psychologue, ostéopathe, diététicien… (BNC)' },
-  { code: 'mixte', icone: 'calques', titre: 'Les deux : ventes et prestations', texte: 'Chaque recette sera classée en vente ou en prestation.' }
+  { code: 'prestations', icone: 'outil', encre: 'prestation', titre: 'Prestations de services commerciales ou artisanales', texte: 'Dépannage, travaux, transport, coiffure… (BIC)' },
+  { code: 'ventes', icone: 'colis', encre: 'vente', titre: 'Ventes de marchandises', texte: 'Achat-revente, vente de vos fabrications, restauration, hébergement (BIC)' },
+  { code: 'liberal', icone: 'mallette', encre: 'sarcelle', titre: 'Autres prestations de services : activité libérale', texte: 'Conseil, formation, informatique, graphisme, rédaction… (BNC)' },
+  { code: 'liberalCipav', icone: 'mallette', encre: 'sarcelle', titre: 'Profession libérale relevant de la Cipav', texte: 'Architecte, psychologue, ostéopathe, diététicien… (BNC)' },
+  { code: 'mixte', icone: 'calques', encre: 'or', titre: 'Les deux : ventes et prestations', texte: 'Chaque recette sera classée en vente ou en prestation.' }
 ];
 
 const RYTHMES = [
@@ -91,9 +91,9 @@ export function lancerAccueil({ fermer }) {
     <div class="choix-cartes ${classe}" role="radiogroup" aria-labelledby="${etiquette}">
       ${options.map((o) => `<label class="choix-carte">
           <input type="radio" class="hors-ecran" name="${nom}" value="${o.code}" ${o.code === choisi ? 'checked' : ''}>
-          ${o.icone ? `<span class="choix-icone">${icone(o.icone, { taille: 18 })}</span>` : ''}
+          ${o.icone ? `<span class="choix-icone${o.encre ? ` encre-${o.encre}` : ''}">${icone(o.icone, { taille: 18 })}</span>` : ''}
           <span class="choix-texte"><strong>${o.titre}</strong>${o.texte ? `<span>${o.texte}</span>` : ''}</span>
-          <span class="choix-coche">${icone('coche', { taille: 14 })}</span>
+          <span class="choix-coche" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5 10.2 16.5 18 8"/></svg></span>
         </label>`).join('')}
     </div>`;
 

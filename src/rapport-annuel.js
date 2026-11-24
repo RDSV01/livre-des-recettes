@@ -13,7 +13,7 @@
 
 import { enEuros } from './partage/montants.js';
 import { normaliserTexte } from './partage/texte.js';
-import { moisDe, nomMois } from './partage/dates.js';
+import { moisDe, nomMois, dateIso } from './partage/dates.js';
 import { libelleMode } from './partage/constantes.js';
 import { categorieImposee } from './partage/seuils.js';
 import {
@@ -86,9 +86,11 @@ function mensuel(recettes, achats) {
  *   (le filtrage par année est fait ici, l'année précédente servant à mesurer
  *   l'évolution).
  * @param {number} annee année civile analysée.
+ * @param {Date} [maintenant] date du jour : une année en cours se compare à la
+ *   même période de l'année d'avant, pas à l'année entière.
  * @returns {object} rapport prêt à mettre en forme.
  */
-export function rapportAnnuel({ recettes = [], achats = [], parametres = {} }, annee) {
+export function rapportAnnuel({ recettes = [], achats = [], parametres = {} }, annee, maintenant = new Date()) {
   const modes = parametres.modesPersonnalises ?? [];
   // Une activité à nature unique classe toutes ses recettes d'office, même
   // celles saisies avant que la catégorie soit posée à l'enregistrement.
@@ -111,8 +113,12 @@ export function rapportAnnuel({ recettes = [], achats = [], parametres = {} }, a
   };
 
   // Évolution : sans aucun encaissement l'année précédente, un pourcentage
-  // n'aurait pas de sens (division par zéro), d'où `evolution: null`.
-  const precedente = filtrerParPeriode(recettes, { annee: annee - 1 });
+  // n'aurait pas de sens (division par zéro), d'où `evolution: null`. L'année
+  // en cours se mesure à l'année d'avant arrêtée au même jour.
+  const memePeriode = annee === maintenant.getFullYear();
+  const borne = dateIso(annee - 1, maintenant.getMonth() + 1, maintenant.getDate());
+  const precedente = filtrerParPeriode(recettes, { annee: annee - 1 })
+    .filter((r) => !memePeriode || r.dateEncaissement <= borne);
   const caPrecedentCentimes = totalCentimes(precedente);
 
   const mois = mensuel(duRegistre, achatsAnnee);
@@ -140,6 +146,7 @@ export function rapportAnnuel({ recettes = [], achats = [], parametres = {} }, a
     },
     comparaison: {
       annee: annee - 1,
+      memePeriode,
       chiffreAffaires: enEuros(caPrecedentCentimes),
       nombreEncaissements: precedente.length,
       evolution: caPrecedentCentimes === 0

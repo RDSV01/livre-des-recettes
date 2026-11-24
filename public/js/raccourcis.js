@@ -28,11 +28,41 @@ const RACCOURCIS = () => [
     ]
   },
   {
+    titre: 'Dans un registre, sur une ligne',
+    lignes: [
+      [['↓'], 'Ligne suivante (ou J)'],
+      [['↑'], 'Ligne précédente (ou K)'],
+      [['Début'], 'Première ligne'],
+      [['Fin'], 'Dernière ligne'],
+      [['Entrée'], 'Ouvrir la ligne'],
+      [['Espace'], 'Voir le PDF joint, ou en joindre un'],
+      [['D'], 'Dupliquer la ligne'],
+      [['X'], 'Cocher la ligne'],
+      [['Suppr'], 'Supprimer la ligne (annulable)']
+    ]
+  },
+  {
     titre: 'Dans un panneau de saisie',
     lignes: [
       [['Entrée'], 'Ajouter, ou enregistrer la modification'],
       [['Ctrl', 'Entrée'], 'Ajouter et en saisir une autre, à la même date'],
       [['Échap'], 'Fermer le panneau']
+    ]
+  },
+  {
+    titre: 'Dans le relevé d’un mois (tableau de bord)',
+    lignes: [
+      [['←'], 'Mois précédent'],
+      [['→'], 'Mois suivant']
+    ]
+  },
+  {
+    titre: 'Dans la rétrospective',
+    lignes: [
+      [['→'], 'Scène suivante (ou un clic)'],
+      [['←'], 'Scène précédente (ou un clic à gauche)'],
+      [['Espace'], 'Mettre en pause, reprendre'],
+      [['Échap'], 'Fermer']
     ]
   },
   {
@@ -92,6 +122,9 @@ export function installerRaccourcis({ disponibles, rechercher }) {
       evenement.preventDefault();
       // Un menu ouvert (« … », liste des années) se referme d'abord.
       fermerMenu();
+      // Le bouton qui porte la touche s'enfonce un instant : on voit ce qu'elle a fait.
+      const bouton = document.querySelector(`#vue [data-touche="${touche.toLowerCase()}"]`);
+      if (bouton) { bouton.classList.remove('enfonce'); void bouton.offsetWidth; bouton.classList.add('enfonce'); }
       action();
     };
 

@@ -20,9 +20,9 @@ import { majusculeInitiale } from './texte.js';
 
 /** « 2e trimestre 2026 », « Juillet 2026 ». */
 export function libellePeriode({ annee, type, valeur }) {
-  if (type === 'trimestre') return `${valeur}${valeur === 1 ? 'er' : 'e'} trimestre ${annee}`;
-  if (type === 'mois') return `${majusculeInitiale(nomMois(valeur))} ${annee}`;
-  return `Année ${annee}`;
+  return type === 'trimestre'
+    ? `${valeur}${valeur === 1 ? 'er' : 'e'} trimestre ${annee}`
+    : `${majusculeInitiale(nomMois(valeur))} ${annee}`;
 }
 
 /** Période qui précède (le 1er trimestre 2026 donne le 4e trimestre 2025). */

@@ -26,10 +26,10 @@ export function pastilleEtat(etatPeriode) {
  * de « 0 € » (à déclarer, prélevé, reste). La déclaration reste due :
  * l'URSSAF attend un chiffre d'affaires nul, déclaré dans les délais.
  *
- * @param {string|null} etatPeriode état de la période ; `null` pour une année entière.
+ * @param {string} etatPeriode état de la période (voir `etatPeriode`).
  * @returns {{ titre: string, texte: string }}
  */
-export function sansChiffreAffaires(etatPeriode) {
+function sansChiffreAffaires(etatPeriode) {
   const aDeclarer = ['Aucun chiffre d’affaires sur cette période',
     'La déclaration reste obligatoire : indiquez 0 sur le site de l’URSSAF. Rien ne sera prélevé.'];
   const enAttente = ['Aucun encaissement pour l’instant',
@@ -41,7 +41,7 @@ export function sansChiffreAffaires(etatPeriode) {
     'a-venir': enAttente,
     declaree: ['Déclarée sans chiffre d’affaires', 'Rien n’a été prélevé sur cette période.'],
     ecoulee: ['Aucun encaissement sur cette période', '']
-  }[etatPeriode] ?? ['Aucun encaissement sur l’année', ''];
+  }[etatPeriode];
   return { titre, texte };
 }
 

@@ -5,6 +5,36 @@ locale, légère et simple.
 
 ## Déjà livré
 
+### v2.4
+
+- Tableau de bord plus lisible : cartes chiffrées, dernières recettes présentées comme un
+  relevé, le détail d'un mois en un clic, « Bien démarrer » pour
+  un nouvel utilisateur.
+- Plafonds estimés au 31 décembre, au rythme de l'année, explications rangées dans des
+  bulles « i ».
+- Rétrospective de l'année : le total, le meilleur mois, les clients, les habitudes,
+  racontés en scènes animées. Mise en avant de mi-décembre à fin janvier, ouverte à tout
+  moment depuis le rapport annuel.
+- Registres plus confortables : ouverts sur l'année en cours, mois collés en haut, mode
+  compact, filtres qui disent combien ils trouvent, navigation au clavier, bilan d'un
+  client au survol, numéro de facture manquant signalé dans sa suite.
+- Saisie plus sûre : montant en tête, facture PDF déposée n'importe où, série comptée,
+  doublons comparés côte à côte. Une recette ajoutée depuis le tableau de bord s'annule
+  elle aussi. Une suppression se confirme d'abord, et reste annulable.
+- URSSAF : l'année des déclarations en frise, au rythme choisi dans les paramètres, calcul
+  dessiné (chaque prélèvement avec son montant exact avant l'arrondi à l'euro), cases à
+  reporter comme sur le formulaire, y compris en activité mixte.
+- Clients : annuaire en fiches, et pour chacun une fiche plus complète, dont les recettes
+  s'ouvrent d'un clic dans le registre.
+- Rapport annuel : une année en cours se compare à la même période de l'année d'avant.
+- Menu rangé et repliable, recherche (Ctrl+K) avec aperçu, en-tête compact, nouveautés
+  présentées à la mise à jour.
+- Paramètres : ordre des modes de règlement au choix, sauvegardes en frise, import en
+  étapes, accueil en cartes.
+- Registres plus rapides à l'ouverture, modules mis à jour.
+- Pour les contributeurs : `npm run essai` a son banc d'essai, qui provoque d'un clic une
+  autre date du jour, un seuil dépassé, une déclaration en retard, une panne…
+
 ### v2.3
 
 - Annuaire des entreprises par nom : un nouveau client se cherche par son nom, son SIREN
@@ -149,20 +179,15 @@ locale, légère et simple.
 
 ## Prochaines versions
 
-### v2.3 : plusieurs entreprises
-
-- [ ] Un livre par entreprise, qu'on bascule de l'un à l'autre, chacun avec ses sauvegardes
-      et sa copie externe.
-- [ ] Un exécutable pour Mac Intel.
-
-### v2.4 : pilotage
+### v2.5 : pilotage
 
 - [ ] Tableau de bord personnalisable.
-- [ ] Projection de fin d'année : « à ce rythme, 41 200 €, soit 49 % du plafond ».
-- [ ] Protection des périodes déjà déclarées : l'application prévient avant de modifier une
-      recette d'une période déclarée à l'URSSAF, et indique le montant à rectifier.
+- [ ] Protection des périodes déjà déclarées : l'application prévient avant de modifier ou
+      de supprimer une recette d'une période déclarée à l'URSSAF, et indique le montant à
+      rectifier.
+- [ ] Un exécutable pour Mac Intel.
 
-### v2.5 : exports et déclarations
+### v2.6 : exports et déclarations
 
 - [ ] Export d'une période libre.
 - [ ] Impression directe du registre.
@@ -172,6 +197,7 @@ locale, légère et simple.
 
 ## À l'étude (pas engagé)
 
+- Plusieurs entreprises : un livre par entreprise, qu'on bascule de l'un à l'autre.
 - Tenir le même livre depuis plusieurs ordinateurs, si la demande existe.
 
 ## Jamais (hors périmètre, voir CONTRIBUTING.md)

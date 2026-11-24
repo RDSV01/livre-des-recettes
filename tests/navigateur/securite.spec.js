@@ -155,6 +155,9 @@ test.describe('sauvegardes automatiques', () => {
     await ouvrir(page, 'parametres?section=securite');
     await expect(page.locator('#securite-sauvegardes')).toHaveClass(/ok/);
     const liste = page.locator('#liste-sauvegardes');
+    // Rangées dans le temps, sous ce qui est gardé.
+    await expect(page.locator('.barre-conservation')).toContainText('14 jours');
+    await expect(liste.locator('.groupe-sauvegardes').first()).toHaveText('Aujourd’hui');
     await expect(liste.locator('.ligne-gestion', { hasText: 'Copie de secours' })).toBeVisible();
     const jour = liste.locator('.ligne-gestion', { hasText: 'Sauvegarde du jour' });
     await expect(jour).toBeVisible();

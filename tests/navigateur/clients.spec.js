@@ -32,6 +32,10 @@ test('la liste, classée par chiffre d’affaires, par nom ou par récence', asy
   // Le plus gros client est montré d'emblée.
   await expect(page.locator('#titre-fiche')).toHaveText('Zénith');
   await expect(page.locator('#liste-clients .client-ligne').first().locator('.ca')).toContainText(eurosEntiers(900));
+  // Avec ou sans SIRET, chaque client est posé sur une barre de même hauteur.
+  const hauteurs = await page.locator('#liste-clients .barre-client').evaluateAll((barres) => barres.map((b) => Math.round(b.getBoundingClientRect().height)));
+  expect(hauteurs).toHaveLength(3);
+  expect(new Set(hauteurs).size).toBe(1);
   await page.locator('[data-ordre="nom"]').click();
   await expect(noms).toHaveText(['Alpha', 'Milieu', 'Zénith']);
   await page.locator('[data-ordre="recent"]').click();
@@ -55,12 +59,20 @@ test('la fiche d’un client : ses encaissements, son total, ses factures jointe
   const fiche = page.locator('#fiche');
   await expect(fiche.locator('#titre-fiche')).toHaveText('Cabinet Roux');
   await expect(fiche.locator('.fiche-chiffres')).toContainText(euros(1750));
+  // Un profil : depuis quand, comment il paie, ses factures ; quatre chiffres.
+  await expect(fiche.locator('.profil-client')).toContainText('Client depuis');
+  await expect(fiche.locator('.fiche-chiffres > div')).toHaveCount(4);
+  await expect(fiche.locator('a', { hasText: 'Nouvelle recette' })).toHaveAttribute('href', /#\/recettes\?nouvelle=1&client=/);
   await expect(fiche.locator('tbody tr')).toHaveCount(2);
   await expect(fiche.locator('tfoot')).toContainText('2 encaissements');
   await fiche.locator('[data-piece]').click();
   await expect(page.locator('dialog.panneau[open] #titre-piece')).toHaveText('audit.pdf');
   await page.keyboard.press('Escape');
   await expect(page.locator('dialog.panneau')).toHaveCount(0);
+  // Une recette de la fiche s'ouvre dans le registre, mise en avant.
+  await fiche.locator(`tbody tr[data-voir="${r.id}"] td.libelle`).click();
+  await expect(page).toHaveURL(new RegExp(`#/recettes\\?voir=${r.id}`));
+  await expect(page.locator(`#registre tr[data-id="${r.id}"]`)).toHaveClass(/nouvelle/);
 });
 
 test('ajouter un client par son SIRET, retrouvé dans l’annuaire', async ({ page, request }) => {
@@ -176,7 +188,7 @@ test('retirer un client du carnet se confirme, garde ses recettes, et s’annule
   await page.locator('#supprimer-client').click();
   const boite = page.locator('dialog.boite[open]');
   await expect(boite).toContainText('Retirer À Retirer du carnet ?');
-  await expect(boite).toContainText('sa recette reste dans le livre');
+  await expect(boite).toContainText('Sa recette reste dans le livre');
   await boite.locator('[data-role="annuler"]').click();
   await expect(boite).toHaveCount(0);
   expect((await lister(request, '/api/clients')).clients).toHaveLength(1);

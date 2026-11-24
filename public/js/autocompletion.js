@@ -42,9 +42,12 @@ export function eclairer(champ) {
  *   suggestion (ou suggestions) ajoutée en fin de liste
  *   (`{ extra: true, rendu, action }` : créer, rechercher).
  * @param {number} [options.max]
+ * @param {{ trouves: string, extra: string }} [options.groupes] intitulés des
+ *   deux groupes de la liste (« Vos clients », puis « Ajouter »), et une ligne
+ *   d'aide au clavier au pied.
  * @returns {{ fermer: () => void }}
  */
-export function autocompletion(champ, { source, texte, rendu, surChoix, extra, max = 6 }) {
+export function autocompletion(champ, { source, texte, rendu, surChoix, extra, max = 6, groupes = null }) {
   const idListe = identifiantUnique('suggestions');
   const liste = document.createElement('ul');
   liste.className = 'suggestions';
@@ -85,8 +88,18 @@ export function autocompletion(champ, { source, texte, rendu, surChoix, extra, m
 
   function dessiner() {
     const saisie = champ.value;
-    liste.innerHTML = elements.map((e, i) => `<li role="option" id="${idListe}-${i}" data-i="${i}"
-        class="sugg${e.extra ? ' extra' : ''}" aria-selected="${i === actif}">${e.extra ? e.rendu : rendu(e, saisie)}</li>`).join('');
+    // Les groupes nommés : un intitulé avant le premier élément de chacun.
+    const intitule = (e, i) => {
+      if (!groupes) return '';
+      const avant = elements[i - 1];
+      if (i === 0 || Boolean(avant?.extra) !== Boolean(e.extra)) {
+        return `<li role="presentation" class="sugg-groupe">${echapperHtml(e.extra ? groupes.extra : groupes.trouves)}</li>`;
+      }
+      return '';
+    };
+    liste.innerHTML = elements.map((e, i) => `${intitule(e, i)}<li role="option" id="${idListe}-${i}" data-i="${i}"
+        class="sugg${e.extra ? ' extra' : ''}" aria-selected="${i === actif}">${e.extra ? e.rendu : rendu(e, saisie)}</li>`).join('') +
+      (groupes ? '<li role="presentation" class="sugg-pied" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> choisir <kbd>Entrée</kbd> valider <kbd>Échap</kbd> fermer</li>' : '');
     if (actif >= 0) champ.setAttribute('aria-activedescendant', `${idListe}-${actif}`);
     else champ.removeAttribute('aria-activedescendant');
     placerSurlignage();

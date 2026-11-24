@@ -20,7 +20,7 @@
 import { normaliserTexte } from './texte.js';
 
 /** Découpe « préfixe + chiffres finaux ». */
-const MOTIF_NUMERO = /^(.*?)(\d+)$/s;
+export const MOTIF_NUMERO = /^(.*?)(\d+)$/s;
 
 /** Taille maximale d'un trou signalé (au-delà, ce n'est pas une omission plausible). */
 const TROU_MAX = 3;

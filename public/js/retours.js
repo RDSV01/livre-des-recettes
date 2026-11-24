@@ -150,7 +150,7 @@ export async function copierDansPressePapiers(texte, bouton) {
 }
 
 /**
- * Ligne de retour en tête d'un conteneur : « 2e trimestre déclaré · Annuler ».
+ * Ligne de retour en tête d'un conteneur : « 2e trimestre déclaré, Annuler ».
  * Elle se déplie, reste le temps de réagir, puis se replie.
  *
  * @param {HTMLElement} conteneur

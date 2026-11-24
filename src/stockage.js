@@ -706,6 +706,9 @@ export function creerStockage(dossierDonnees, { dossierSauvegardes = dossierSauv
     /** Relit un livre momentanément inaccessible ; vrai s'il vient de revenir. */
     rafraichir,
 
+    /** Relit le fichier tel qu'il est sur le disque (le banc d'essai l'abîme ou le retire). */
+    relire: charger,
+
     /** Réagit à chaque écriture réussie (copie externe, archives). */
     surEcriture(ecouteur) {
       ecouteursEcriture.push(ecouteur);

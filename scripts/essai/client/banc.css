@@ -1,0 +1,110 @@
+/* Banc d'essai : `npm run essai` seulement (voir banc.js). Les couleurs et
+   les espacements sont ceux de l'application. */
+
+.bouton-banc {
+  position: fixed;
+  left: calc(var(--largeur-rail) + 16px);
+  bottom: 16px;
+  /* Devant l'accueil guidé (70) : le banc sert aussi pendant le premier lancement. */
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--bordure-controle);
+  border-radius: 999px;
+  background: var(--carte);
+  color: var(--texte-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--ombre-carte);
+  cursor: pointer;
+}
+.bouton-banc:hover {
+  color: var(--texte);
+}
+/* Une date simulée se voit d'un coup d'œil, sur chaque écran. */
+.bouton-banc.simule {
+  border-style: solid;
+  border-color: var(--alerte);
+  background: var(--alerte-doux);
+  color: var(--alerte-texte);
+}
+
+dialog.banc-essai {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(440px, 100vw);
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--bordure);
+  background: var(--carte);
+  color: var(--texte);
+  box-shadow: var(--ombre-panneau);
+}
+dialog.banc-essai[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.banc-essai::backdrop {
+  background: rgba(20, 18, 15, 0.25);
+}
+.banc-tete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: var(--e5) var(--e5) var(--e4);
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.banc-tete h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.banc-tete p {
+  margin-top: 4px;
+  color: var(--texte-2);
+  font-size: 13px;
+}
+.banc-corps {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--e2) var(--e5) var(--e5);
+}
+.banc-groupe {
+  padding: var(--e4) 0;
+  border-bottom: 1px solid var(--bordure-douce);
+}
+.banc-groupe:last-child {
+  border-bottom: 0;
+}
+.banc-groupe h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.banc-note {
+  margin-top: 2px;
+  color: var(--texte-3);
+  font-size: 12.5px;
+}
+.banc-gestes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--e2);
+}
+.banc-date {
+  display: flex;
+  gap: 6px;
+  margin-top: var(--e2);
+}
+.banc-date input {
+  width: auto;
+  height: 32px;
+}

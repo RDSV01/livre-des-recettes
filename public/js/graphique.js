@@ -154,21 +154,53 @@ export const graphiqueMensuel = () => `<div class="graphique">
     <div class="bulle-graphique" aria-hidden="true"></div>
   </div>`;
 
-/** Les mêmes chiffres en tableau, mois écoulés seulement ; l'année d'avant en dernière colonne. */
+/**
+ * Les mêmes chiffres en relevé, mois écoulés seulement : chaque mois garde
+ * une barre fine (ses séries empilées, à l'échelle du meilleur mois), le
+ * détail par série quand il y en a plusieurs, le total, le cumul de l'année
+ * et, si le livre connaît l'année d'avant, l'écart avec le même mois.
+ */
 export function tableauMensuel(mois, series, { moisCourant, devise, annee, precedente = null }) {
   const faits = mois.filter((m) => moisCourant === null || m.mois <= moisCourant);
   const plusieurs = series.length > 1;
-  const somme = (cle) => formaterMontant(sommeMontants(faits.map((m) => (cle ? m.valeurs[cle] ?? 0 : m.total))), devise);
-  const sommeAvant = () => formaterMontant(sommeMontants(faits.map((m) => precedente[m.mois - 1] ?? 0)), devise);
-  return `<table class="tableau">
-      <thead><tr><th>Mois</th>${plusieurs ? series.map((s) => `<th class="montant">${SERIES[s].libelle}</th>`).join('') : ''}<th class="montant">Total</th>
-        ${precedente ? `<th class="montant attenue">${annee - 1}</th>` : ''}</tr></thead>
-      <tbody>${faits.map((m) => `<tr><td>${majusculeInitiale(nomMois(m.mois))}</td>
-        ${plusieurs ? series.map((s) => `<td class="montant">${formaterMontant(m.valeurs[s] ?? 0, devise)}</td>`).join('') : ''}
-        <td class="montant">${formaterMontant(m.total, devise)}</td>
-        ${precedente ? `<td class="montant attenue">${formaterMontant(precedente[m.mois - 1] ?? 0, devise)}</td>` : ''}</tr>`).join('')}</tbody>
-      <tfoot><tr><td>Total</td>${plusieurs ? series.map((s) => `<td class="montant">${somme(s)}</td>`).join('') : ''}<td class="montant">${somme(null)}</td>
-        ${precedente ? `<td class="montant attenue">${sommeAvant()}</td>` : ''}</tr></tfoot>
+  const max = Math.max(0, ...faits.map((m) => m.total));
+  // Le meilleur mois n'est signalé que s'il se détache : un seul mois au maximum, et pas seul de l'année.
+  const meilleur = max > 0 && faits.length > 1 && faits.filter((m) => m.total === max).length === 1
+    ? faits.find((m) => m.total === max).mois : null;
+  const somme = (cle) => sommeMontants(faits.map((m) => (cle ? m.valeurs[cle] ?? 0 : m.total)));
+  // Les centimes se retirent quand la carte est étroite (voir le CSS) : le montant reste entier et lisible.
+  const montant = (v) => echapperHtml(formaterMontant(v, devise)).replace(/,(\d{2})/, '<span class="decimales">,$1</span>');
+  const ecart = (valeur, avant) => {
+    const difference = Math.round((valeur - avant) * 100) / 100;
+    // Moins d'un euro d'écart : rien à montrer (pas de « +0 € »).
+    if (Math.round(Math.abs(difference)) === 0) return '<td class="montant ecart-mois">=</td>';
+    return `<td class="montant ecart-mois ${difference > 0 ? 'hausse' : 'baisse'}"><span class="hors-ecran">${difference > 0 ? 'hausse de' : 'baisse de'} </span><span aria-hidden="true">${difference > 0 ? '+' : '−'}</span>${echapperHtml(formaterMontantEntier(Math.abs(difference), devise))}</td>`;
+  };
+  let cumul = 0;
+  const lignes = faits.map((m) => {
+    cumul = Math.round((cumul + m.total) * 100) / 100;
+    const barre = max > 0 ? series.filter((s) => (m.valeurs[s] ?? 0) > 0)
+      .map((s) => `<i class="${SERIES[s].classe}" style="width:${((m.valeurs[s] ?? 0) / max) * 100}%"></i>`).join('') : '';
+    return `<tr${m.mois === moisCourant ? ' class="mois-en-cours"' : ''}>
+        <th scope="row"><span class="nom-mois">${majusculeInitiale(nomMois(m.mois))}${m.mois === meilleur ? '<span class="meilleur-mois">Meilleur mois</span>' : ''}${m.mois === moisCourant ? '<span class="mois-courant">en cours</span>' : ''}</span>
+          <span class="barre-mois" aria-hidden="true">${barre}</span></th>
+        ${plusieurs ? series.map((s) => `<td class="montant">${(m.valeurs[s] ?? 0) > 0 ? montant(m.valeurs[s]) : '<span class="attenue">0</span>'}</td>`).join('') : ''}
+        <td class="montant total-mois">${montant(m.total)}</td>
+        <td class="montant cumul-mois">${formaterMontantEntier(cumul, devise)}</td>
+        ${precedente ? ecart(m.total, precedente[m.mois - 1] ?? 0) : ''}
+      </tr>`;
+  }).join('');
+  const totalAvant = precedente ? sommeMontants(faits.map((m) => precedente[m.mois - 1] ?? 0)) : 0;
+  return `<table class="tableau tableau-mensuel">
+      <thead><tr><th>Mois</th>
+        ${plusieurs ? series.map((s) => `<th class="montant">${SERIES[s].libelle}</th>`).join('') : ''}
+        <th class="montant">Total</th><th class="montant cumul-mois">Cumul</th>
+        ${precedente ? `<th class="montant ecart-mois">Écart avec ${annee - 1}</th>` : ''}</tr></thead>
+      <tbody>${lignes}</tbody>
+      <tfoot><tr><th scope="row">${moisCourant === null ? `Année ${annee}` : 'À ce jour'}</th>
+        ${plusieurs ? series.map((s) => `<td class="montant">${montant(somme(s))}</td>`).join('') : ''}
+        <td class="montant total-mois">${montant(somme(null))}</td><td class="cumul-mois"></td>
+        ${precedente ? ecart(somme(null), totalAvant) : ''}</tr></tfoot>
     </table>`;
 }
 

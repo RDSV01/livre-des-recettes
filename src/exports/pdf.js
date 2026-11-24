@@ -89,12 +89,16 @@ export function genererPdf(registre, parametres, flux) {
     doc.y = y + 22;
   }
 
-  /** Passe à la page suivante si la hauteur demandée ne tient plus. */
-  function assurerPlace(hauteur) {
+  /**
+   * Passe à la page suivante si la hauteur demandée ne tient plus. L'en-tête
+   * y est redessiné en gras : la police de la ligne qui suit est rétablie.
+   */
+  function assurerPlace(hauteur, police) {
     if (doc.y + hauteur > basDePage()) {
       doc.addPage();
       doc.y = MARGE;
       enTeteTableau();
+      doc.font(police).fontSize(TAILLE_TEXTE);
     }
   }
 
@@ -112,9 +116,7 @@ export function genererPdf(registre, parametres, flux) {
       doc.heightOfString(texte || ' ', { width: largeurCellule(COLONNES[i]) })
     )) + REMPLISSAGE_CELLULE * 2;
 
-    assurerPlace(hauteur);
-    // Un saut de page redessine l'en-tête en gras : on rétablit la police.
-    doc.font('Helvetica').fontSize(TAILLE_TEXTE);
+    assurerPlace(hauteur, 'Helvetica');
     const y = doc.y;
     doc.fillColor(COULEUR_TEXTE);
     let x = MARGE;
@@ -134,13 +136,14 @@ export function genererPdf(registre, parametres, flux) {
    * qui précèdent le montant, lequel s'aligne avec sa colonne.
    */
   function ligneTotal(libelle, montant, { ventilation = false } = {}) {
-    doc.font(ventilation ? 'Helvetica-Oblique' : 'Helvetica-Bold').fontSize(TAILLE_TEXTE);
+    const police = ventilation ? 'Helvetica-Oblique' : 'Helvetica-Bold';
+    doc.font(police).fontSize(TAILLE_TEXTE);
     const retrait = ventilation ? 14 : 0;
     const largeurLibelle = DEBUT_MONTANT - REMPLISSAGE_CELLULE * 2 - retrait;
     const hauteur = Math.max(16, doc.heightOfString(libelle, { width: largeurLibelle })) +
       REMPLISSAGE_CELLULE * 2;
 
-    assurerPlace(hauteur);
+    assurerPlace(hauteur, police);
     const y = doc.y;
     if (!ventilation) {
       doc.rect(MARGE, y, LARGEUR_TABLEAU, hauteur).fill(COULEUR_FOND_TOTAL);

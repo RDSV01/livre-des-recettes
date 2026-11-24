@@ -131,9 +131,12 @@ function refuserRequetesExterieures(req, res, suite) {
  *   proposés pour la copie externe, à la place de ceux de la machine : les
  *   tests de l'interface y mettent des dossiers temporaires, pour ne jamais
  *   écrire sur une vraie clé.
+ * @param {(app: import('express').Express, contexte: object) => void} [options.essai]
+ *   `npm run essai` seulement : branche le banc d'essai des développeurs
+ *   (voir scripts/essai/), qui reçoit le stockage, les pièces et la copie externe.
  */
 export function creerApp({
-  dossierDonnees, dossierSauvegardes, actifs, arreter, taches = false, listerVolumes
+  dossierDonnees, dossierSauvegardes, actifs, arreter, taches = false, listerVolumes, essai
 } = {}) {
   const dossier = dossierDonnees ?? DOSSIER_DONNEES_DEFAUT;
   const stockage = creerStockage(dossier, dossierSauvegardes ? { dossierSauvegardes } : {});
@@ -186,6 +189,7 @@ export function creerApp({
     stockage.rafraichir();
     suite();
   });
+  essai?.(app, { stockage, pieces, copieExterne, archives });
   app.use('/api/recettes', routesRecettes(stockage, pieces));
   app.use('/api/achats', routesAchats(stockage, pieces));
   app.use('/api/clients', routesClients(stockage));
@@ -242,11 +246,14 @@ export function creerApp({
       // Le registre des achats reste visible tant qu'il contient quelque
       // chose, même si l'activité déclarée ne l'exige plus.
       aDesAchats: nombre.achats > 0,
+      // Combien de lignes compte chaque registre : le menu les affiche.
+      compteurs: nombre,
       // Pièces jointes : combien, quel poids, et où elles sont rangées.
       pieces: { ...stockage.bilanPieces(), dossier: pieces.dossier },
       // Première utilisation : l'interface dirige alors vers les Paramètres.
       premierLancement: nombre.recettes === 0 && nombre.clients === 0 &&
-        !parametres.nomEntreprise && !parametres.typeActivite
+        !parametres.nomEntreprise && !parametres.typeActivite,
+      ...(essai ? { essai: true } : {})
     });
   });
 

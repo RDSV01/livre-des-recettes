@@ -122,6 +122,19 @@ test('le jeu de démonstration depuis l’accueil garde le prénom tapé', async
   expect((await lister(request, '/api/recettes')).recettes.length).toBeGreaterThan(20);
 });
 
+test('pendant le chargement de la démonstration, la roue reste sur la ligne du lien, devant son texte', async ({ page }) => {
+  // Une réponse retenue : le temps de regarder le lien en attente.
+  await page.route('**/api/demo', async (route) => { await new Promise((fin) => { setTimeout(fin, 1500); }); await route.continue(); });
+  await page.goto('/');
+  const lien = accueil(page).locator('[data-demo]');
+  await lien.click();
+  await expect(lien).toContainText('Chargement…');
+  const [roue, texte] = await Promise.all([lien.locator('.statut').boundingBox(), lien.locator('span').last().boundingBox()]);
+  // Même ligne (centres alignés au pixel près), la roue à gauche du texte.
+  expect(Math.abs((roue.y + roue.height / 2) - (texte.y + texte.height / 2))).toBeLessThan(2);
+  expect(roue.x + roue.width).toBeLessThanOrEqual(texte.x);
+});
+
 test('la carte de bienvenue charge aussi la démonstration', async ({ page, request }) => {
   await regler(request, { accueil: 'termine' });
   await ouvrir(page, 'parametres');

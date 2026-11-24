@@ -45,10 +45,10 @@ test('les colonnes sont devinées, les lignes vérifiées, puis importées', asy
   await expect(carte.locator('.points-import')).toContainText('1 recette prête à importer');
   await expect(carte.locator('.points-import li.alerte')).toContainText('1 doublon détecté');
   await expect(carte.locator('.points-import li.erreur')).toContainText('2 lignes en erreur, non importées');
-  await expect(carte.locator('#i-importer')).toHaveText(/Importer 1 recette/);
+  await expect(carte.locator('#i-importer')).toHaveText(/Importer 1\srecette/);
   // Les doublons peuvent être importés aussi.
   await carte.locator('#i-doublons').check();
-  await expect(carte.locator('#i-importer')).toHaveText(/Importer 2 recettes/);
+  await expect(carte.locator('#i-importer')).toHaveText(/Importer 2\srecettes/);
   await carte.locator('#i-doublons').uncheck();
 
   await carte.locator('#i-importer').click();
@@ -118,12 +118,39 @@ test('seuls des doublons : rien à importer tant qu’ils ne sont pas demandés'
   await ouvrir(page, 'import');
   const carte = await deposer(page, csv(['Date;Client;Montant', `05/01/${annee};Durand;120,50`]));
   await carte.locator('#i-analyser').click();
-  await expect(carte.locator('#i-importer')).toHaveText(/Importer 0 recette/);
+  await expect(carte.locator('#i-importer')).toHaveText(/Importer 0\srecette/);
   await expect(carte.locator('#i-importer')).toBeDisabled();
   await carte.locator('#i-doublons').check();
   await expect(carte.locator('#i-importer')).toBeEnabled();
   await carte.locator('#i-importer').click();
   await expect(carte.locator('.reussite-import h2')).toHaveText('1 recette importée');
+});
+
+test('un import refusé revient au rapport tel quel : la case des doublons garde son choix', async ({ page, request }) => {
+  await configurer(request);
+  await ajouterRecette(request, { client: 'Durand', montant: 120.5, dateEncaissement: `${annee}-01-05` });
+  // Le premier envoi est refusé (sauvegarde impossible, par exemple), le suivant passe.
+  let refus = 1;
+  await page.route('**/api/recettes/import', async (route) => {
+    // L'analyse (simulation) passe ; seul le vrai import est refusé.
+    if (route.request().postDataJSON()?.simulation) await route.continue();
+    else if (refus-- > 0) await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ erreur: 'Sauvegarde impossible avant l’import.' }) });
+    else await route.continue();
+  });
+  await ouvrir(page, 'import');
+  const carte = await deposer(page, csv(['Date;Client;Montant', `05/01/${annee};Durand;120,50`, `06/01/${annee};Martin;80`]));
+  await carte.locator('#i-analyser').click();
+  await carte.locator('#i-doublons').check();
+  await expect(carte.locator('#i-importer')).toHaveText(/Importer 2\srecettes/);
+  await carte.locator('#i-importer').click();
+  await expect(carte.locator('[data-erreur]')).toContainText('Sauvegarde impossible');
+  // Le rapport revenu : la case toujours cochée, et toujours écoutée.
+  await expect(carte.locator('#i-doublons')).toBeChecked();
+  await carte.locator('#i-doublons').uncheck();
+  await expect(carte.locator('#i-importer')).toHaveText(/Importer 1\srecette/);
+  await carte.locator('#i-importer').click();
+  await expect(carte.locator('.reussite-import h2')).toHaveText('1 recette importée');
+  expect((await lister(request, '/api/recettes')).recettes).toHaveLength(2);
 });
 
 test('activité mixte : la catégorie lue, ou celle choisie par défaut', async ({ page, request }) => {

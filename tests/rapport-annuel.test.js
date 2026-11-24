@@ -129,13 +129,27 @@ test('un mode de règlement personnalisé garde son libellé', () => {
 });
 
 test('l’évolution se mesure sur l’année précédente, et vaut null sans passé', () => {
-  const avec = rapportAnnuel({ recettes: RECETTES, achats: [], parametres: PARAMETRES }, 2026);
+  const close = new Date(2027, 2, 1);
+  const avec = rapportAnnuel({ recettes: RECETTES, achats: [], parametres: PARAMETRES }, 2026, close);
   assert.equal(avec.comparaison.annee, 2025);
+  assert.equal(avec.comparaison.memePeriode, false);
   assert.equal(avec.comparaison.chiffreAffaires, 500);
   assert.equal(avec.comparaison.evolution, 100, 'de 500 à 1000 : +100 %');
 
-  const sans = rapportAnnuel({ recettes: RECETTES, achats: [], parametres: PARAMETRES }, 2025);
+  const sans = rapportAnnuel({ recettes: RECETTES, achats: [], parametres: PARAMETRES }, 2025, close);
   assert.equal(sans.comparaison.evolution, null, 'rien en 2024 : pas de pourcentage');
+});
+
+test('l’année en cours se compare à la même période de l’année d’avant', () => {
+  const recettes = [...RECETTES, recette('2025-12-15', 700, { client: 'Alpha' })];
+  // Au 24 novembre 2026 : la recette du 15 décembre 2025 n'est pas encore comparable.
+  const enCours = rapportAnnuel({ recettes, achats: [], parametres: PARAMETRES }, 2026, new Date(2026, 10, 24));
+  assert.equal(enCours.comparaison.memePeriode, true);
+  assert.equal(enCours.comparaison.chiffreAffaires, 500);
+  // L'année close : toute l'année d'avant.
+  const close = rapportAnnuel({ recettes, achats: [], parametres: PARAMETRES }, 2026, new Date(2027, 0, 10));
+  assert.equal(close.comparaison.memePeriode, false);
+  assert.equal(close.comparaison.chiffreAffaires, 1200);
 });
 
 test('une année vide ne divise par zéro nulle part', () => {

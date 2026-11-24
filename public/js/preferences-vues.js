@@ -7,14 +7,18 @@
  *
  * Chaque vue reçoit une référence stable qu'elle mute directement : c'est cette
  * référence partagée qui fait persister l'état d'une visite à l'autre.
+ *
+ * L'année vaut `null` tant qu'elle n'a pas été choisie : le registre s'ouvre
+ * alors sur l'année en cours (voir `rendreAnnees` dans registre.js). Un
+ * choix, « Toutes » (`''`) compris, est ensuite gardé.
  */
 const etats = {
   recettes: {
-    filtres: { q: '', annee: '', mois: '', mode: '', categorie: '', piece: '' },
+    filtres: { q: '', annee: null, mois: '', mode: '', categorie: '', piece: '' },
     tri: { colonne: 'date', sens: 'desc' }
   },
   achats: {
-    filtres: { q: '', annee: '', mois: '', mode: '', piece: '' },
+    filtres: { q: '', annee: null, mois: '', mode: '', piece: '' },
     tri: { colonne: 'date', sens: 'desc' }
   }
 };

@@ -26,6 +26,9 @@ import { formaterMontant, formaterMontantEntier } from '../../src/partage/montan
 
 export { expect };
 
+/** La version de l'application, telle que le navigateur la retient pour ses nouveautés. */
+const VERSION = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
+
 // ---- Numéros d'entreprise -----------------------------------------------------------
 
 /** Complète un numéro par sa clé de Luhn : SIREN et SIRET fictifs mais valides. */
@@ -235,11 +238,33 @@ export async function attendrePage(page) {
   await page.waitForFunction(() => !document.documentElement.classList.contains('fondu-en-cours'));
 }
 
+/**
+ * Un geste qui enregistre un réglage, puis l'attente que la page ait reçu la
+ * réponse (événement `parametres-modifies`), pas seulement que le serveur
+ * l'ait écrite : sur une machine lente, le geste suivant partirait sinon de
+ * l'état d'avant.
+ */
+export async function apresEnregistrement(page, geste) {
+  await page.evaluate(() => {
+    window.__parametresRecus = new Promise((fin) => addEventListener('parametres-modifies', () => fin(), { once: true }));
+  });
+  await geste();
+  await page.evaluate(() => window.__parametresRecus);
+}
+
 /** Le panneau de saisie ouvert (recette, achat). */
 export const panneau = (page) => page.locator('dialog.panneau[open]').last();
 
 /** Le dernier message éphémère affiché (« toast »). */
 export const toast = (page) => page.locator('#toasts .toast').last();
+
+/** Garde un bouton « Maintenir pour … » appuyé jusqu'à ce qu'il confirme. */
+export async function maintenir(page, bouton) {
+  await bouton.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(1300);
+  await page.mouse.up();
+}
 
 /**
  * Attend un téléchargement déclenché par `action` et rend son nom et son contenu.
@@ -343,9 +368,12 @@ export const test = base.extend({
     });
     // La fenêtre « Enregistrer sous » du système bloquerait le test : la
     // sauvegarde passe par un téléchargement ordinaire, comme dans Firefox.
-    await page.addInitScript(() => {
+    await page.addInitScript((version) => {
       Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true });
-    });
+      // Les nouveautés de la version ont « déjà été vues » : leur boîte ne
+      // couvre pas la page des autres tests (voir nouveautes.spec.js).
+      if (!sessionStorage.getItem('garder-nouveautes')) localStorage.setItem('ldr-nouveautes-vues', version);
+    }, VERSION);
     await use(page);
     expect(erreurs, 'erreurs relevées dans la page').toEqual([]);
   }

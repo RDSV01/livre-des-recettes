@@ -9,7 +9,7 @@
 
 import { icone } from './icones.js';
 import { surlignageGlissant } from './glisseur.js';
-import { analyserMontant, formaterMontant } from '/partage/montants.js';
+import { analyserMontant, formaterMontant, symboleDevise } from '/partage/montants.js';
 import { NOMS_MOIS } from '/partage/dates.js';
 import { majusculeInitiale, normaliserTexte } from '/partage/texte.js';
 
@@ -66,7 +66,7 @@ let compteurIdentifiants = 0;
 export const identifiantUnique = (prefixe) => `${prefixe}-${(compteurIdentifiants += 1)}`;
 
 /** « 3 recettes » : le nombre et le mot accordé. */
-export const accorder = (n, mot, pluriel = `${mot}s`) => `${n} ${n > 1 ? pluriel : mot}`;
+export const accorder = (n, mot, pluriel = `${mot}s`) => `${n}\u00a0${n > 1 ? pluriel : mot}`;
 
 /** Monogramme d'un client : les initiales de ses deux premiers mots utiles. */
 export const initiales = (nom) => String(nom ?? '').replace(/^(Mme|M\.|SARL|SAS|SASU|EURL|SCI)\s+/i, '')
@@ -79,6 +79,10 @@ export const initiales = (nom) => String(nom ?? '').replace(/^(Mme|M\.|SARL|SAS|
  */
 export const teinteDe = (nom) => [...String(nom ?? '').toLowerCase()]
   .reduce((somme, c) => (somme * 31 + c.codePointAt(0)) % 9973, 7) % 4;
+
+/** Les initiales d'un client dans leur pastille, à sa teinte. */
+export const monogramme = (nom, { petit = false } = {}) =>
+  `<span class="monogramme${petit ? ' petit' : ''}" data-teinte="${teinteDe(nom)}" aria-hidden="true">${echapperHtml(initiales(nom))}</span>`;
 
 /** SIRET groupé comme sur un avis de situation : 123 456 782 00010. */
 export const siretLisible = (s) => (s ? String(s).replace(/^(\d{3})(\d{3})(\d{3})(\d*)$/, '$1 $2 $3 $4').trim() : '');
@@ -104,23 +108,35 @@ export const interrupteur = (id, actif, libelle) =>
  * défilement de la page pour fermer ; le focus revient au bouton.
  *
  * @param {HTMLElement} bouton
- * @param {Array<{libelle: string, icone?: string, action: () => void, danger?: boolean, coche?: boolean}|'separateur'>} entrees
+ * @param {Array<{libelle: string, icone?: string, action: () => void, danger?: boolean, coche?: boolean, touche?: string, montant?: string, sous?: string, part?: number}|'separateur'>} entrees
  *   avec `coche`, le menu devient une liste de choix : l'entrée choisie porte
- *   une coche et prend le focus à l'ouverture.
- * @param {{ alignement?: 'gauche'|'droite' }} [options] bord du bouton sur
- *   lequel le menu s'aligne.
+ *   une coche et prend le focus à l'ouverture. `touche` écrit le raccourci au
+ *   bout de l'entrée ; `montant`, `sous` et `part` (de 0 à 1) donnent à un
+ *   choix ses chiffres et une barre pour comparer (les années).
+ * @param {{ alignement?: 'gauche'|'droite', tete?: { titre: string, detail?: string } }} [options]
+ *   bord du bouton sur lequel le menu s'aligne ; `tete` rappelle en haut du
+ *   menu ce sur quoi il agit (la ligne d'un registre).
  */
-export function menuContextuel(bouton, entrees, { alignement = 'droite' } = {}) {
+export function menuContextuel(bouton, entrees, { alignement = 'droite', tete = null } = {}) {
   fermerMenu();
   const choix = entrees.some((e) => e !== 'separateur' && 'coche' in e);
   const menu = document.createElement('div');
-  menu.className = `menu-contextuel${choix ? ' menu-choix' : ''}${alignement === 'gauche' ? ' a-gauche' : ''}`;
+  const chiffres = entrees.some((e) => e !== 'separateur' && e.montant !== undefined);
+  menu.className = `menu-contextuel${choix ? ' menu-choix' : ''}${chiffres ? ' avec-chiffres' : ''}${alignement === 'gauche' ? ' a-gauche' : ''}`;
   menu.setAttribute('role', 'menu');
-  menu.innerHTML = entrees.map((e, i) => {
+  const enTete = tete ? `<div class="menu-tete" aria-hidden="true"><strong>${echapperHtml(tete.titre)}</strong>${tete.detail ? `<span>${echapperHtml(tete.detail)}</span>` : ''}</div>` : '';
+  menu.innerHTML = enTete + entrees.map((e, i) => {
     if (e === 'separateur') return '<hr>';
     const role = choix ? `menuitemradio" aria-checked="${Boolean(e.coche)}` : 'menuitem';
     const marque = choix ? icone('coche', { taille: 15, classe: 'marque-choix' }) : icone(e.icone, { taille: 16 });
-    return `<button type="button" role="${role}" data-i="${i}" class="${e.danger ? 'danger' : ''}">${marque}${echapperHtml(e.libelle)}</button>`;
+    const touche = e.touche ? `<kbd aria-hidden="true">${echapperHtml(e.touche)}</kbd>` : '';
+    const libelle = e.montant === undefined ? echapperHtml(e.libelle) : `<span class="choix-chiffre">
+        <span class="choix-nom">${echapperHtml(e.libelle)}</span>
+        <span class="choix-barre" aria-hidden="true"><i style="width:${Math.round(Math.max(0, Math.min(1, e.part ?? 0)) * 100)}%"></i></span>
+        <span class="choix-montant">${echapperHtml(e.montant)}</span>
+        ${e.sous ? `<span class="choix-sous">${echapperHtml(e.sous)}</span>` : ''}
+      </span>`;
+    return `<button type="button" role="${role}" data-i="${i}" class="${e.danger ? 'danger' : ''}">${marque}${libelle}${touche}</button>`;
   }).join('');
   document.body.append(menu);
   const r = bouton.getBoundingClientRect();
@@ -220,8 +236,10 @@ export const choixAnnee = ({ id, etiquette = 'Année' }) => `<div class="choix-a
  * @param {number|string} options.choisie
  * @param {(annee: number|string, pas: string|null) => void} options.surChoix
  *   `pas` : la flèche utilisée, ou `null` pour un choix dans la liste.
+ * @param {(annee: number|string) => ({ montant: string, sous?: string, part?: number }|null)} [options.resume]
+ *   chiffres d'une année, montrés dans la liste.
  */
-export function brancherChoixAnnee(groupe, { annees, choisie, surChoix, libelle = String, nom = String }) {
+export function brancherChoixAnnee(groupe, { annees, choisie, surChoix, libelle = String, nom = String, resume = null }) {
   let annee = choisie;
   const etiquette = groupe.getAttribute('aria-label') ?? 'Année';
   const affichee = groupe.querySelector('.annee-choisie');
@@ -249,8 +267,9 @@ export function brancherChoixAnnee(groupe, { annees, choisie, surChoix, libelle 
     if (evenement.target.closest('.annee-choisie')) {
       // Un second clic sur l'année referme la liste.
       if (menuActif?.bouton === affichee) { menuActif.fermer(); return; }
+      // Avec `resume`, chaque année dit ce qu'elle contient : on choisit en sachant.
       menuContextuel(affichee, annees.map((a) => ({
-        libelle: libelle(a), coche: a === annee, action: () => choisir(a, null)
+        libelle: libelle(a), coche: a === annee, action: () => choisir(a, null), ...(resume?.(a) ?? {})
       })), { alignement: 'gauche' });
       return;
     }
@@ -317,17 +336,20 @@ export function toast(message, type = 'succes') {
   // Une erreur interrompt l'annonce en cours du lecteur d'écran ; une réussite
   // attend son tour.
   element.setAttribute('role', estErreur ? 'alert' : 'status');
-  element.innerHTML = `${icone(estErreur ? 'cercle-alerte' : 'cercle-valide', { taille: 18 })}<span>${echapperHtml(message)}</span><i class="meche" aria-hidden="true"></i>`;
+  element.innerHTML = `<span class="toast-icone">${icone(estErreur ? 'cercle-alerte' : 'cercle-valide', { taille: 16 })}</span><span>${echapperHtml(message)}</span><i class="meche" aria-hidden="true"></i>`;
 
   conteneur.appendChild(element);
+  installerPile(conteneur);
   if (conteneur.showPopover) {
     // Ré-ouverte à chaque ajout : elle repasse ainsi devant une boîte ouverte après elle.
     if (conteneur.matches(':popover-open')) conteneur.hidePopover();
     conteneur.showPopover();
   }
+  rangerPile(conteneur);
 
   const retirer = () => {
     element.remove();
+    rangerPile(conteneur);
     if (conteneur.childElementCount === 0 && conteneur.hidePopover && conteneur.matches(':popover-open')) {
       conteneur.hidePopover();
     }
@@ -336,27 +358,72 @@ export function toast(message, type = 'succes') {
   const partir = () => {
     if (mouvementReduit()) { retirer(); return; }
     element.classList.add('part');
+    rangerPile(conteneur);
     setTimeout(retirer, 200);
   };
 
   // Une mèche se consume sous le message pendant le temps qui lui reste
-  // (d'après « Swipe Toast » de React Bits). Le survol la suspend, le temps de
-  // lire jusqu'au bout ; à la sortie, il reste au moins deux secondes.
+  // (d'après « Swipe Toast » de React Bits). Le survol de la pile la
+  // suspend, le temps de tout relire ; à la sortie, il reste au moins deux secondes.
   const DUREE = 4000;
   const RELIQUAT = 2000;
   if (mouvementReduit()) {
     let minuteur = setTimeout(partir, DUREE);
-    element.addEventListener('pointerenter', () => clearTimeout(minuteur));
-    element.addEventListener('pointerleave', () => { minuteur = setTimeout(partir, RELIQUAT); });
+    element.suspendre = () => clearTimeout(minuteur);
+    element.reprendre = () => { clearTimeout(minuteur); minuteur = setTimeout(partir, RELIQUAT); };
     return;
   }
   const meche = element.querySelector('.meche').animate([{ scale: '1 1' }, { scale: '0 1' }], { duration: DUREE, easing: 'linear', fill: 'forwards' });
   meche.finished.then(partir, () => {});
-  element.addEventListener('pointerenter', () => meche.pause());
-  element.addEventListener('pointerleave', () => {
+  element.suspendre = () => meche.pause();
+  element.reprendre = () => {
     if (meche.currentTime > DUREE - RELIQUAT) meche.currentTime = DUREE - RELIQUAT;
     meche.play();
+  };
+  if (conteneur.classList.contains('ouverte')) element.suspendre();
+}
+
+/**
+ * La pile des notifications (d'après Sonner) : la plus récente devant, les
+ * autres en retrait derrière elle, un peu plus petites ; au survol, la pile
+ * s'ouvre pour tout relire, et le temps s'arrête.
+ */
+function installerPile(conteneur) {
+  if (conteneur.dataset.pile) return;
+  conteneur.dataset.pile = 'oui';
+  const messages = () => [...conteneur.querySelectorAll('.toast')];
+  conteneur.addEventListener('pointerenter', () => {
+    conteneur.classList.add('ouverte');
+    messages().forEach((m) => m.suspendre?.());
+    rangerPile(conteneur);
   });
+  conteneur.addEventListener('pointerleave', () => {
+    conteneur.classList.remove('ouverte');
+    messages().forEach((m) => m.reprendre?.());
+    rangerPile(conteneur);
+  });
+}
+
+/** Place chaque message de la pile, fermée ou ouverte. */
+function rangerPile(conteneur) {
+  const ouverte = conteneur.classList.contains('ouverte');
+  // Du plus récent au plus ancien.
+  const presents = [...conteneur.querySelectorAll('.toast:not(.part)')].reverse();
+  let hauteur = 0;
+  presents.forEach((element, rang) => {
+    element.style.zIndex = String(100 - rang);
+    element.classList.toggle('derriere', !ouverte && rang > 0);
+    if (ouverte) {
+      element.style.transform = `translateY(${-hauteur}px)`;
+      element.style.opacity = '';
+      hauteur += element.offsetHeight + 8;
+    } else {
+      element.style.transform = `translateY(${-rang * 10}px) scale(${1 - rang * 0.05})`;
+      element.style.opacity = rang > 2 ? '0' : '';
+    }
+  });
+  const devant = presents[0]?.offsetHeight ?? 0;
+  conteneur.style.height = `${ouverte ? Math.max(hauteur - 8, devant) : devant + Math.min(presents.length - 1, 2) * 10}px`;
 }
 
 // ---- Boîtes de dialogue -------------------------------------------------------------
@@ -409,44 +476,132 @@ function dialogueTemporaire(contenu, classe = '') {
  * corbeille) ; `danger: false` et `iconeOk` conviennent aux actions qui ne
  * suppriment rien, comme installer une mise à jour.
  *
- * `caseACocher` demande une seconde validation : le bouton ne s'active
- * qu'une fois la case cochée (choix lourd de conséquences).
+ * `suites` dit ce qui se passera, ligne à ligne : ce qui est gardé
+ * (`garde`, coche verte) et ce qui est perdu (`perd`, croix rouge). On
+ * confirme en sachant, sans lire un paragraphe.
  *
+ * `caseACocher` demande une seconde validation : le bouton ne s'active
+ * qu'une fois la case cochée (choix lourd de conséquences). `maintenir`
+ * demande de garder le bouton appuyé une seconde, le temps de le voir se
+ * remplir, pour ce qui efface tout ; relâché trop tôt, il revient à zéro.
+ *
+ * @param {object} options
+ * @param {Array<{ garde?: string, perd?: string }>} [options.suites]
+ * @param {{ icone: string, ton?: string }|null} [options.tuile] pastille
+ *   d'icône en tête ; par défaut, un triangle rouge pour une action destructrice.
  * @returns {Promise<boolean>} vrai si l'utilisateur confirme.
  */
 export function confirmer({
-  titre = 'Confirmer', message, boutonOk = 'Supprimer',
-  danger = true, iconeOk = 'corbeille', caseACocher = ''
+  titre = 'Confirmer', message = '', boutonOk = 'Supprimer',
+  danger = true, iconeOk = 'corbeille', caseACocher = '', suites = [], tuile, maintenir = false
 }) {
+  const pastille = tuile === undefined ? (danger ? { icone: 'triangle-alerte', ton: 'danger' } : null) : tuile;
+  const ligneSuite = (s) => (s.garde
+    ? `<li class="garde">${icone('cercle-valide', { taille: 16 })}<span>${echapperHtml(s.garde)}</span></li>`
+    : `<li class="perd">${icone('croix', { taille: 16 })}<span>${echapperHtml(s.perd)}</span></li>`);
   const { dialogue, reponse } = dialogueTemporaire((idTitre) => `
     <form method="dialog" class="boite-corps">
-      <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
-      <p>${echapperHtml(message)}</p>
+      <div class="boite-tete">${pastille ? `<span class="boite-tuile ${pastille.ton ?? ''}">${icone(pastille.icone, { taille: 18 })}</span>` : ''}<h2 id="${idTitre}">${echapperHtml(titre)}</h2></div>
+      ${message ? `<p>${echapperHtml(message)}</p>` : ''}
+      ${suites.length ? `<ul class="suites">${suites.map(ligneSuite).join('')}</ul>` : ''}
       ${caseACocher ? `<label class="case-a-cocher"><input type="checkbox"><span>${echapperHtml(caseACocher)}</span></label>` : ''}
       <div class="boite-pied">
         <button type="button" class="btn btn-fantome" data-role="annuler">Annuler</button>
-        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-principal'}" data-role="ok"${caseACocher ? ' disabled' : ''}>
-          ${icone(iconeOk, { taille: 16 })}<span>${echapperHtml(boutonOk)}</span>
+        <button type="button" class="btn ${maintenir ? 'btn-maintenir' : danger ? 'btn-danger' : 'btn-principal'}" data-role="ok"${caseACocher ? ' disabled' : ''}>
+          ${maintenir ? '<span class="remplissage" aria-hidden="true"></span>' : ''}<span class="texte-bouton">${icone(maintenir ? 'maintien' : iconeOk, { taille: 16 })}<span>${echapperHtml(maintenir ? `Maintenir pour ${boutonOk.charAt(0).toLowerCase()}${boutonOk.slice(1)}` : boutonOk)}</span></span>
         </button>
       </div>
     </form>`);
+  const ok = dialogue.querySelector('[data-role="ok"]');
   if (caseACocher) {
-    const ok = dialogue.querySelector('[data-role="ok"]');
     dialogue.querySelector('.case-a-cocher input').addEventListener('change', (evenement) => {
       ok.disabled = !evenement.target.checked;
     });
   }
+  if (maintenir) maintenirPourConfirmer(ok);
   return reponse;
+}
+
+/** Durée d'appui qui confirme (ms). */
+const DUREE_MAINTIEN = 1100;
+
+/**
+ * Le bouton ne confirme qu'après un appui maintenu (souris, Espace ou
+ * Entrée) : son fond se remplit pendant l'appui, et se vide si on relâche
+ * avant la fin. Un simple clic ne fait rien, et le dit.
+ */
+function maintenirPourConfirmer(bouton) {
+  let minuteur = null;
+  let tenu = false;
+  bouton.setAttribute('aria-description', 'Maintenez le bouton appuyé une seconde pour confirmer.');
+  // Le clic ne vaut confirmation qu'une fois l'appui allé jusqu'au bout.
+  bouton.addEventListener('click', (evenement) => {
+    if (tenu) return;
+    evenement.stopImmediatePropagation();
+    evenement.preventDefault();
+  }, true);
+  const commencer = () => {
+    if (bouton.disabled || minuteur) return;
+    bouton.classList.add('appui');
+    minuteur = setTimeout(() => {
+      tenu = true;
+      bouton.click();
+    }, mouvementReduit() ? 0 : DUREE_MAINTIEN);
+  };
+  const arreter = () => {
+    clearTimeout(minuteur);
+    minuteur = null;
+    bouton.classList.remove('appui');
+  };
+  bouton.addEventListener('pointerdown', commencer);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((type) => bouton.addEventListener(type, arreter));
+  bouton.addEventListener('keydown', (evenement) => {
+    if ((evenement.key === ' ' || evenement.key === 'Enter') && !evenement.repeat) {
+      evenement.preventDefault();
+      commencer();
+    }
+  });
+  bouton.addEventListener('keyup', (evenement) => {
+    if (evenement.key === ' ' || evenement.key === 'Enter') arreter();
+  });
+}
+
+/** Le repère d'une étape : un cercle, puis la coche qui s'y trace une fois l'étape faite. */
+export const MARQUE_ETAPE = '<span class="etape-marque" aria-hidden="true"><svg viewBox="0 0 24 24"><circle class="etape-cercle" cx="12" cy="12" r="9"/><path class="etape-coche" d="M7.5 12.5 10.5 15.5 16.5 9"/></svg></span>';
+
+/**
+ * Étapes d'une opération, cochées une à une (la coche se trace) ; l'étape
+ * en cours porte un cercle qui tourne. Ne liste que des étapes réelles :
+ * une attente qui dit où elle en est, pas une barre qui défile sans fin.
+ *
+ * @param {HTMLElement} conteneur
+ * @param {string[]} etapes
+ * @returns {{ avancer: () => void, terminer: () => void }}
+ */
+export function listeEtapes(conteneur, etapes) {
+  conteneur.innerHTML = `<ol class="etapes-attente">${etapes.map((e) => `<li>
+      ${MARQUE_ETAPE}
+      <span>${echapperHtml(e)}</span></li>`).join('')}</ol>`;
+  const items = [...conteneur.querySelectorAll('li')];
+  let i = -1;
+  const avancer = () => {
+    if (items[i]) { items[i].className = 'faite'; items[i].removeAttribute('aria-current'); }
+    i += 1;
+    if (items[i]) { items[i].className = 'en-cours'; items[i].setAttribute('aria-current', 'step'); }
+  };
+  avancer();
+  return { avancer, terminer: () => { while (i < items.length) avancer(); } };
 }
 
 /**
  * Ouvre une modale d'attente, sans bouton : l'utilisateur ne peut ni la
  * fermer ni cliquer ailleurs pendant une opération qu'il ne faut pas
- * interrompre (l'installation d'une mise à jour, par exemple).
+ * interrompre (l'installation d'une mise à jour, par exemple). Ses `etapes`
+ * disent où en est l'opération (voir `listeEtapes`).
  *
- * @returns {{ etat: (message: string) => void, fermer: () => void }}
+ * @returns {{ avancer: () => void, fermer: () => void }}
  */
-export function dialogueAttente({ titre, message }) {
+export function dialogueAttente({ titre, message, etapes }) {
   const dialogue = document.createElement('dialog');
   dialogue.className = 'boite boite-attente';
   const idTitre = identifiantUnique('titre-attente');
@@ -454,18 +609,17 @@ export function dialogueAttente({ titre, message }) {
   dialogue.innerHTML = `
     <div class="boite-corps">
       <h2 id="${idTitre}">${echapperHtml(titre)}</h2>
+      <div class="zone-etapes" aria-live="polite"></div>
       <p class="etat-attente" aria-live="polite">${echapperHtml(message)}</p>
-      <div class="barre-attente"><span></span></div>
     </div>`;
   document.body.appendChild(dialogue);
+  const suivi = listeEtapes(dialogue.querySelector('.zone-etapes'), etapes);
   // Échap ne doit pas interrompre l'opération en cours.
   dialogue.addEventListener('cancel', (evenement) => evenement.preventDefault());
   dialogue.showModal();
 
   return {
-    etat(nouveauMessage) {
-      dialogue.querySelector('.etat-attente').textContent = nouveauMessage;
-    },
+    avancer: suivi.avancer,
     fermer() {
       dialogue.close();
       dialogue.remove();
@@ -546,6 +700,18 @@ export function formaterChampMontant(valeur) {
   return montant === null ? String(valeur ?? '') : montant.toFixed(2).replace('.', ',');
 }
 
+/** Le montant en tête du panneau de saisie, relu en clair dessous (voir `installerChampMontant`). */
+export const champMontant = (libelle, devise) => `
+      <div class="champ champ-montant-tete" data-champ="montant" style="--i:0">
+        <label for="f-montant">${libelle}</label>
+        <div class="champ-montant">
+          <input class="champ-texte" id="f-montant" name="montant" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-describedby="f-montant-lu">
+          <span class="devise" aria-hidden="true">${echapperHtml(symboleDevise(devise))}</span>
+        </div>
+        <p class="lecture-montant" id="f-montant-lu" aria-live="polite"></p>
+        <span class="erreur-champ message-erreur"></span>
+      </div>`;
+
 /**
  * Champ montant d'un formulaire : « 12,5 » devient « 12,50 » dès qu'on le
  * quitte, et une saisie que l'application ne sait pas lire est signalée tout
@@ -556,9 +722,19 @@ export function formaterChampMontant(valeur) {
  *
  * @param {HTMLFormElement} formulaire formulaire portant un champ `montant`.
  */
-export function installerChampMontant(formulaire) {
+export function installerChampMontant(formulaire, { devise = 'EUR', verbe = '' } = {}) {
   const champ = formulaire.montant;
   const conteneur = formulaire.querySelector('[data-champ="montant"]');
+  // Le montant relu en clair sous le champ, à mesure qu'on tape : « 1 250,50 € encaissés ».
+  const lecture = conteneur.querySelector('.lecture-montant');
+  const relire = () => {
+    if (!lecture) return;
+    const valeur = champ.value.trim() ? analyserMontant(champ.value.trim()) : null;
+    lecture.textContent = valeur === null ? '' : `${formaterMontant(valeur, devise)}${verbe ? ` ${verbe}` : ''}`;
+  };
+  champ.addEventListener('input', relire);
+  champ.addEventListener('change', relire);
+  relire();
   const signaler = (message) => {
     conteneur.classList.toggle('invalide', Boolean(message));
     if (message) champ.setAttribute('aria-invalid', 'true');
@@ -622,14 +798,35 @@ export function listeEntreprises(zone, { entreprises, total }, surChoix) {
     <p class="resultats-annuaire-tete">${total > entreprises.length
       ? `${total} entreprises correspondent : les ${entreprises.length} premières. Ajoutez la ville pour affiner.`
       : `${accorder(entreprises.length, 'entreprise trouvée', 'entreprises trouvées')} : choisissez la bonne.`}</p>
-    <ul>${entreprises.map((e, i) => `<li><button type="button" class="entreprise-annuaire" data-entreprise="${i}">
-      <span class="entreprise-nom"><strong>${echapperHtml(e.nom)}</strong>${e.active ? '' : '<span class="etat-fermee">Fermée</span>'}</span>
-      <span>${e.siret ? `SIRET ${siretLisible(e.siret)}` : `SIREN ${siretLisible(e.siren)}`}${e.creation ? `, créée en ${e.creation.slice(0, 4)}` : ''}</span>
-      <span>${e.adresse ? echapperHtml(e.adresse) : 'Adresse non diffusée'}</span>
+    <ul>${entreprises.map((e, i) => `<li><button type="button" class="entreprise-annuaire${e.active ? '' : ' fermee'}" data-entreprise="${i}">
+      ${i === 0 && entreprises.length > 1 && e.active ? '<span class="meilleure-correspondance">Meilleure correspondance</span>' : ''}
+      <span class="entreprise-nom"><span class="tuile petit neutre" aria-hidden="true">${icone('entreprise', { taille: 15 })}</span><strong>${echapperHtml(e.nom)}</strong>${e.active ? '' : '<span class="etat-fermee">Fermée</span>'}</span>
+      <span class="entreprise-ligne"><span class="entreprise-siret">${e.siret ? `SIRET ${siretLisible(e.siret)}` : `SIREN ${siretLisible(e.siren)}`}</span>${e.creation ? `<span>créée en ${e.creation.slice(0, 4)}</span>` : ''}</span>
+      <span class="entreprise-ligne attenue">${e.adresse ? echapperHtml(e.adresse) : 'Adresse non diffusée'}</span>
     </button></li>`).join('')}</ul>`;
   zone.querySelectorAll('[data-entreprise]').forEach((bouton) => bouton.addEventListener('click', () => {
     surChoix(entreprises[Number(bouton.dataset.entreprise)]);
   }));
+}
+
+/**
+ * L'annuaire ne répond pas (pas de connexion, service en panne) : on le dit
+ * simplement, avec ce qu'on peut faire en attendant, et de quoi réessayer.
+ *
+ * @param {HTMLElement} zone
+ * @param {string} nom le nom cherché, gardé tel quel s'il est choisi.
+ * @param {() => void} reessayer
+ */
+export function annuaireInjoignable(zone, nom, reessayer) {
+  zone.hidden = false;
+  zone.className = 'resultats-annuaire injoignable';
+  zone.innerHTML = `<div class="annuaire-injoignable">
+      <span class="tuile petit neutre" aria-hidden="true">${icone('entreprise', { taille: 15 })}</span>
+      <div><strong>L’annuaire des entreprises ne répond pas</strong>
+        <span>Vérifiez la connexion à Internet. En attendant, « ${echapperHtml(nom)} » peut être gardé tel quel : son SIRET s’ajoutera plus tard, depuis sa fiche client.</span>
+        <button type="button" class="lien-bouton" data-reessayer>Réessayer</button></div>
+    </div>`;
+  zone.querySelector('[data-reessayer]').addEventListener('click', reessayer);
 }
 
 // ---- Bulles d'aide ----------------------------------------------------------------------
@@ -870,30 +1067,38 @@ export function montantDetaille(valeur, devise) {
 }
 
 /**
- * Largeur d'un texte dans la police et le style d'un élément, sans toucher à
- * son contenu : un double invisible est mesuré à sa place.
- * @param {HTMLElement} element
- * @param {string} texte
+ * Largeurs de textes dans la police et le style de leurs éléments, sans
+ * toucher à leur contenu : un double invisible est mesuré à la place de
+ * chacun. Tous sont posés avant d'être lus : une seule mise en page, quel que
+ * soit leur nombre (les mesurer un par un en forçait une à chaque fois).
+ * @param {[HTMLElement, string][]} mesures
+ * @returns {number[]}
  */
-export function largeurTexte(element, texte) {
-  const double = document.createElement('span');
-  double.textContent = texte;
-  double.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;min-width:0';
-  element.append(double);
-  const largeur = double.getBoundingClientRect().width;
-  double.remove();
-  return largeur;
+export function largeursTextes(mesures) {
+  const doubles = mesures.map(([element, texte]) => {
+    const double = document.createElement('span');
+    double.textContent = texte;
+    double.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;min-width:0';
+    element.append(double);
+    return double;
+  });
+  const largeurs = doubles.map((double) => double.getBoundingClientRect().width);
+  doubles.forEach((double) => double.remove());
+  return largeurs;
 }
+
+/** Le chiffre le plus large, par police (une police ne change pas de chasse en cours de route). */
+const chiffresLesPlusLarges = new Map();
 
 /** Le chiffre le plus large dans le style d'un élément (les chiffres de la police n'ont pas tous la même chasse). */
 export function chiffreLePlusLarge(element) {
-  let large = '0';
-  let max = 0;
-  for (const chiffre of '0123456789') {
-    const largeur = largeurTexte(element, chiffre.repeat(4));
-    if (largeur > max) { max = largeur; large = chiffre; }
+  const s = getComputedStyle(element);
+  const police = `${s.font}|${s.fontVariantNumeric}|${s.fontFeatureSettings}|${s.letterSpacing}`;
+  if (!chiffresLesPlusLarges.has(police)) {
+    const largeurs = largeursTextes([...'0123456789'].map((chiffre) => [element, chiffre.repeat(4)]));
+    chiffresLesPlusLarges.set(police, String(largeurs.indexOf(Math.max(...largeurs))));
   }
-  return large;
+  return chiffresLesPlusLarges.get(police);
 }
 
 /**
@@ -1032,4 +1237,17 @@ export function differer(fonction, delaiMs = 250) {
     clearTimeout(minuteur);
     minuteur = setTimeout(() => fonction(...args), delaiMs);
   };
+}
+
+/**
+ * Une préférence d'affichage propre à ce navigateur (carte masquée, choix
+ * mémorisé). Stockage indisponible (navigation privée, données effacées) :
+ * on lit `null`, on n'écrit rien, et l'écran reste juste.
+ */
+export function lirePreference(cle) {
+  try { return localStorage.getItem(cle); } catch { return null; }
+}
+
+export function ecrirePreference(cle, valeur) {
+  try { localStorage.setItem(cle, valeur); } catch { /* sans gravité : la préférence vaut pour la session */ }
 }

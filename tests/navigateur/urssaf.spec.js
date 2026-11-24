@@ -1,7 +1,7 @@
 /**
- * L'écran URSSAF : rythme rappelé, périodes en onglets avec leur état,
- * découpage (mois, trimestres, année), détail d'une période et calcul,
- * cases à reporter, période marquée comme déclarée et son annulation.
+ * L'écran URSSAF : rythme rappelé, périodes du rythme en onglets avec leur
+ * état, détail d'une période et calcul, cases à reporter, période marquée
+ * comme déclarée et son annulation.
  */
 
 import {
@@ -35,6 +35,9 @@ test('les quatre trimestres en onglets, le trimestre en cours choisi d’emblée
   await expect(onglets.nth(trimestreDe(mois) - 1).locator('.etat')).toHaveText('En cours');
   if (trimestreDe(mois) < 4) await expect(onglets.nth(3).locator('.etat')).toHaveText('À venir');
   await expect(onglets.nth(trimestreDe(mois) - 1).locator('.montant')).toHaveText(`${eurosEntiers(500)} à ce jour`);
+  // En frise : le repère de la période en cours, le trait rempli jusqu'à elle.
+  await expect(onglets.nth(trimestreDe(mois) - 1)).toHaveClass(/etat-en-cours/);
+  if (trimestreDe(mois) > 1) await expect(onglets.nth(trimestreDe(mois) - 2)).toHaveClass(/suite-faite/);
 });
 
 test('un onglet choisi affiche sa période et se retrouve dans l’adresse', async ({ page, request }) => {
@@ -49,21 +52,15 @@ test('un onglet choisi affiche sa période et se retrouve dans l’adresse', asy
   await expect(page.locator('.statut-ligne')).toContainText('Période en cours');
 });
 
-test('le découpage passe des mois aux trimestres puis à l’année, au même moment de l’année', async ({ page, request }) => {
+test('les périodes suivent le rythme des paramètres : un lien vers un trimestre ouvre son dernier mois', async ({ page, request }) => {
   await configurer(request, { periodiciteUrssaf: 'mois' });
-  await ajouterRecette(request, { montant: 120 });
-  await ouvrir(page, 'urssaf');
-  await page.locator(`#periodes .periode[data-valeur="${mois}"]`).click();
-  await page.locator('[data-decoupage="trimestre"]').click();
-  await expect(page.locator('#periodes .periode')).toHaveCount(4);
-  await expect(page.locator(`#periodes .periode[data-valeur="${trimestreDe(mois)}"]`)).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('[data-decoupage="annee"]').click();
-  await expect(page.locator('#periodes')).toBeHidden();
-  await expect(page.locator('#titre-periode')).toHaveText(`Année ${annee}`);
-  await expect(page.locator('.chiffre-cle.principal .libelle')).toHaveText('Encaissé sur l’année');
-  await expect(page.locator('#declarer')).toHaveCount(0);
-  await page.locator('[data-decoupage="mois"]').click();
+  await page.goto(`/#/urssaf?periode=${annee}-T${trimestreDe(mois)}`);
+  await attendrePage(page);
   await expect(page.locator('#periodes .periode')).toHaveCount(12);
+  await expect(page.locator('[data-decoupage]')).toHaveCount(0);
+  const dernierMois = trimestreDe(mois) * 3;
+  await expect(page.locator(`#periodes .periode[data-valeur="${dernierMois}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#titre-periode')).toHaveText(libellePeriode({ annee, type: 'mois', valeur: dernierMois }));
 });
 
 test('l’année se change depuis l’en-tête', async ({ page, request }) => {
@@ -79,8 +76,6 @@ test('l’année se change depuis l’en-tête', async ({ page, request }) => {
   await page.reload();
   await attendrePage(page);
   await expect(page.locator('#urssaf-annee .annee-choisie')).toHaveText(String(annee - 1));
-  await page.locator('[data-decoupage="annee"]').click();
-  await expect(page).toHaveURL(/#\/urssaf$/);
 });
 
 test('une période à déclarer : chiffres clés, copie, case à reporter, détail du calcul', async ({ page, request }) => {
@@ -108,6 +103,8 @@ test('une période à déclarer : chiffres clés, copie, case à reporter, déta
   await expect(details).toHaveAttribute('open', '');
   await expect(details).toContainText('Encaissé sur la période');
   await expect(details).toContainText('Cotisations sociales');
+  // Dessiné avant d'être détaillé : la part de l'URSSAF, puis ce qui reste.
+  await expect(details.locator('.barre-calcul')).toHaveAttribute('aria-label', /^Cotisations sociales \d+ %.*Il vous restera \d+ %$/);
   await expect(details).toContainText('La déclaration se fait en euros entiers');
   await page.locator(`#periodes .periode[data-valeur="${autreMois}"]`).click();
   await expect(page.locator('.details-calcul')).toHaveAttribute('open', '');
@@ -195,4 +192,28 @@ test('arriver par un lien de période l’ouvre directement', async ({ page, req
   await attendrePage(page);
   await expect(page.locator('#titre-periode')).toHaveText(libellePeriode({ annee, type: 'trimestre', valeur: 1 }));
   await expect(page.locator('#periodes .periode[data-valeur="1"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('aucun trait de la frise ne traverse la période choisie', async ({ page, request }) => {
+  await configurer(request);
+  await ouvrir(page, 'urssaf');
+  const traitsHorsChoisie = () => page.locator('#periodes').evaluate((frise) => {
+    const zone = frise.querySelector('.periode[aria-pressed="true"]').getBoundingClientRect();
+    return [...frise.querySelectorAll('.periode')].flatMap((p) => {
+      const trait = getComputedStyle(p, '::after');
+      if (trait.content === 'none' || trait.display === 'none') return [];
+      const gauche = p.getBoundingClientRect().left + Number.parseFloat(trait.left);
+      const droite = gauche + Number.parseFloat(trait.width);
+      // Un pixel de marge : les positions arrondies diffèrent d'un système à l'autre.
+      return [droite <= zone.left + 1 || gauche >= zone.right - 1];
+    });
+  });
+  // Une période entourée de deux autres : ni le trait qui arrive ni celui qui part n'y entrent.
+  // La mesure attend la frise stable (la page se redessine après le clic).
+  await page.locator('#periodes .periode[data-valeur="2"]').click();
+  await expect(page.locator('#periodes .periode[data-valeur="2"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => {
+    const traits = await traitsHorsChoisie();
+    return traits.length > 0 && traits.every(Boolean);
+  }).toBe(true);
 });

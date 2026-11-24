@@ -1,7 +1,6 @@
 /**
  * API du bilan URSSAF : chiffre d'affaires encaissé et nombre d'encaissements
- * sur une période (mois, trimestre ou année), pour aider à remplir la
- * déclaration.
+ * sur une période de déclaration (mois ou trimestre), pour aider à la remplir.
  *
  * Simple calcul local, aucune connexion à l'URSSAF.
  */
@@ -20,16 +19,13 @@ export function routesUrssaf(stockage) {
     const annee = lireAnnee(req, res);
     if (annee === null) return;
     const type = req.query.type;
-    if (!['mois', 'trimestre', 'annee'].includes(type)) {
-      return res.status(400).json({ erreur: 'Paramètre « type » invalide (mois, trimestre ou annee).' });
+    if (!['mois', 'trimestre'].includes(type)) {
+      return res.status(400).json({ erreur: 'Paramètre « type » invalide (mois ou trimestre).' });
     }
-    let valeur = null;
-    if (type !== 'annee') {
-      valeur = Number.parseInt(req.query.valeur, 10);
-      const max = type === 'mois' ? 12 : 4;
-      if (!Number.isInteger(valeur) || valeur < 1 || valeur > max) {
-        return res.status(400).json({ erreur: `Paramètre « valeur » invalide (1 à ${max}).` });
-      }
+    const valeur = Number.parseInt(req.query.valeur, 10);
+    const max = type === 'mois' ? 12 : 4;
+    if (!Number.isInteger(valeur) || valeur < 1 || valeur > max) {
+      return res.status(400).json({ erreur: `Paramètre « valeur » invalide (1 à ${max}).` });
     }
     // L'estimation des cotisations se fait ici, et non dans le navigateur :
     // chaque encaissement cotise au taux en vigueur le jour où il a été

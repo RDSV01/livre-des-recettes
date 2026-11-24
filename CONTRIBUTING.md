@@ -30,6 +30,17 @@ npm run essai      # sur un livre vide et temporaire (« -- --garder » pour le 
 L'application écrit dans « Documents/Livre des recettes », jamais dans le dépôt.
 `LDR_DATA_DIR=./data npm start` la lance sur un autre dossier.
 
+En mode essai, le bouton « Banc d'essai », en bas de l'écran, provoque d'un clic ce
+qu'un vrai livre met des mois à produire :
+- un livre vierge, de démonstration, très chargé ou extrême ;
+- une autre date du jour (saison de la rétrospective, déclaration à faire ou en retard) ;
+- un type d'activité, un rythme URSSAF, l'ACRE, un seuil atteint ou dépassé ;
+- un numéro de facture manquant, un doublon, une recette qui revient chaque mois ;
+- une clé de copie retirée, des sauvegardes en panne, un livre abîmé ou disparu ;
+- une mise à jour disponible, un serveur qui ne répond plus.
+
+Il n'existe que dans `npm run essai` (voir `scripts/essai/`) et ne touche jamais au vrai livre.
+
 ## Tests
 
 `npm test` enchaîne ces quatre étapes et s'arrête au premier échec :
@@ -84,6 +95,8 @@ code et des tests quand une API change.
   `registre.js`.
 - `public/` : l'interface. Les vues sont dans `public/js/vues/`, les couleurs et espacements
   dans `public/css/theme.css`.
+- `scripts/essai/` : le banc d'essai de `npm run essai` (date simulée, livres d'essai,
+  pannes), branché par l'option `essai` de `creerApp` et jamais livré dans l'exécutable.
 
 ## Conventions
 
@@ -104,9 +117,11 @@ code et des tests quand une API change.
   pas de console, tout message destiné à l'utilisateur passe par l'interface.
 - Animations discrètes, utiles, coupées sous `prefers-reduced-motion`. On anime une
   transformation, une opacité ou une découpe (`clip-path`), jamais une largeur ou une
-  hauteur ; les ressorts se règlent dans `public/js/ressort.js`.
+  hauteur, sauf là où la place elle-même doit changer : le repli du menu et la pile des
+  notifications. Les ressorts se règlent dans `public/js/ressort.js`.
 - Un correctif arrive avec le test qui l'aurait attrapé, une fonctionnalité avec les siens,
-  dans l'interface aussi (`tests/navigateur/`).
+  dans l'interface aussi (`tests/navigateur/`). Une situation rare (une date, un seuil, une
+  panne) a aussi son geste dans le banc d'essai (`scripts/essai/client/banc.js`).
 
 ## Licence de vos contributions
 

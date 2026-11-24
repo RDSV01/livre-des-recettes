@@ -180,7 +180,7 @@ export function statistiquesTableauDeBord(recettes, { maintenant = new Date(), a
  * encaissements, dont elle a besoin ligne à ligne (chacun cotise au taux en
  * vigueur le jour de son encaissement).
  *
- * @param {object} periode `{ annee, type: 'mois'|'trimestre'|'annee', valeur }`
+ * @param {object} periode `{ annee, type: 'mois'|'trimestre', valeur }`
  *   où `valeur` est le numéro de mois (1-12) ou de trimestre (1-4).
  */
 export function selectionPeriode(recettes, { annee, type, valeur }) {
@@ -194,11 +194,6 @@ export function selectionPeriode(recettes, { annee, type, valeur }) {
       return {
         selection: filtrerParPeriode(recettes, { annee, trimestre: valeur }),
         libellePeriode: `${valeur}${valeur === 1 ? 'er' : 'e'} trimestre ${annee}`
-      };
-    case 'annee':
-      return {
-        selection: filtrerParPeriode(recettes, { annee }),
-        libellePeriode: `année ${annee}`
       };
     default:
       throw new Error(`Type de période inconnu : ${type}`);
@@ -233,7 +228,7 @@ export function bilanPeriode(recettes, periode) {
   return {
     annee,
     type,
-    valeur: type === 'annee' ? null : valeur,
+    valeur,
     libellePeriode,
     chiffreAffaires,
     aDeclarer: arrondiDeclaration(enCentimes(chiffreAffaires)),

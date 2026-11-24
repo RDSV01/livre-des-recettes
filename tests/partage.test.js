@@ -487,7 +487,6 @@ test('le barème ne contient que des montants cohérents', () => {
 test('idPeriode et periodeDepuisId se répondent', () => {
   assert.equal(idPeriode(2026, 'mois', 7), '2026-07');
   assert.equal(idPeriode(2026, 'trimestre', 2), '2026-T2');
-  assert.equal(idPeriode(2026, 'annee', null), null, 'une année n’est pas une périodicité de déclaration');
   assert.deepEqual(periodeDepuisId('2026-07'), { annee: 2026, type: 'mois', valeur: 7 });
   assert.deepEqual(periodeDepuisId('2026-T2'), { annee: 2026, type: 'trimestre', valeur: 2 });
   for (const illisible of ['', null, undefined, '2026-13', '2026-T5', '2026']) {
@@ -505,13 +504,11 @@ test('l’échéance tombe le dernier jour du mois qui suit la période', () => 
   assert.equal(echeanceDeclaration(2026, 'mois', 1), '2026-02-28');
   assert.equal(echeanceDeclaration(2028, 'mois', 1), '2028-02-29');
   assert.equal(echeanceDeclaration(2026, 'mois', 12), '2027-01-31');
-  assert.equal(echeanceDeclaration(2026, 'annee', null), null);
 });
 
 test('finPeriode donne le dernier jour de la période', () => {
   assert.equal(finPeriode(2026, 'trimestre', 1), '2026-03-31');
   assert.equal(finPeriode(2026, 'mois', 2), '2026-02-28');
-  assert.equal(finPeriode(2026, 'annee', null), null);
 });
 
 test('une période est déclarée si elle précède la dernière marquée faite', () => {

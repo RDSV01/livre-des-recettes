@@ -21,6 +21,12 @@ const ligne = (page, id) => page.locator(`#registre tbody tr[data-id="${id}"]`);
 const total = (page) => page.locator('#registre tfoot [data-total]');
 const lignes = (page) => page.locator('#registre tbody tr[data-id]');
 
+/** Le registre s'ouvre sur l'année en cours : « Toutes », pour voir aussi les autres. */
+async function toutesLesAnnees(page) {
+  await page.locator('.choix-annee .annee-choisie').first().click();
+  await page.locator('.menu-contextuel.menu-choix [role="menuitemradio"]', { hasText: 'Toutes' }).click();
+}
+
 test.describe('saisie d’une recette', () => {
   test('livre vide : l’invitation ouvre la saisie, la recette s’ajoute avec son nouveau client', async ({ page, request }) => {
     await configurer(request);
@@ -66,12 +72,17 @@ test.describe('saisie d’une recette', () => {
     const secondes = page.locator('#registre .minuteur .secondes').first();
     await expect(secondes).toBeAttached();
     // Relevé à chaque image pendant 2,6 s, dans la page : aucune valeur ne peut échapper.
-    const suite = await secondes.evaluate((e) => new Promise((fin) => {
+    // Le minuteur est relu à chaque fois : la ligne peut être redessinée entre-temps,
+    // son remplaçant reprend le décompte là où il en était. Le 0 (valeur de départ
+    // d'un compteur dont l'animation n'a pas encore pris) n'est pas un chiffre montré :
+    // le décompte ne l'atteint qu'au bout de ses 5 secondes.
+    const suite = await page.evaluate(() => new Promise((fin) => {
       const vues = [];
       const debut = performance.now();
       const relever = () => {
-        const valeur = Number(getComputedStyle(e).getPropertyValue('--secondes'));
-        if (vues.at(-1) !== valeur) vues.push(valeur);
+        const e = document.querySelector('#registre .minuteur .secondes');
+        const valeur = e ? Number(getComputedStyle(e).getPropertyValue('--secondes')) : 0;
+        if (valeur > 0 && vues.at(-1) !== valeur) vues.push(valeur);
         if (performance.now() - debut < 2600) requestAnimationFrame(relever);
         else fin(vues);
       };
@@ -296,6 +307,9 @@ test.describe('saisie d’une recette', () => {
     await p.locator('[type="submit"]').click();
     await expect(p.locator('#f-similaire')).toContainText('Une recette très similaire existe déjà');
     await expect(p.locator('#f-similaire')).toContainText('facture F-1');
+    // Les deux recettes côte à côte : ce qui diffère se voit (ici le libellé et le numéro).
+    await expect(p.locator('#f-similaire .doublon-table thead')).toContainText('Cette saisie');
+    await expect(p.locator('#f-similaire tr.differe th')).toHaveText(['Libellé', 'N° de facture']);
     await expect(p.locator('[type="submit"]')).toHaveText(/Enregistrer quand même/);
     // Changer la saisie rouvre la question au lieu de passer en silence.
     await p.locator('#f-libelle').fill('Autre chose');
@@ -306,6 +320,50 @@ test.describe('saisie d’une recette', () => {
     await p.locator('[type="submit"]').click();
     await expect(page.locator('dialog.panneau')).toHaveCount(0);
     expect((await lister(request, '/api/recettes')).recettes).toHaveLength(2);
+  });
+
+  test('le montant en tête, relu en clair ; les clients rangés en deux groupes', async ({ page, request }) => {
+    await configurer(request);
+    await ajouterRecette(request, { client: 'Studio Lumen', montant: 260, modeReglement: 'cheque' });
+    await ouvrir(page, 'recettes');
+    const p = await nouvelle(page);
+    // Le montant ouvre le panneau, relu dessous à mesure qu'on tape.
+    await expect(p.locator('.panneau-corps > .champ').first()).toHaveAttribute('data-champ', 'montant');
+    await p.locator('#f-montant').fill('1200,5');
+    await expect(p.locator('#f-montant-lu')).toHaveText(`${euros(1200.5)} encaissés`);
+    // Deux groupes : vos clients, puis ce qu'on peut ajouter.
+    await p.locator('#f-client').fill('Stu');
+    await expect(p.locator('.suggestions .sugg-groupe')).toHaveText(['Vos clients', 'Ajouter']);
+    await expect(p.locator('.suggestions .sugg').first()).toContainText('1 encaissement, le dernier le');
+    await expect(p.locator('.suggestions .sugg').first().locator('.sugg-meta')).toHaveText('Chèque');
+  });
+
+  test('un PDF lâché n’importe où sur le panneau se joint ; la série se compte au pied', async ({ page, request }) => {
+    await configurer(request);
+    await ouvrir(page, 'recettes');
+    const p = await nouvelle(page);
+    // Un fichier qui entre dans le panneau : tout le panneau devient zone de dépôt.
+    const transfert = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['%PDF-1.4\n%%EOF\n'], 'facture-glissee.pdf', { type: 'application/pdf' }));
+      return dt;
+    });
+    await p.locator('#f-libelle').dispatchEvent('dragenter', { dataTransfer: transfert });
+    await expect(p.locator('.voile-depot')).toHaveClass(/visible/);
+    await p.locator('#f-libelle').dispatchEvent('drop', { dataTransfer: transfert });
+    await expect(p.locator('.voile-depot')).not.toHaveClass(/visible/);
+    await expect(p.locator('#f-piece .piece-jointe')).toContainText('facture-glissee.pdf');
+    // Deux recettes à la suite : la bande du pied les compte.
+    await p.locator('#f-piece [data-piece="retirer"]').click();
+    await p.locator('#f-montant').fill('100');
+    await p.locator('#f-client').fill('Premier');
+    await page.keyboard.press('Control+Enter');
+    await expect(p.locator('.bande-serie')).toContainText('1 recette dans cette série');
+    await p.locator('#f-montant').fill('50');
+    await p.locator('#f-client').fill('Second');
+    await page.keyboard.press('Control+Enter');
+    await expect(p.locator('.bande-serie')).toContainText(`2 recettes dans cette série, ${euros(150)}`);
+    await expect(p.locator('.bande-serie .monogramme')).toHaveCount(2);
   });
 
   test('l’avertissement des recettes similaires se coupe dans les options', async ({ page, request }) => {
@@ -382,11 +440,59 @@ test.describe('saisie d’une recette', () => {
     await expect(page.locator('dialog.panneau')).toHaveCount(0);
   });
 
-  test('depuis le tableau de bord, « Nouvelle recette » ouvre le panneau', async ({ page, request }) => {
+  test('depuis le tableau de bord, le panneau s’ouvre sur place ; la recette ajoutée, on arrive sur le registre, annulable', async ({ page, request }) => {
     await configurer(request);
+    await ajouterRecette(request, { client: 'Habitué', modeReglement: 'cheque' });
     await ouvrir(page);
     await page.locator('.entete-page a.btn-principal', { hasText: 'Nouvelle recette' }).click();
-    await expect(panneau(page).locator('#titre-panneau')).toHaveText('Nouvelle recette');
+    const p = panneau(page);
+    await expect(p.locator('#titre-panneau')).toHaveText('Nouvelle recette');
+    // On reste sur le tableau de bord, avec les mêmes aides à la saisie.
+    await expect(page).toHaveURL(/#\/$/);
+    await p.locator('#f-client').fill('Habit');
+    await expect(p.locator('.suggestions .sugg').first()).toContainText('Habitué');
+    await page.keyboard.press('Enter');
+    await expect(p.locator('#f-mode')).toHaveValue('cheque');
+    await p.locator('#f-montant').fill('75');
+    await p.locator('[type="submit"]').click();
+    // Ajoutée : le registre, la nouvelle ligne mise en avant.
+    await expect(page).toHaveURL(/#\/recettes\?voir=/);
+    await attendrePage(page);
+    const nouvelle = page.locator('#registre tbody tr.nouvelle');
+    await expect(nouvelle).toContainText('Habitué');
+    expect((await lister(request, '/api/recettes')).recettes).toHaveLength(2);
+    // Le même retour qu'un ajout fait dans le registre : « Ajoutée », et
+    // « Annuler » avec son compte à rebours.
+    await expect(nouvelle.locator('.texte-retour')).toHaveText('Ajoutée');
+    const annuler = nouvelle.locator('[data-annuler-retour]');
+    await expect(annuler).toContainText('Annuler');
+    await annuler.click();
+    await expect(page.locator('#registre tbody tr[data-id]')).toHaveCount(1);
+    expect((await lister(request, '/api/recettes')).recettes).toHaveLength(1);
+  });
+
+  test('ajoutée ailleurs avec un nouveau client, le registre le dit comme sur place', async ({ page, request }) => {
+    await configurer(request);
+    await ouvrir(page);
+    await page.keyboard.press('n');
+    const p = panneau(page);
+    await p.locator('#f-client').fill('Tout Nouveau');
+    await p.locator('#f-montant').fill('40');
+    await p.locator('[type="submit"]').click();
+    await expect(page).toHaveURL(/#\/recettes\?voir=/);
+    await expect(page.locator('#registre tbody tr.nouvelle .texte-retour')).toHaveText('Ajoutée, nouveau client');
+  });
+
+  test('depuis la fiche d’un client, la saisie part de son nom', async ({ page, request }) => {
+    await configurer(request);
+    await request.post('/api/clients', { data: { nom: 'Cabinet Roux', siret: '' } });
+    await ajouterRecette(request, { client: 'Cabinet Roux', modeReglement: 'cheque' });
+    await ouvrir(page, 'clients');
+    await page.locator('#fiche a', { hasText: 'Nouvelle recette' }).click();
+    const p = panneau(page);
+    await expect(p.locator('#f-client')).toHaveValue('Cabinet Roux');
+    await expect(p.locator('#f-mode')).toHaveValue('cheque');
+    await expect(page).toHaveURL(/#\/clients/);
   });
 });
 
@@ -429,7 +535,9 @@ test.describe('modifier, dupliquer, supprimer', () => {
     await ouvrir(page, 'recettes');
     await ligne(page, r.id).locator('[data-action="menu"]').click();
     const menu = page.locator('.menu-contextuel');
-    await expect(menu.locator('[role="menuitem"]')).toHaveText(['Modifier', 'Dupliquer (paiement récurrent)', 'Joindre la facture (PDF)', 'Supprimer']);
+    await expect(menu.locator('.menu-tete')).toContainText('Abonné');
+    // Chaque entrée porte sa touche au bout de la ligne.
+    await expect(menu.locator('[role="menuitem"]')).toHaveText(['ModifierEntrée', 'Dupliquer (paiement récurrent)D', 'Joindre la facture (PDF)', 'SupprimerSuppr']);
     await menu.locator('[role="menuitem"]', { hasText: 'Dupliquer' }).click();
     const p = panneau(page);
     await expect(p.locator('.panneau-tete p')).toHaveText('Copie d’un paiement récurrent, datée d’aujourd’hui.');
@@ -467,6 +575,13 @@ test.describe('modifier, dupliquer, supprimer', () => {
     await ouvrir(page, 'recettes');
     await ligne(page, r.id).locator('[data-action="menu"]').click();
     await page.locator('.menu-contextuel [role="menuitem"]', { hasText: 'Supprimer' }).click();
+    // La confirmation dit ce qui part, PDF compris.
+    const boite = page.locator('dialog.boite[open]');
+    await expect(boite.locator('.suites li')).toHaveText([
+      `Recette de ${euros(75)} (Durand), du ${dateAffichee(aujourdhui())}`,
+      'La facture PDF jointe'
+    ].map((t) => t.replace(/\s/g, ' ')));
+    await boite.locator('[data-role="ok"]').click();
     const place = page.locator('tr.place-retiree');
     await expect(place).toContainText(`Recette de ${euros(75)} (Durand) supprimée`.replace(/\s/g, ' '));
     expect((await lister(request, '/api/recettes')).recettes).toHaveLength(0);
@@ -493,6 +608,8 @@ test.describe('sélection et actions groupées', () => {
     await expect(barre.locator('.compte')).toHaveText(`2 recettes sélectionnées (${euros(30)})`.replace(/\s/g, ' '));
     await expect(page.locator('#tout-selectionner')).toHaveJSProperty('indeterminate', true);
     await barre.locator('[data-lot="supprimer"]').click();
+    await expect(page.locator('dialog.boite[open] h2')).toHaveText('Supprimer 2 recettes ?');
+    await page.locator('dialog.boite[open] [data-role="ok"]').click();
     await expect(barre.locator('.compte')).toHaveText('2 recettes supprimées');
     await expect(lignes(page)).toHaveCount(1);
     await barre.locator('[data-lot="annuler"]').click();
@@ -561,6 +678,7 @@ test.describe('filtres, recherche et tri', () => {
   test('la recherche filtre sans tenir compte des accents, surligne, et se dit partielle', async ({ page, request }) => {
     const { r1 } = await preparer(request);
     await ouvrir(page, 'recettes');
+    await toutesLesAnnees(page);
     await page.locator('#filtre-q').fill('dupre');
     await expect(lignes(page)).toHaveCount(1);
     await expect(ligne(page, r1.id).locator('mark')).toHaveText('Dupré');
@@ -572,36 +690,62 @@ test.describe('filtres, recherche et tri', () => {
     await expect(lignes(page)).toHaveCount(1);
     await page.locator('#filtre-q').fill('aucune chance');
     await expect(page.locator('#registre .ligne-vide')).toContainText('Aucune ligne ne correspond à ces filtres.');
+    // Effacer ramène à la vue par défaut : l'année en cours, sans recherche.
     await page.locator('#registre .ligne-vide [data-effacer-filtres]').click();
-    await expect(lignes(page)).toHaveCount(3);
+    await expect(lignes(page)).toHaveCount(2);
     await expect(page.locator('#filtre-q')).toHaveValue('');
+    await expect(page.locator('#annee-recettes .annee-choisie')).toHaveText(String(new Date().getFullYear()));
   });
 
-  test('l’année se choisit aux flèches ou dans la liste', async ({ page, request }) => {
+  test('le registre s’ouvre sur l’année en cours ; l’année se choisit aux flèches ou dans la liste', async ({ page, request }) => {
     const { annee } = await preparer(request);
     await ouvrir(page, 'recettes');
     const choix = page.locator('#annee-recettes');
-    await expect(choix.locator('.annee-choisie')).toHaveText('Toutes');
-    await expect(choix.locator('[data-pas="1"]')).toHaveAttribute('aria-disabled', 'true');
-    await choix.locator('[data-pas="-1"]').click();
+    // L'année en cours, sans être comptée comme un filtre.
     await expect(choix.locator('.annee-choisie')).toHaveText(String(annee));
     await expect(lignes(page)).toHaveCount(2);
+    await expect(choix).not.toHaveClass(/actif/);
+    await expect(page.locator('.resume-registre')).not.toContainText('sur');
+    await expect(page.locator('.resume-registre [data-effacer-filtres]')).toHaveCount(0);
+    await expect(page.locator('#registre tfoot')).toContainText(`Total ${annee}`);
     await choix.locator('[data-pas="-1"]').click();
     await expect(choix.locator('.annee-choisie')).toHaveText(String(annee - 1));
     await expect(lignes(page)).toHaveCount(1);
     await expect(choix.locator('[data-pas="-1"]')).toHaveAttribute('aria-disabled', 'true');
+    // Une autre année : un filtre, qu'« Effacer les filtres » ramène à l'année en cours.
+    await expect(choix).toHaveClass(/actif/);
+    await page.locator('.resume-registre [data-effacer-filtres]').click();
+    await expect(choix.locator('.annee-choisie')).toHaveText(String(annee));
+    await expect(lignes(page)).toHaveCount(2);
+    await choix.locator('[data-pas="-1"]').click();
     await choix.locator('.annee-choisie').click();
     const menu = page.locator('.menu-contextuel.menu-choix');
-    await expect(menu.locator('[role="menuitemradio"]')).toHaveText(['Toutes', String(annee), String(annee - 1)]);
-    await expect(menu.locator('[aria-checked="true"]')).toHaveText(String(annee - 1));
+    // Chaque année dit son total et son nombre de recettes.
+    await expect(menu.locator('.choix-nom')).toHaveText(['Toutes', String(annee), String(annee - 1)]);
+    await expect(menu.locator('.choix-sous')).toHaveText(['3 recettes', '2 recettes', '1 recette']);
+    await expect(menu.locator('[aria-checked="true"] .choix-nom')).toHaveText(String(annee - 1));
     await menu.locator('[role="menuitemradio"]', { hasText: 'Toutes' }).click();
     await expect(lignes(page)).toHaveCount(3);
     await expect(choix.locator('.annee-choisie')).toBeFocused();
+    await expect(page.locator('#registre tfoot')).toContainText('Total');
+    await expect(page.locator('#registre tfoot')).not.toContainText(String(annee));
+  });
+
+  test('sans recette dans l’année en cours, le registre s’ouvre sur la plus récente', async ({ page, request }) => {
+    await configurer(request);
+    const annee = new Date().getFullYear();
+    await ajouterRecette(request, { client: 'Ancien', dateEncaissement: `${annee - 1}-11-20` });
+    await ajouterRecette(request, { client: 'Plus ancien', dateEncaissement: `${annee - 2}-03-02` });
+    await ouvrir(page, 'recettes');
+    await expect(page.locator('#annee-recettes .annee-choisie')).toHaveText(String(annee - 1));
+    await expect(lignes(page)).toHaveCount(1);
+    await expect(page.locator('#annee-recettes')).not.toHaveClass(/actif/);
   });
 
   test('les filtres du panneau : mois, paiement, PDF joint, avec leurs pastilles', async ({ page, request }) => {
     const { r1, r2 } = await preparer(request);
     await ouvrir(page, 'recettes');
+    await toutesLesAnnees(page);
     await page.locator('.btn-filtres').click();
     const filtres = page.locator('#filtres-recettes');
     await expect(filtres).toBeVisible();
@@ -648,9 +792,32 @@ test.describe('filtres, recherche et tri', () => {
     await expect(lignes(page)).toHaveCount(3);
   });
 
-  test('« recettes sans PDF » filtre d’un clic', async ({ page, request }) => {
+  test('chaque filtre dit combien de recettes il montrerait, le bouton du pied annonce le résultat', async ({ page, request }) => {
     await preparer(request);
     await ouvrir(page, 'recettes');
+    await toutesLesAnnees(page);
+    await page.locator('.btn-filtres').click();
+    const filtres = page.locator('#filtres-recettes');
+    await expect(filtres.locator('#filtre-piece [data-valeur="avec"] .compte-facette')).toHaveText('1');
+    await expect(filtres.locator('#filtre-piece [data-valeur="sans"] .compte-facette')).toHaveText('2');
+    await expect(filtres.locator('#filtre-mode option[value="virement"]')).toHaveText('Virement (2)');
+    await expect(filtres.locator('[data-voir-resultat]')).toHaveText('Voir 3 recettes');
+    await filtres.locator('#filtre-mode').selectOption('cheque');
+    await expect(filtres.locator('[data-voir-resultat]')).toHaveText('Voir 1 recette');
+    // Avec ce filtre, aucune recette jointe : « Avec » se grise.
+    await expect(filtres.locator('#filtre-piece [data-valeur="avec"]')).toBeDisabled();
+    await filtres.locator('[data-voir-resultat]').click();
+    await expect(filtres).toBeHidden();
+    await expect(page.locator('.filtres-actifs .pastille-filtre')).toHaveText('Chèque');
+  });
+
+  test('« recettes sans PDF » filtre d’un clic, et compte celles de l’année affichée', async ({ page, request }) => {
+    await preparer(request);
+    await ouvrir(page, 'recettes');
+    // Cette année : une sur deux sans PDF.
+    await expect(page.locator('[data-voir-sans-piece]')).toHaveText('1 recette sans PDF');
+    await toutesLesAnnees(page);
+    await expect(page.locator('[data-voir-sans-piece]')).toHaveText('2 recettes sans PDF');
     await page.locator('[data-voir-sans-piece]').click();
     await expect(lignes(page)).toHaveCount(2);
     await expect(page.locator('.filtres-actifs .pastille-filtre')).toHaveText('Sans PDF joint');
@@ -659,7 +826,6 @@ test.describe('filtres, recherche et tri', () => {
   test('les filtres sont gardés d’une visite à l’autre, et l’export reprend la période filtrée', async ({ page, request }) => {
     const { annee } = await preparer(request);
     await ouvrir(page, 'recettes');
-    await page.locator('#annee-recettes [data-pas="-1"]').click();
     await page.locator('.btn-filtres').click();
     await page.locator('#filtre-mois').selectOption('2');
     await expect(page.locator('#lien-exporter')).toHaveAttribute('href', `#/exports?registre=recettes&annee=${annee}&mois=2`);
@@ -680,6 +846,7 @@ test.describe('filtres, recherche et tri', () => {
   test('le tri par colonne, et les mois séparés avec leur sous-total quand on trie par date', async ({ page, request }) => {
     const { r1, r2, r3, annee } = await preparer(request);
     await ouvrir(page, 'recettes');
+    await toutesLesAnnees(page);
     const ids = async () => lignes(page).evaluateAll((trs) => trs.map((tr) => tr.dataset.id));
     expect(await ids()).toEqual([r2.id, r1.id, r3.id]);
     await expect(page.locator('tr.separateur-mois')).toHaveCount(3);
@@ -848,6 +1015,106 @@ test.describe('pièces jointes', () => {
   });
 });
 
+test.describe('le registre façon tableau de données', () => {
+  test('au clavier : les flèches, Entrée, X, D et Suppr, comme dans le menu « … »', async ({ page, request }) => {
+    await configurer(request);
+    const ancienne = await ajouterRecette(request, { client: 'Ancienne', montant: 10, dateEncaissement: dansJours(-2) });
+    const recente = await ajouterRecette(request, { client: 'Récente', montant: 20 });
+    await ouvrir(page, 'recettes');
+    const premiere = ligne(page, recente.id);
+    await premiere.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(ligne(page, ancienne.id)).toBeFocused();
+    await page.keyboard.press('k');
+    await expect(premiere).toBeFocused();
+    // X coche la ligne : la barre de sélection apparaît.
+    await page.keyboard.press('x');
+    await expect(premiere.locator('.case')).toBeChecked();
+    await expect(page.locator('#barre-selection')).toContainText('1 recette sélectionnée');
+    await page.keyboard.press('x');
+    await expect(page.locator('#barre-selection')).toBeHidden();
+    // Entrée l'ouvre, D la duplique.
+    await page.keyboard.press('Enter');
+    await expect(panneau(page).locator('#titre-panneau')).toHaveText('Modifier la recette');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog.panneau')).toHaveCount(0);
+    await premiere.focus();
+    await page.keyboard.press('d');
+    await expect(panneau(page).locator('#f-client')).toHaveValue('Récente');
+    await expect(panneau(page).locator('#titre-panneau')).toHaveText('Nouvelle recette');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog.panneau')).toHaveCount(0);
+    // Suppr demande confirmation : refusée, rien ne bouge, la ligne garde le focus.
+    await premiere.focus();
+    await page.keyboard.press('Delete');
+    const boite = page.locator('dialog.boite[open]');
+    await expect(boite.locator('h2')).toHaveText('Supprimer cette recette ?');
+    await boite.locator('[data-role="annuler"]').click();
+    await expect(boite).toHaveCount(0);
+    await expect(lignes(page)).toHaveCount(2);
+    await expect(premiere).toBeFocused();
+    // Confirmée, elle part (annulable), le focus passe à la suivante.
+    await page.keyboard.press('Delete');
+    await boite.locator('[data-role="ok"]').click();
+    await expect(page.locator('#registre .place-retiree')).toContainText('supprimée');
+    await expect(ligne(page, ancienne.id)).toBeFocused();
+    await page.locator('#registre [data-restaurer-place]').click();
+    await expect(lignes(page)).toHaveCount(2);
+  });
+
+  test('la densité compacte se garde d’une visite à l’autre', async ({ page, request }) => {
+    await configurer(request);
+    await ajouterRecette(request);
+    await ouvrir(page, 'recettes');
+    await expect(page.locator('table.registre')).not.toHaveClass(/serree/);
+    await page.locator('[data-densite="serree"]').click();
+    await expect(page.locator('table.registre')).toHaveClass(/serree/);
+    await expect(page.locator('[data-densite="serree"]')).toHaveAttribute('aria-pressed', 'true');
+    await page.reload();
+    await attendrePage(page);
+    await expect(page.locator('table.registre')).toHaveClass(/serree/);
+  });
+
+  test('un client se survole : son bilan, et le lien vers sa fiche', async ({ page, request }) => {
+    await configurer(request);
+    await request.post('/api/clients', { data: { nom: 'Studio Lumen', siret: '' } });
+    const annee = new Date().getFullYear();
+    await ajouterRecette(request, { client: 'Studio Lumen', montant: 300 });
+    await ajouterRecette(request, { client: 'Studio Lumen', montant: 200, dateEncaissement: `${annee - 1}-06-10` });
+    await ouvrir(page, 'recettes');
+    await page.locator('#registre .nom-tiers').first().hover();
+    const bulle = page.locator('.apercu-tiers');
+    await expect(bulle).toBeVisible();
+    await expect(bulle).toContainText(`Client depuis ${annee - 1}`);
+    await expect(bulle.locator('.apercu-details')).toContainText(euros(500).replace(',00', ''));
+    await expect(bulle.locator('.apercu-annees > div')).toHaveCount(2);
+    await bulle.locator('.apercu-lien').hover();
+    await bulle.locator('.apercu-lien').click();
+    await expect(page).toHaveURL(/#\/clients\?client=/);
+    await expect(bulle).toBeHidden();
+  });
+
+  test('glisser d’un client à l’autre ouvre l’aperçu du second, sans le perdre', async ({ page, request }) => {
+    await configurer(request);
+    await ajouterRecette(request, { client: 'Dupont', montant: 300 });
+    await ajouterRecette(request, { client: 'Martin', montant: 120 });
+    await ouvrir(page, 'recettes');
+    const noms = page.locator('#registre .nom-tiers');
+    const bulle = page.locator('.apercu-tiers');
+    // L'aperçu s'ouvre sous son nom : on glisse vers la ligne du dessus, libre.
+    await noms.nth(1).hover();
+    await expect(bulle).toBeVisible();
+    const premier = (await noms.nth(1).textContent()).trim();
+    const second = (await noms.nth(0).textContent()).trim();
+    await expect(bulle).toContainText(premier);
+    await noms.nth(0).hover();
+    await expect(bulle).toBeVisible();
+    await expect(bulle).toContainText(second);
+    await page.waitForTimeout(300);
+    await expect(bulle).toBeVisible();
+  });
+});
+
 test.describe('numérotation des factures', () => {
   test('un numéro manquant se signale, se déplie, et peut ne plus être signalé', async ({ page, request }) => {
     await configurer(request);
@@ -859,7 +1126,16 @@ test.describe('numérotation des factures', () => {
     await pastille.click();
     await expect(pastille).toHaveAttribute('aria-expanded', 'true');
     const avis = page.locator('#avis-numerotation');
-    await expect(avis).toContainText('il semble manquer « F-002 »');
+    // Le numéro manquant se montre dans sa suite, entre ses deux voisins.
+    await expect(avis.locator('.suite-numero')).toHaveText(['001', '002', '003']);
+    await expect(avis.locator('.suite-numero.trou')).toHaveText('002');
+    await expect(avis).toContainText('La facture F-002 devrait se trouver entre la recette du');
+    // « Saisir la recette F-002 » : la saisie, son numéro déjà écrit.
+    await avis.locator('[data-saisir-numero="F-002"]').click();
+    await expect(panneau(page).locator('#f-facture')).toHaveValue('F-002');
+    await panneau(page).locator('[data-fermer]').first().click();
+    await expect(page.locator('dialog.panneau')).toHaveCount(0);
+    // « La facture a été annulée » : elle ne sera plus signalée.
     await avis.locator('[data-ignorer="F-002"]').click();
     await expect(page.locator('.zone-avis .bandeau-retour')).toContainText('« F-002 » ne sera plus signalé');
     await expect(pastille).toHaveCount(0);
@@ -912,6 +1188,7 @@ test.describe('Annuler et Rétablir au clavier dans le registre', () => {
     await ouvrir(page, 'recettes');
     await ligne(page, r.id).locator('[data-action="menu"]').click();
     await page.locator('.menu-contextuel [role="menuitem"]', { hasText: 'Supprimer' }).click();
+    await page.locator('dialog.boite[open] [data-role="ok"]').click();
     await expect(page.locator('tr.place-retiree')).toBeVisible();
     await page.keyboard.press('Control+z');
     await expect(ligne(page, r.id)).toBeVisible();
@@ -928,4 +1205,29 @@ test('un mode de règlement personnalisé se choisit et s’affiche', async ({ p
   await p.locator('#f-montant').fill('25');
   await p.locator('[type="submit"]').click();
   await expect(page.locator('#registre td.mode')).toHaveText('Lydia');
+});
+
+test('au clavier, la ligne active reste visible entre les titres collés et le total', async ({ page, request }) => {
+  await configurer(request);
+  for (let i = 0; i < 40; i += 1) await ajouterRecette(request, { client: `Client ${i}`, montant: 10 + i });
+  await ouvrir(page, 'recettes');
+  const visible = async () => page.evaluate(() => {
+    const ligne = document.activeElement.getBoundingClientRect();
+    const titres = document.querySelector('#registre thead').getBoundingClientRect();
+    const mois = document.querySelector('#registre .separateur-mois td').getBoundingClientRect();
+    const total = document.querySelector('#registre tfoot').getBoundingClientRect();
+    return ligne.top >= Math.max(titres.bottom, mois.bottom) - 1 && ligne.bottom <= total.top + 1;
+  });
+  // Depuis le bas du registre, on remonte : la ligne ne passe pas sous les titres.
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  await page.locator('#registre tbody tr[data-id]').last().focus();
+  for (let i = 0; i < 25; i += 1) {
+    await page.keyboard.press('ArrowUp');
+    await expect.poll(visible).toBe(true);
+  }
+  // Puis on redescend : elle ne passe pas sous le total.
+  for (let i = 0; i < 25; i += 1) {
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(visible).toBe(true);
+  }
 });

@@ -116,16 +116,19 @@ export const dateIso = (annee, mois, jour) =>
 /** Nombre de jours d'un mois (1 à 12). Le jour 0 du mois suivant est le dernier. */
 export const joursDuMois = (annee, mois) => new Date(Date.UTC(annee, mois, 0)).getUTCDate();
 
+/** Rang d'un jour dans son année, 1 au 1er janvier (en UTC : aucun changement d'heure). */
+export const jourDeLAnnee = (iso) => Math.round((Date.parse(iso) - Date.parse(`${iso.slice(0, 4)}-01-01`)) / 864e5) + 1;
+
+/** « 1er mars », « 12 septembre ». */
+export const jourEtMois = (iso) => `${Number(iso.slice(8)) === 1 ? '1er' : Number(iso.slice(8))} ${nomMois(moisDe(iso))}`;
+
 /**
  * Identifiant d'une période de déclaration : « 2026-07 » pour un mois,
  * « 2026-T2 » pour un trimestre. C'est la forme mémorisée par le bouton
- * « C'est fait ». Retourne `null` pour une année entière, qui n'est pas une
- * périodicité de déclaration.
+ * « C'est fait ».
  */
 export function idPeriode(annee, type, valeur) {
-  if (type === 'mois') return `${annee}-${String(valeur).padStart(2, '0')}`;
-  if (type === 'trimestre') return `${annee}-T${valeur}`;
-  return null;
+  return type === 'mois' ? `${annee}-${String(valeur).padStart(2, '0')}` : `${annee}-T${valeur}`;
 }
 
 /** Inverse d'`idPeriode` : `{ annee, type, valeur }`, ou `null` si illisible. */
@@ -138,14 +141,10 @@ export function periodeDepuisId(id) {
 }
 
 /** Dernier mois (1 à 12) couvert par une période de déclaration. */
-const dernierMois = (type, valeur) => (type === 'mois' ? valeur : valeur * 3);
+export const dernierMois =(type, valeur) => (type === 'mois' ? valeur : valeur * 3);
 
-/**
- * Dernier jour d'une période de déclaration (date ISO), ou `null` pour une
- * année entière.
- */
+/** Dernier jour d'une période de déclaration (date ISO). */
 export function finPeriode(annee, type, valeur) {
-  if (type !== 'mois' && type !== 'trimestre') return null;
   const mois = dernierMois(type, valeur);
   return dateIso(annee, mois, joursDuMois(annee, mois));
 }
@@ -154,10 +153,9 @@ export function finPeriode(annee, type, valeur) {
  * Date limite de la déclaration URSSAF d'une période : le dernier jour du
  * mois qui suit sa fin. En mensuel, juillet se déclare au plus tard le
  * 31 août ; en trimestriel, cela donne les 30 avril, 31 juillet, 31 octobre
- * et 31 janvier. Retourne `null` pour une année entière.
+ * et 31 janvier.
  */
 export function echeanceDeclaration(annee, type, valeur) {
-  if (type !== 'mois' && type !== 'trimestre') return null;
   const suivant = dernierMois(type, valeur) + 1;
   const [a, m] = suivant === 13 ? [annee + 1, 1] : [annee, suivant];
   return dateIso(a, m, joursDuMois(a, m));

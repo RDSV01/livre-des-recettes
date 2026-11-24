@@ -5,7 +5,7 @@
  */
 
 import {
-  test, expect, configurer, regler, ajouterRecette, ouvrir, attendrePage, parametres, euros, aujourdhui, ANNUAIRE
+  test, expect, configurer, regler, ajouterRecette, ouvrir, attendrePage, apresEnregistrement, parametres, euros, aujourdhui, ANNUAIRE
 } from './outils.js';
 import { dateEnFrancaisLong } from '../../src/partage/dates.js';
 import { finAcre } from '../../src/partage/acre.js';
@@ -152,6 +152,28 @@ test.describe('affichage', () => {
   });
 });
 
+test.describe('l’ordre des modes de règlement', () => {
+  test('rangés aux flèches, avec leur usage ; la saisie suit cet ordre', async ({ page, request }) => {
+    await configurer(request);
+    await ajouterRecette(request, { modeReglement: 'virement' });
+    await ouvrir(page, 'parametres?section=modes');
+    const ordre = page.locator('#ordre-modes [data-code]');
+    await expect(ordre.first()).toHaveAttribute('data-code', 'carte');
+    await expect(page.locator('#ordre-modes [data-code="virement"] .usages-mode')).toHaveText('1 ligne');
+    await expect(ordre.first().locator('[data-bouger="-1"]')).toBeDisabled();
+    // Virement monte en tête.
+    await page.locator('#ordre-modes [data-code="virement"] [data-bouger="-1"]').click();
+    await expect(ordre.first()).toHaveAttribute('data-code', 'virement');
+    // Annoncé une fois la réponse prise en compte par la page, pas seulement par le serveur.
+    await expect(page.locator('#annonces')).toHaveText('Ordre des modes enregistré');
+    await expect.poll(async () => (await parametres(request)).ordreModes?.[0]).toBe('virement');
+    // La liste de la saisie le propose en premier.
+    await ouvrir(page, 'recettes');
+    await page.locator('#nouvelle-recette').click();
+    await expect(page.locator('dialog.panneau[open] #f-mode option').first()).toHaveAttribute('value', 'virement');
+  });
+});
+
 test.describe('modes de règlement personnalisés', () => {
   test('ajouter, renommer, supprimer et annuler la suppression', async ({ page, request }) => {
     await configurer(request);
@@ -160,11 +182,11 @@ test.describe('modes de règlement personnalisés', () => {
     await page.locator('#ajouter-mode').click();
     await expect(liste.locator('.ligne-gestion input').last()).toBeFocused();
     await liste.locator('.ligne-gestion input').last().fill('Lydia');
-    await liste.locator('.ligne-gestion input').last().press('Tab');
+    await apresEnregistrement(page, () => liste.locator('.ligne-gestion input').last().press('Tab'));
     await expect.poll(async () => (await parametres(request)).modesPersonnalises.map((m) => m.libelle)).toEqual(['Lydia']);
     await expect(liste.locator('.ligne-gestion .quand')).toHaveText('jamais utilisé');
     await liste.locator('.ligne-gestion input').fill('Lydia Pro');
-    await liste.locator('.ligne-gestion input').press('Tab');
+    await apresEnregistrement(page, () => liste.locator('.ligne-gestion input').press('Tab'));
     await expect.poll(async () => (await parametres(request)).modesPersonnalises.map((m) => m.libelle)).toEqual(['Lydia Pro']);
     await liste.locator('[data-supprimer-mode]').click();
     await expect(liste.locator('.bandeau-retour')).toContainText('« Lydia Pro » supprimé');
@@ -257,4 +279,18 @@ test.describe('navigation dans les paramètres', () => {
     const copie = await page.evaluate(() => navigator.clipboard.readText());
     expect(copie.startsWith(livre.dossierDonnees)).toBe(true);
   });
+});
+
+test('en défilant, le sommaire reste sous l’en-tête compact', async ({ page, request }) => {
+  await configurer(request);
+  await ouvrir(page, 'parametres');
+  await page.evaluate(() => scrollTo(0, 1500));
+  await expect(page.locator('#barre-compacte')).toHaveClass(/visible/);
+  await expect(async () => {
+    const [basBarre, hautSommaire] = await page.evaluate(() => [
+      document.getElementById('barre-compacte').getBoundingClientRect().bottom,
+      document.querySelector('.sommaire').getBoundingClientRect().top
+    ]);
+    expect(hautSommaire).toBeGreaterThanOrEqual(basBarre);
+  }).toPass();
 });

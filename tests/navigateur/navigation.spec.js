@@ -5,7 +5,7 @@
 
 import {
   test, expect, configurer, ajouterRecette, ajouterAchat, ajouterClient, ouvrir, attendrePage,
-  euros, chargerDemo, regler
+  euros, chargerDemo, regler, maintenir
 } from './outils.js';
 
 test.describe('menu et routage', () => {
@@ -26,7 +26,8 @@ test.describe('menu et routage', () => {
       await page.locator('#navigation .lien-nav', { hasText: libelle }).click();
       await expect(page).toHaveURL(new RegExp(`#/${route}$`));
       await attendrePage(page);
-      await expect(page).toHaveTitle(titre);
+      // « (1) » devant le titre quand une déclaration attend (voir plus bas).
+      await expect(page).toHaveTitle(new RegExp(`^(\\(1\\) )?${titre}$`));
       await expect(page.locator(`#navigation .lien-nav[data-route="${route}"]`)).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('#navigation .lien-nav[aria-current="page"]')).toHaveCount(1);
     }
@@ -65,7 +66,15 @@ test.describe('menu et routage', () => {
     await expect(page.locator('#navigation .lien-nav[data-route="achats"]')).toHaveCount(1);
   });
 
-  test('l’heure d’enregistrement prend un instant la place de la version', async ({ page, request }) => {
+  test('l’onglet porte une pastille et « (1) » quand une déclaration attend', async ({ page, request }) => {
+    await configurer(request);
+    await ouvrir(page);
+    await expect(page.locator('#navigation .alerte-nav')).toBeVisible();
+    await expect(page).toHaveTitle(/^\(1\) Livre des recettes$/);
+    expect(await page.locator('link[rel="icon"]').getAttribute('href')).toContain(encodeURIComponent('#ea580c'));
+  });
+
+  test('l’état d’enregistrement prend la place de la version, puis vieillit', async ({ page, request }) => {
     await configurer(request);
     await ouvrir(page, 'recettes');
     const ligne = page.locator('#navigation .ligne-version');
@@ -79,13 +88,14 @@ test.describe('menu et routage', () => {
     await p.locator('#f-montant').fill('80');
     await p.locator('[type="submit"]').click();
     await expect(ligne).toHaveClass(/montre-heure/);
-    await expect(heure).toHaveText(/^Enregistré à \d{1,2} h \d{2}$/);
+    await expect(heure).toHaveText('Enregistré à l’instant');
     await expect(heure).not.toHaveAttribute('aria-hidden');
-    // Rien ne bouge dans le menu : l'heure se superpose à la version.
+    // L'heure exacte et la version se lisent au survol.
+    await expect(ligne).toHaveAttribute('title', /^Enregistré à \d{1,2} h \d{2}, version /);
+    // Rien ne bouge dans le menu : l'état se superpose à la version.
     expect(await ligne.boundingBox()).toEqual(avant);
-    // Puis la version revient.
-    await expect(ligne).not.toHaveClass(/montre-heure/, { timeout: 10_000 });
-    await expect(heure).toHaveAttribute('aria-hidden', 'true');
+    // Les compteurs du menu suivent.
+    await expect(page.locator('#navigation .compte-nav[data-compte="recettes"]')).toHaveText('1');
   });
 
   test('changer de page referme le panneau ouvert, sans rien demander', async ({ page, request }) => {
@@ -116,6 +126,25 @@ test.describe('menu et routage', () => {
 });
 
 test.describe('recherche dans tout le livre', () => {
+  test('une recette lointaine choisie par Ctrl+K arrive à l’écran, mise en avant', async ({ page, request }) => {
+    await configurer(request);
+    const annee = new Date().getFullYear();
+    for (let i = 0; i < 60; i += 1) {
+      await ajouterRecette(request, { client: `Client ${i}`, montant: 10 + i, dateEncaissement: `${annee}-${String((i % 9) + 2).padStart(2, '0')}-10` });
+    }
+    // La plus ancienne : tout en bas du registre, trié du plus récent au plus ancien.
+    await ajouterRecette(request, { client: 'Atelier Lointain', montant: 99, dateEncaissement: `${annee}-01-03` });
+    await ouvrir(page);
+    await page.keyboard.press('Control+k');
+    const boite = page.locator('dialog.boite-recherche');
+    await boite.locator('input[type="search"]').fill('lointain');
+    await expect(boite.locator('.groupe-resultats[aria-label="Recettes"] .resultat')).toHaveCount(1);
+    await page.keyboard.press('Enter');
+    const ligne = page.locator('#registre tbody tr.nouvelle');
+    await expect(ligne).toContainText('Atelier Lointain');
+    await expect(ligne).toBeInViewport();
+  });
+
   test('Ctrl+K trouve pages, actions, clients, recettes et achats, et y mène', async ({ page, request }) => {
     await configurer(request, { typeActivite: 'mixte' });
     await ajouterClient(request, { nom: 'Boulangerie Martin' });
@@ -231,12 +260,33 @@ test.describe('recherche dans tout le livre', () => {
 });
 
 test.describe('raccourcis clavier', () => {
+  test('N sur une page qui a noté un état dans son adresse : la saisie s’ouvre, l’adresse et l’historique restent justes', async ({ page, request }) => {
+    await configurer(request, { periodiciteUrssaf: 'trimestre' });
+    await ouvrir(page);
+    await page.locator('#navigation .lien-nav[data-route="urssaf"]').click();
+    await expect(page).toHaveURL(/#\/urssaf$/);
+    await page.locator('#periodes .periode[data-valeur="1"]').click();
+    await expect(page).toHaveURL(/#\/urssaf\?periode=\d{4}-T1$/);
+    await page.keyboard.press('n');
+    await expect(page.locator('dialog.panneau[open] #titre-panneau')).toHaveText('Nouvelle recette');
+    // L'adresse garde la période choisie.
+    await expect(page).toHaveURL(/#\/urssaf\?periode=\d{4}-T1$/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog.panneau')).toHaveCount(0);
+    // Pas de doublon dans l'historique : un retour mène à la page d'avant.
+    await page.goBack();
+    await expect(page).toHaveURL(/#\/$/);
+    await expect(page.locator('#vue .indicateurs')).toBeVisible();
+  });
+
   test('N ouvre une nouvelle recette, A un nouvel achat, ? la liste des raccourcis', async ({ page, request }) => {
     await configurer(request, { typeActivite: 'ventes' });
     await ouvrir(page);
     await page.keyboard.press('n');
-    await expect(page).toHaveURL(/#\/recettes\?nouvelle=1/);
+    // Le panneau s'ouvre sur place : on reste sur le tableau de bord.
     await expect(page.locator('dialog.panneau[open] #titre-panneau')).toHaveText('Nouvelle recette');
+    await expect(page).toHaveURL(/#\/$/);
+    await expect(page.locator('#vue .indicateurs')).toBeVisible();
     // Dans un champ, la touche s'écrit.
     await page.locator('#f-client').click();
     await page.keyboard.press('n');
@@ -246,8 +296,8 @@ test.describe('raccourcis clavier', () => {
     await expect(page.locator('dialog.panneau')).toHaveCount(0);
 
     await page.keyboard.press('a');
-    await expect(page).toHaveURL(/#\/achats\?nouveau=1/);
     await expect(page.locator('dialog.panneau[open] #titre-panneau')).toHaveText('Nouvel achat');
+    await expect(page).toHaveURL(/#\/$/);
     await page.keyboard.press('Escape');
     await expect(page.locator('dialog.panneau')).toHaveCount(0);
 
@@ -308,9 +358,10 @@ test.describe('bandeaux et mises à jour', () => {
       json: { actif: true, disponible: true, version: '99.0.0', page: 'https://github.com/RDSV01/livre-des-recettes/releases/latest', remplacable: false, erreur: null }
     }));
     await ouvrir(page);
-    const bandeau = page.locator('#bandeaux .bandeau-global');
-    await expect(bandeau).toContainText('Version 99.0.0 disponible');
-    await expect(bandeau.locator('a')).toHaveAttribute('href', /github\.com/);
+    const annonce = page.locator('#bandeaux .annonce-maj');
+    await expect(annonce).toContainText('99.0.0');
+    await expect(annonce).toContainText('Une nouvelle version est disponible');
+    await expect(annonce.locator('a')).toHaveAttribute('href', /github\.com/);
   });
 
   test('l’exécutable propose d’installer la nouvelle version, après confirmation', async ({ page, request }) => {
@@ -349,7 +400,7 @@ test.describe('bandeaux et mises à jour', () => {
     await ouvrir(page);
     const reponse = await (await request.get('/api/maj')).json();
     expect(reponse.disponible).toBe(false);
-    await expect(page.locator('#bandeaux .bandeau-global')).toHaveCount(0);
+    await expect(page.locator('#bandeaux .annonce-maj')).toHaveCount(0);
   });
 
   test('le jeu de démonstration se signale, et s’efface pour repartir de zéro', async ({ page, request }) => {
@@ -358,7 +409,12 @@ test.describe('bandeaux et mises à jour', () => {
     const bandeau = page.locator('#bandeaux .bandeau-global');
     await expect(bandeau).toContainText('jeu de démonstration');
     await bandeau.locator('#effacer-demo').click();
-    await page.locator('dialog.boite [data-role="ok"]').click();
+    const boite = page.locator('dialog.boite[open]');
+    await expect(boite).toContainText('Une sauvegarde est faite juste avant');
+    // Un simple clic ne suffit pas : tout effacer se confirme en maintenant le bouton.
+    await boite.locator('[data-role="ok"]').click();
+    await expect(boite).toBeVisible();
+    await maintenir(page, boite.locator('[data-role="ok"]'));
     // Livre vide : l'accueil guidé reprend.
     await expect(page.locator('.accueil')).toBeVisible();
     const { recettes } = await (await request.get('/api/recettes')).json();

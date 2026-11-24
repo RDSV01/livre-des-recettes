@@ -274,6 +274,14 @@ function booleen(valeur, defaut) {
 
 const NUMEROS_IGNORES_MAX = 500;
 
+/** L'ordre des modes de règlement : des codes, sans doublon. Un code inconnu est sans effet. */
+function validerOrdreModes(entree) {
+  if (!Array.isArray(entree) || entree.length > 60) {
+    return { erreur: 'Ordre des modes de règlement invalide.', valeurs: null };
+  }
+  return { erreur: null, valeurs: [...new Set(entree.map((c) => texte(c)).filter((c) => /^[a-z0-9-]{1,40}$/.test(c)))] };
+}
+
 /**
  * Valide la liste des numéros de facture à ne plus signaler. Les doublons de
  * saisie (casse, accents) sont fusionnés : l'analyse de la numérotation les
@@ -389,6 +397,12 @@ export function validerParametres(entree) {
     erreurs.modesPersonnalises = modes.erreur;
   }
 
+  // L'ordre des modes, comme les listes qui suivent : absent, il reste tel quel.
+  const ordre = e.ordreModes === undefined ? null : validerOrdreModes(e.ordreModes);
+  if (ordre?.erreur) {
+    erreurs.ordreModes = ordre.erreur;
+  }
+
   // Liste absente de la requête : elle est conservée telle qu'enregistrée
   // (voir plus bas). Une requête qui oublierait ce champ ne doit pas effacer
   // en silence ce que l'utilisateur a choisi de ne plus voir.
@@ -409,6 +423,7 @@ export function validerParametres(entree) {
     activiteArtisanale: booleen(e.activiteArtisanale, false),
     acre: booleen(e.acre, false), debutActivite,
     devise, formatDate, modesPersonnalises: modes.valeurs,
+    ...(ordre ? { ordreModes: ordre.valeurs } : {}),
     periodiciteUrssaf, dernierePeriodeDeclaree,
     alertesNumerotation: booleen(e.alertesNumerotation, true),
     ...(ignores ? { numerosIgnores: ignores.valeurs } : {}),

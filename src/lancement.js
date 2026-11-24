@@ -6,8 +6,9 @@
  * L'exécutable n'ouvre aucune fenêtre de console : rien de ce qui est écrit
  * ici ne doit être indispensable à l'utilisateur. Les deux situations qu'il
  * peut rencontrer se règlent donc toutes seules : une application déjà
- * ouverte est simplement rappelée à l'écran, et un port occupé est remplacé
- * par le suivant.
+ * ouverte est simplement rappelée à l'écran, et un port occupé (ou réservé
+ * par Windows) est remplacé par le suivant, puis par un port libre choisi par
+ * le système.
  */
 
 import fs from 'node:fs';
@@ -56,8 +57,10 @@ export async function ecouterSurUnPortLibre(app) {
  * @param {object} [options.actifs] interface servie depuis la mémoire.
  * @param {(erreur: Error) => void} [options.surEchec] appelé au lieu de
  *   `process.exit` quand l'application ne peut vraiment pas démarrer.
+ * @param {() => Promise<object[]>} [options.listerVolumes] supports de copie
+ *   simulés, et `essai` le banc d'essai : `npm run essai` seulement (voir `creerApp`).
  */
-export function demarrerServeur({ dossierDonnees, port = 3000, actifs, surEchec }) {
+export function demarrerServeur({ dossierDonnees, port = 3000, actifs, surEchec, listerVolumes, essai }) {
   const abandonner = (erreur) => {
     if (surEchec) return surEchec(erreur);
     console.error(erreur.message);
@@ -91,21 +94,40 @@ export function demarrerServeur({ dossierDonnees, port = 3000, actifs, surEchec 
     serveur.close();
     serveur.closeAllConnections?.();
   };
-  const app = creerApp({ dossierDonnees, actifs, arreter, taches: true });
+  const app = creerApp({ dossierDonnees, actifs, arreter, taches: true, listerVolumes, essai });
 
-  const ecouter = (portEssai, restants) => {
-    if (PORTS_REFUSES_PAR_LES_NAVIGATEURS.has(portEssai)) return ecouter(portEssai + 1, restants);
+  // Les ports essayés, toujours dans le même ordre : le navigateur range les
+  // préférences d'affichage par adresse, un port stable les garde d'un
+  // lancement à l'autre. D'abord 3000 et les suivants, puis un port par
+  // centaine (3100, 3200… 9900) : Windows réserve ses plages par blocs de
+  // cent, ces sauts les enjambent. En dernier recours, le système choisit.
+  const candidats = [
+    ...Array.from({ length: PORTS_ESSAYES }, (_, i) => port + i),
+    ...Array.from({ length: 69 }, (_, i) => Math.ceil((port + PORTS_ESSAYES) / 100) * 100 + i * 100).filter((p) => p < 10000),
+    0
+  ].filter((p) => !PORTS_REFUSES_PAR_LES_NAVIGATEURS.has(p));
+
+  /** @param {number} rang place dans `candidats` ; le port 0 laisse le système choisir. */
+  const ecouter = (rang) => {
+    const portEssai = candidats[rang];
     serveur = app.listen(portEssai, '127.0.0.1', (erreur) => {
       // Express rappelle aussi en cas d'échec (port occupé) : l'écouteur
       // `error` ci-dessous s'en charge, rien n'est annoncé ni ouvert.
       if (erreur) return;
-      verrou.noterPort(portEssai);
+      const portObtenu = serveur.address().port;
+      // Un port choisi par le système peut être de ceux que les navigateurs
+      // refusent : on en redemande un autre.
+      if (PORTS_REFUSES_PAR_LES_NAVIGATEURS.has(portObtenu)) {
+        serveur.close(() => ecouter(candidats.length - 1));
+        return;
+      }
+      verrou.noterPort(portObtenu);
       // Nouvelle version lancée par une mise à jour : l'ancienne attend ce
       // signe pour s'effacer ; sans lui, elle reprend la main (voir `maj.js`).
       if (process.env[TEMOIN_MAJ]) {
         try { fs.writeFileSync(process.env[TEMOIN_MAJ], String(process.pid), 'utf8'); } catch { /* l'ancienne rétablira sa version */ }
       }
-      const adresse = `http://localhost:${portEssai}`;
+      const adresse = `http://localhost:${portObtenu}`;
       console.log('');
       console.log(`  Livre des recettes v${VERSION}`);
       console.log(`  Ouvert sur ${adresse} (vos données restent sur cette machine).`);
@@ -116,16 +138,17 @@ export function demarrerServeur({ dossierDonnees, port = 3000, actifs, surEchec 
     });
 
     serveur.on('error', (erreur) => {
-      if (erreur.code !== 'EADDRINUSE') throw erreur;
-      // Port occupé par un autre logiciel : on prend le suivant.
-      if (restants > 0) return ecouter(portEssai + 1, restants - 1);
+      // Port occupé par un autre logiciel (EADDRINUSE), ou réservé par Windows
+      // (EACCES : Hyper-V, WSL ou Docker se gardent des plages entières, qui
+      // peuvent couvrir 3000 et les suivants) : on prend le suivant.
+      if (erreur.code !== 'EADDRINUSE' && erreur.code !== 'EACCES') throw erreur;
+      if (rang < candidats.length - 1) return ecouter(rang + 1);
       verrou.liberer();
       abandonner(new Error(
-        `Aucun port disponible entre ${port} et ${portEssai} pour ouvrir l’application. ` +
-        'Fermez les logiciels qui les occupent, puis relancez.'
+        'Aucun port disponible pour ouvrir l’application. Fermez les logiciels qui les occupent, puis relancez.'
       ));
     });
   };
 
-  ecouter(port, PORTS_ESSAYES - 1);
+  ecouter(0);
 }

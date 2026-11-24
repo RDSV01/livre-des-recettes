@@ -300,9 +300,23 @@ textarea {
   border: 3px solid var(--fond);
   border-radius: 999px;
 }
+/* Au clavier, un anneau détaché de l'élément par un liseré de la couleur du
+   fond : il se lit sur toutes les surfaces. Il se pose par un fondu bref, en
+   se resserrant d'un cheveu ; rien ne change à la souris. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* Le fondu reste sur les commandes : posé sur une boîte de dialogue ou un
+   panneau, il remplacerait leur propre animation d'ouverture. */
+:is(a, button, input, select, textarea, summary):focus-visible {
+  animation: anneau-focus 140ms ease-out;
+}
+@keyframes anneau-focus {
+  from {
+    outline-color: transparent;
+    outline-offset: 4px;
+  }
 }
 
 h1,

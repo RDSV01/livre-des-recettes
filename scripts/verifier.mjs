@@ -45,7 +45,7 @@ const json = (chemin, options) => appel(chemin, options).then((r) => r.json());
 for (const chemin of [
   '/api/systeme', '/api/tableau-de-bord', '/api/recettes', '/api/recettes/annees',
   '/api/achats', '/api/achats/annees', '/api/clients', '/api/parametres', '/api/sauvegardes',
-  '/api/securite', '/api/urssaf?annee=2026&type=annee', '/api/urssaf/periodes?annee=2026&type=trimestre'
+  '/api/securite', '/api/urssaf?annee=2026&type=trimestre&valeur=1', '/api/urssaf/periodes?annee=2026&type=trimestre'
 ]) {
   await verifier(`GET ${chemin}`, 200, () => statut(chemin));
 }
@@ -161,18 +161,18 @@ await verifier('export CSV neutralise les formules', true, async () => {
 // Sans type d'activité, aucun taux ne s'applique : on le renseigne d'abord,
 // comme l'aurait fait l'utilisateur.
 await verifier('sans type d’activité, aucune estimation de cotisations', null, async () =>
-  (await json('/api/urssaf?annee=2026&type=annee')).cotisations);
+  (await json('/api/urssaf?annee=2026&type=trimestre&valeur=1')).cotisations);
 await verifier('le type d’activité s’enregistre', 200, () => statut('/api/parametres', {
   method: 'PUT',
   body: JSON.stringify({ typeActivite: 'mixte', naturePrestations: 'liberal', devise: 'EUR', formatDate: 'JJ/MM/AAAA', modesPersonnalises: [] })
 }));
 await verifier('le bilan URSSAF porte l’estimation des cotisations', true, async () => {
-  const c = (await json('/api/urssaf?annee=2026&type=annee')).cotisations;
+  const c = (await json('/api/urssaf?annee=2026&type=trimestre&valeur=1')).cotisations;
   return c !== null && Number.isInteger(c.total) && c.lignes.length > 0 &&
     c.lignes.every((l) => l.taux > 0 && Number.isInteger(l.montant) && Boolean(l.duJour));
 });
 await verifier('les cotisations ne dépassent pas le chiffre d’affaires', true, async () => {
-  const bilan = await json('/api/urssaf?annee=2026&type=annee');
+  const bilan = await json('/api/urssaf?annee=2026&type=trimestre&valeur=1');
   return bilan.cotisations === null || bilan.cotisations.total <= bilan.chiffreAffaires;
 });
 

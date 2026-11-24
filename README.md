@@ -20,17 +20,21 @@ Saisie guidée, totaux automatiques, exports conformes, et vos données restent 
 ## Fonctionnalités
 
 - Livre des recettes aux six colonnes légales, lu mois par mois avec sous-totaux, recherche,
-  filtres et tri. À la saisie : client retrouvé par son nom ou son SIRET, nouveau client
-  vérifié dans l'annuaire des entreprises (nom exact, SIRET, adresse), mode de règlement
-  repris, numéro de facture suivant proposé, doublon signalé, saisie en série, facture PDF
-  jointe. La numérotation des factures est surveillée.
+  filtres et tri. À la saisie : client retrouvé par son nom ou
+  son SIRET, nouveau client vérifié dans l'annuaire des entreprises (nom exact, SIRET,
+  adresse), mode de règlement repris, doublon signalé,
+  saisie en série, facture PDF jointe. La numérotation des factures est surveillée.
 - Registre des achats aux cinq colonnes légales, avec les justificatifs en PDF.
-- Fiche de chaque client, avec son chiffre d'affaires et ses encaissements.
+- Carnet de clients : la fiche de chacun, avec son chiffre d'affaires, ses années et ses
+  encaissements.
 - Tableau de bord : chiffre d'affaires de l'année et du mois, graphique comparé à l'année
-  précédente, déclaration URSSAF à faire, plafond micro-entrepreneur et franchise de TVA,
-  recettes mensuelles à renouveler.
-- Déclaration URSSAF : montant à déclarer par mois ou par trimestre, échéance, estimation des
-  prélèvements (cotisations, formation professionnelle, versement libératoire, ACRE).
+  précédente avec le détail de chaque mois, déclaration URSSAF à faire, plafond
+  micro-entrepreneur et franchise de TVA estimés au 31 décembre, recettes qui reviennent.
+- Rétrospective de l'année en scènes animées : le total, le meilleur mois, les clients,
+  les habitudes.
+- Déclaration URSSAF : l'année en frise au rythme choisi (mois ou trimestre), montant à
+  déclarer et cases à reporter, échéance, estimation des prélèvements (cotisations,
+  formation professionnelle, versement libératoire, ACRE).
 - Activité mixte : ventes et prestations distinguées partout, exports compris.
 - Exports des registres en PDF, Excel et CSV, contrôlés avant téléchargement, avec en option
   les PDF joints dans un .zip. Rapport annuel de gestion en PDF.
@@ -54,17 +58,21 @@ Depuis les sources, avec [Node.js](https://nodejs.org) 22.12 ou plus :
 git clone https://github.com/RDSV01/livre-des-recettes.git
 cd livre-des-recettes
 npm install
-npm start
+npm start          # votre livre, sur http://localhost:3000
+npm run essai      # un livre d'essai temporaire, avec le banc d'essai (sur le port 3100)
 ```
 
 L'application s'ouvre sur `http://localhost:3000` (ou le port libre suivant), accessible
-seulement depuis votre machine.
+seulement depuis votre machine. Le mode essai ne touche jamais au vrai livre : son bouton
+« Banc d'essai » provoque d'un clic ce qui arrive rarement (une autre date du jour, un seuil
+dépassé, une déclaration en retard, une clé retirée, une panne…) pour tout essayer.
 
 ## Vos données
 
 - Un seul fichier lisible, `Documents/Livre des recettes/livre-des-recettes.json`, et les PDF
   joints dans le dossier `pieces`, à côté. Chaque écriture est atomique : une coupure de
-  courant n'abîme pas le fichier. Le navigateur ne garde que le choix du thème.
+  courant n'abîme pas le fichier. Le navigateur ne garde que des préférences d'affichage
+  (thème, menu replié, mode compact), jamais vos données.
 - Des sauvegardes automatiques rangées ailleurs et vérifiées au démarrage : une copie de
   secours à chaque saisie, puis une sauvegarde par jour pendant 14 jours, par semaine pendant
   2 mois, par mois pendant un an. Un fichier abîmé ou supprimé se restaure en un clic.
@@ -103,8 +111,9 @@ paiement et le montant. Registres et justificatifs se conservent 10 ans.
 
 Node.js et Express côté serveur, JavaScript sans framework ni étape de build dans le
 navigateur, données en JSON, trois dépendances (`express`, `exceljs`, `pdfkit`). `npm test`
-vérifie tout. Architecture, tests et conventions : [CONTRIBUTING.md](CONTRIBUTING.md).
-Ce qui est fait et prévu : [ROADMAP.md](ROADMAP.md).
+vérifie tout, `npm run essai` lance un livre d'essai et son banc d'essai. Architecture,
+tests et conventions : [CONTRIBUTING.md](CONTRIBUTING.md). Ce qui est fait et prévu :
+[ROADMAP.md](ROADMAP.md).
 
 ## Crédits
 

@@ -10,13 +10,23 @@ import {
 
 const annee = new Date().getFullYear();
 
+/**
+ * Télécharge d'un clic sur `bouton`, en guettant dès le clic son retour
+ * passager (« Exporté », 2,2 s) : relevé après la lecture du fichier, il
+ * pourrait être déjà reparti sur une machine lente.
+ */
+async function exporter(page, bouton, retour = 'Exporté') {
+  const [fichier] = await Promise.all([telecharger(page, () => bouton.click()), expect(bouton).toContainText(retour)]);
+  return fichier;
+}
+
 test('registre des recettes en CSV : contrôle affiché, puis le fichier', async ({ page, request }) => {
   await configurer(request);
   await ajouterRecette(request, { client: 'Durand', libelle: 'Logo', numeroFacture: 'F-1', montant: 1234.5 });
   await ajouterRecette(request, { client: 'Martin', libelle: 'Site', numeroFacture: 'F-2', montant: 99 });
   await ouvrir(page, 'exports');
   const carte = page.locator('#carte-recettes');
-  const { nom, contenu } = await telecharger(page, () => carte.locator('[data-format="csv"]').click());
+  const { nom, contenu } = await exporter(page, carte.locator('[data-format="csv"]'));
   expect(nom).toBe(`livre-recettes-${annee}.csv`);
   const texte = contenu.toString('utf8');
   expect(texte.charCodeAt(0)).toBe(0xfeff);
@@ -29,7 +39,6 @@ test('registre des recettes en CSV : contrôle affiché, puis le fichier', async
   await expect(controle.locator('.points li')).not.toHaveCount(0);
   await expect(controle.locator('.points li.ok', { hasText: 'Continuité de la numérotation' })).toBeVisible();
   await expect(controle.locator('.conclusion-controle')).toHaveText('Tout est en ordre : le registre est complet et cohérent.');
-  await expect(carte.locator('[data-format="csv"]')).toContainText('Exporté');
   await carte.locator('[data-fermer-controle]').click();
   await expect(carte.locator('.apercu')).not.toHaveClass(/en-controle/);
 });
@@ -39,10 +48,9 @@ test('PDF et Excel : de vrais fichiers, nommés selon la période choisie', asyn
   await ajouterRecette(request, { dateEncaissement: `${annee}-01-10`, numeroFacture: 'F-1' });
   await ouvrir(page, 'exports');
   const carte = page.locator('#carte-recettes');
-  const pdf = await telecharger(page, () => carte.locator('[data-format="pdf"]').click());
+  const pdf = await exporter(page, carte.locator('[data-format="pdf"]'));
   expect(pdf.nom).toBe(`livre-recettes-${annee}.pdf`);
   expect(pdf.contenu.subarray(0, 5).toString()).toBe('%PDF-');
-  await expect(carte.locator('[data-format="pdf"]')).toContainText('Exporté');
 
   await carte.locator('#recettes-mois').selectOption('1');
   const xlsx = await telecharger(page, () => carte.locator('[data-format="xlsx"]').click());
@@ -83,13 +91,12 @@ test('avec les PDF joints : une archive ZIP qui les contient', async ({ page, re
   const carte = page.locator('#carte-recettes');
   await expect(carte.locator('#recettes-pieces-texte')).toContainText('Avec 1 PDF joint');
   await carte.locator('#recettes-pieces').check();
-  const { nom, contenu } = await telecharger(page, () => carte.locator('[data-format="csv"]').click());
+  const { nom, contenu } = await exporter(page, carte.locator('[data-format="csv"]'), 'Exporté (.zip)');
   expect(nom).toBe(`livre-recettes-${annee}-avec-pdf.zip`);
   const noms = nomsDansZip(contenu);
   expect(noms).toContain(`livre-recettes-${annee}.csv`);
   expect(noms.some((n) => n.endsWith('.pdf'))).toBe(true);
   await expect(carte.locator('.points li.info')).toContainText('1 joints, 1 sans PDF');
-  await expect(carte.locator('[data-format="csv"]')).toContainText('Exporté (.zip)');
 });
 
 test('sans PDF sur la période, l’option est éteinte', async ({ page, request }) => {
@@ -125,10 +132,9 @@ test('le rapport annuel de gestion, en PDF', async ({ page, request }) => {
   await ouvrir(page, 'exports');
   const carte = page.locator('#carte-rapport');
   await expect(carte.locator('#rapport-annee .annee-choisie')).toHaveText(String(annee));
-  let rapport = await telecharger(page, () => carte.locator('#telecharger-rapport').click());
+  let rapport = await exporter(page, carte.locator('#telecharger-rapport'));
   expect(rapport.nom).toBe(`rapport-annuel-${annee}.pdf`);
   expect(rapport.contenu.subarray(0, 5).toString()).toBe('%PDF-');
-  await expect(carte.locator('#telecharger-rapport')).toContainText('Rapport prêt');
   await carte.locator('#rapport-annee [data-pas="-1"]').click();
   rapport = await telecharger(page, () => carte.locator('#telecharger-rapport').click());
   expect(rapport.nom).toBe(`rapport-annuel-${annee - 1}.pdf`);

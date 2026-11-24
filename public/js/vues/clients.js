@@ -12,15 +12,17 @@
 import { api, urlPiece } from '../api.js';
 import { etat } from '../etat.js';
 import {
-  echapperHtml, toast, accorder, initiales, teinteDe, siretLisible, resultatSiret, poidsLisible,
+  echapperHtml, toast, accorder, monogramme, siretLisible, resultatSiret, poidsLisible,
   afficherErreursFormulaire, effacerErreursFormulaire, montantDetaille, preparerFlip, confirmer,
-  listeEntreprises, entrepriseEnLigne
+  listeEntreprises, entrepriseEnLigne, ecouterPourLaPage
 } from '../ui.js';
 import { bandeauRetour, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
 import { apercuPiece } from '../pieces.js';
-import { formaterMontant, formaterMontantEntier } from '/partage/montants.js';
-import { formaterDate } from '/partage/dates.js';
+import { formaterMontant, formaterMontantEntier, sommeMontants } from '/partage/montants.js';
+import { formaterDate, nomMois, aujourdHuiIso } from '/partage/dates.js';
+import { joursEntre } from '/partage/declarations.js';
+import { libelleMode } from '/partage/constantes.js';
 import { normaliserTexte } from '/partage/texte.js';
 
 /** Client affiché, retenu d'une visite à l'autre. */
@@ -30,8 +32,20 @@ let choisi = null;
 let ordre = 'ca';
 const ORDRES = [['ca', 'Chiffre d’affaires'], ['nom', 'Nom'], ['recent', 'Récents']];
 
+/** « aujourd’hui », « il y a 5 jours », « il y a 2 mois », « il y a plus d’un an ». */
+function depuisQuand(iso) {
+  const jours = joursEntre(iso, aujourdHuiIso());
+  if (jours <= 0) return 'aujourd’hui';
+  if (jours === 1) return 'hier';
+  if (jours < 45) return `il y a ${jours} jours`;
+  if (jours < 365) return `il y a ${Math.round(jours / 30)} mois`;
+  return jours < 730 ? 'il y a plus d’un an' : `il y a ${Math.floor(jours / 365)} ans`;
+}
+
 export async function vueClients(conteneur, params) {
-  const { devise, formatDate } = etat.parametres;
+  const { devise, formatDate, modesPersonnalises = [] } = etat.parametres;
+  /** Année montrée dans la fiche : « tout » (au départ), ou une de ses années. */
+  let anneeFiche = 'tout';
   // Arrivée depuis la recherche dans tout le livre : la fiche de ce client.
   if (params?.get('client')) choisi = params.get('client');
   let clients = [];
@@ -68,9 +82,20 @@ export async function vueClients(conteneur, params) {
   const zoneListe = page.querySelector('#liste-clients');
   const zoneFiche = page.querySelector('#fiche');
 
+  // Les recettes de chaque client, par nom normalisé : rangées une fois par chargement.
+  let rangees = null;
+  let parClient = new Map();
   const recettesDe = (client) => {
-    const cle = normaliserTexte(client.nom);
-    return recettes.filter((r) => normaliserTexte(r.client) === cle);
+    if (rangees !== recettes) {
+      rangees = recettes;
+      parClient = new Map();
+      for (const r of recettes) {
+        const cle = normaliserTexte(r.client);
+        if (!parClient.has(cle)) parClient.set(cle, []);
+        parClient.get(cle).push(r);
+      }
+    }
+    return [...(parClient.get(normaliserTexte(client.nom)) ?? [])];
   };
   const clientChoisi = () => clients.find((c) => c.id === choisi);
 
@@ -112,8 +137,10 @@ export async function vueClients(conteneur, params) {
     const jouer = anime ? preparerFlip(zoneListe, '.client-ligne', (b) => b.dataset.client) : () => {};
     const mot = normaliserTexte(recherche);
     const visibles = ordonner(clients.filter((c) => !mot || normaliserTexte(`${c.nom} ${c.siret}`).includes(mot)));
-    // Part de chaque client dans le chiffre d'affaires de tout le carnet.
+    // Part de chaque client dans le chiffre d'affaires de tout le carnet ; la
+    // barre, elle, se mesure au plus gros client : le classement se lit sans lire.
     const totalCarnet = clients.reduce((somme, c) => somme + c.totalRecettes, 0);
+    const plusGros = Math.max(0, ...clients.map((c) => c.totalRecettes));
     if (clients.length === 0) {
       zoneListe.innerHTML = `<p class="vide">${icone('clients', { taille: 22 })}Votre carnet est vide. Ajoutez un client pour le retrouver ensuite à la saisie d’une recette.</p>`;
       return;
@@ -126,10 +153,11 @@ export async function vueClients(conteneur, params) {
       const part = totalCarnet > 0 ? Math.round((c.totalRecettes / totalCarnet) * 1000) / 10 : 0;
       return `<li>
       <button type="button" class="client-ligne" data-client="${c.id}" aria-pressed="${c.id === choisi}">
-        <span class="monogramme" data-teinte="${teinteDe(c.nom)}" aria-hidden="true">${echapperHtml(initiales(c.nom))}</span>
-        <span><span class="nom">${echapperHtml(c.nom)}</span>${c.siret ? `<span class="details">SIRET ${siretLisible(c.siret)}</span>` : ''}
-          ${part > 0 ? `<span class="part-ca" title="${String(part).replace('.', ',')} % du chiffre d’affaires"><i style="width:${part}%"></i></span>
-          <span class="hors-ecran">, ${String(part).replace('.', ',')} % du chiffre d’affaires</span>` : ''}</span>
+        ${monogramme(c.nom)}
+        <span class="corps-client"${part > 0 ? ` title="${String(part).replace('.', ',')} % du chiffre d’affaires"` : ''}>
+          ${part > 0 ? `<span class="barre-client" aria-hidden="true" style="width:${Math.max(4, (c.totalRecettes / plusGros) * 100)}%"></span>` : ''}
+          <span class="nom">${echapperHtml(c.nom)}</span>${c.siret ? `<span class="details">SIRET ${siretLisible(c.siret)}</span>` : ''}
+          ${part > 0 ? `<span class="hors-ecran">, ${String(part).replace('.', ',')} % du chiffre d’affaires</span>` : ''}</span>
         <span class="ca">${c.nombreRecettes > 0 ? echapperHtml(formaterMontantEntier(c.totalRecettes, devise)) : '<span class="attenue">-</span>'}
           <small>${c.nombreRecettes > 0 ? accorder(c.nombreRecettes, 'encaissement') : 'aucun encaissement'}</small></span>
       </button></li>`;
@@ -146,27 +174,56 @@ export async function vueClients(conteneur, params) {
       </div>`;
       return;
     }
-    const lignes = recettesDe(client).sort((a, b) => b.dateEncaissement.localeCompare(a.dateEncaissement));
+    const toutes = recettesDe(client).sort((a, b) => b.dateEncaissement.localeCompare(a.dateEncaissement));
     const total = client.totalRecettes;
+    // Ses années, de la plus récente ; « Tout » quand il y en a plusieurs.
+    const anneesClient = [...new Set(toutes.map((r) => r.dateEncaissement.slice(0, 4)))];
+    // Toute son histoire d'abord ; une année se choisit au-dessus du tableau.
+    if (!anneesClient.includes(anneeFiche)) anneeFiche = 'tout';
+    const lignes = anneeFiche === 'tout' ? toutes : toutes.filter((r) => r.dateEncaissement.startsWith(anneeFiche));
+    const totalAffiche = sommeMontants(lignes.map((r) => r.montant));
+    // Un profil en une phrase : depuis quand, comment il paie, ses factures.
+    const premiere = toutes.at(-1);
+    const modes = new Map();
+    toutes.forEach((r) => modes.set(r.modeReglement, (modes.get(r.modeReglement) ?? 0) + 1));
+    const modeHabituel = [...modes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const sansPdf = toutes.filter((r) => !r.pieceJointe).length;
+    const profil = toutes.length ? [
+      `Client depuis ${nomMois(Number(premiere.dateEncaissement.slice(5, 7)))} ${premiere.dateEncaissement.slice(0, 4)}`,
+      modeHabituel ? `paie le plus souvent par ${libelleMode(modeHabituel, modesPersonnalises).toLowerCase()}` : '',
+      sansPdf === 0 ? 'toutes ses factures sont jointes' : `${accorder(sansPdf, 'recette')} sans facture PDF`
+    ].filter(Boolean).join(', ') : '';
+    const derniere = toutes[0];
     zoneFiche.innerHTML = `
       <div class="fiche-tete">
-        <span class="monogramme" data-teinte="${teinteDe(client.nom)}" aria-hidden="true">${echapperHtml(initiales(client.nom))}</span>
+        ${monogramme(client.nom)}
         <div class="fiche-titre">
           <h2 id="titre-fiche">${echapperHtml(client.nom)}</h2>
           ${client.siret ? `<p class="sous-titre">SIRET ${siretLisible(client.siret)}</p>` : ''}
         </div>
         <div class="actions">
+          <a class="btn btn-petit" href="#/recettes?nouvelle=1&client=${encodeURIComponent(client.nom)}">${icone('plus', { taille: 15 })}Nouvelle recette</a>
           <button type="button" class="btn-icone" id="modifier-client" aria-label="Modifier le client" title="Modifier">${icone('crayon', { taille: 17 })}</button>
           <button type="button" class="btn-icone danger" id="supprimer-client" aria-label="Retirer le client du carnet" title="Retirer du carnet">${icone('corbeille', { taille: 17 })}</button>
         </div>
+        ${profil ? `<p class="profil-client">${echapperHtml(profil)}.</p>` : ''}
       </div>
       <div class="fiche-chiffres">
-        <div><span>Encaissé au total</span><strong>${montantDetaille(total, devise)}</strong></div>
-        <div><span>Dernier encaissement</span><strong>${lignes[0] ? echapperHtml(formaterDate(lignes[0].dateEncaissement, formatDate)) : 'Aucun'}</strong></div>
+        <div><span>Total encaissé</span><strong>${montantDetaille(total, devise)}</strong></div>
+        <div><span>Encaissements</span><strong>${toutes.length}</strong></div>
+        <div><span>Panier moyen</span><strong>${toutes.length ? echapperHtml(formaterMontantEntier(total / toutes.length, devise)) : '-'}</strong></div>
+        <div><span>Dernier</span><strong>${derniere ? echapperHtml(formaterDate(derniere.dateEncaissement, formatDate)) : 'Aucun'}</strong>
+          ${derniere ? `<small>${depuisQuand(derniere.dateEncaissement)}</small>` : ''}</div>
       </div>
+      ${anneesClient.length > 1 ? `<div class="fiche-annees">
+        <div class="segmente compact" role="group" aria-label="Année affichée">
+          ${[...anneesClient, 'tout'].map((a) => `<button type="button" data-annee-fiche="${a}" aria-pressed="${a === anneeFiche}">${a === 'tout' ? 'Tout' : a}</button>`).join('')}
+        </div>
+        <span class="attenue">${accorder(lignes.length, 'recette')}, ${echapperHtml(formaterMontant(totalAffiche, devise))}</span>
+      </div>` : ''}
       ${lignes.length ? `<div class="fiche-lignes"><table class="tableau">
         <thead><tr><th>Encaissé le</th><th>Libellé</th><th>Facture</th><th class="montant">Montant</th></tr></thead>
-        <tbody>${lignes.map((r) => `<tr><td class="date">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</td>
+        <tbody>${lignes.map((r) => `<tr data-voir="${r.id}"><td class="date"><a class="lien-ligne" href="#/recettes?voir=${encodeURIComponent(r.id)}">${echapperHtml(formaterDate(r.dateEncaissement, formatDate))}</a></td>
           <td class="libelle">${r.libelle
             ? `<span class="texte-libelle" title="${echapperHtml(r.libelle)}">${echapperHtml(r.libelle)}</span>`
             : '<span class="attenue">Sans libellé</span>'}</td>
@@ -174,8 +231,9 @@ export async function vueClients(conteneur, params) {
             ? `<button type="button" class="btn-icone piece-oui" data-piece="${r.id}" aria-label="Voir la facture ${echapperHtml(r.pieceJointe.nom)}" title="${echapperHtml(r.pieceJointe.nom)}">${icone('trombone', { taille: 15 })}</button>`
             : '<span class="place-piece" aria-hidden="true"></span>'}${r.numeroFacture ? `<span class="ref">${echapperHtml(r.numeroFacture)}</span>` : '<span class="hors-ecran">Sans facture</span>'}</td>
           <td class="montant">${echapperHtml(formaterMontant(r.montant, devise))}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td colspan="3">${accorder(lignes.length, 'encaissement')}</td><td class="montant">${echapperHtml(formaterMontant(total, devise))}</td></tr></tfoot>
+        <tfoot><tr><td colspan="3">${accorder(lignes.length, 'encaissement')}</td><td class="montant">${echapperHtml(formaterMontant(totalAffiche, devise))}</td></tr></tfoot>
       </table></div>` : '<p class="vide">Aucun encaissement enregistré pour ce client.</p>'}`;
+    brancherSegmentes(zoneFiche);
   }
 
   function animerFiche() {
@@ -340,12 +398,22 @@ export async function vueClients(conteneur, params) {
     const bouton = evenement.target.closest('[data-client]');
     if (!bouton) return;
     choisi = bouton.dataset.client;
+    anneeFiche = 'tout';
     zoneListe.querySelectorAll('[data-client]').forEach((x) => x.setAttribute('aria-pressed', String(x === bouton)));
     rendreFiche();
     animerFiche();
   });
 
   zoneFiche.addEventListener('click', async (evenement) => {
+    // Ses recettes d'une année, ou de toutes.
+    const annee = evenement.target.closest('[data-annee-fiche]');
+    if (annee) {
+      if (annee.dataset.anneeFiche === anneeFiche) return;
+      anneeFiche = annee.dataset.anneeFiche;
+      rendreFiche();
+      zoneFiche.querySelector(`[data-annee-fiche="${anneeFiche}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     const piece = evenement.target.closest('[data-piece]');
     if (piece) {
       const recette = recettes.find((r) => r.id === piece.dataset.piece);
@@ -355,6 +423,12 @@ export async function vueClients(conteneur, params) {
           recette.pieceJointe.taille ? poidsLisible(recette.pieceJointe.taille) : ''].filter(Boolean).join(', '),
         url: urlPiece('recettes', recette.id)
       });
+      return;
+    }
+    // Une recette s'ouvre dans le registre, mise en avant, comme depuis le tableau de bord.
+    const ligneRecette = evenement.target.closest('tr[data-voir]');
+    if (ligneRecette && !evenement.target.closest('a, button')) {
+      location.hash = `#/recettes?voir=${encodeURIComponent(ligneRecette.dataset.voir)}`;
       return;
     }
     if (evenement.target.closest('#modifier-client')) {
@@ -367,9 +441,14 @@ export async function vueClients(conteneur, params) {
       const nombre = recettesDe(retire).length;
       const accord = await confirmer({
         titre: `Retirer ${retire.nom} du carnet ?`,
-        message: nombre
-          ? `Seule sa fiche disparaît : ${nombre === 1 ? 'sa recette reste' : `ses ${nombre} recettes restent`} dans le livre, à son nom.`
-          : 'Sa fiche disparaît du carnet. Aucune recette n’est enregistrée à son nom.',
+        suites: [
+          nombre
+            ? { garde: `${nombre === 1 ? 'Sa recette reste' : `Ses ${nombre} recettes restent`} dans le livre, à son nom` }
+            : { garde: 'Aucune recette n’est enregistrée à son nom' },
+          { garde: '« Annuler », juste après, le remet dans le carnet' },
+          { perd: 'Il ne sera plus proposé à la saisie' }
+        ],
+        tuile: { icone: 'clients', ton: 'framboise' },
         boutonOk: 'Retirer du carnet'
       });
       if (!accord) return;
@@ -398,4 +477,8 @@ export async function vueClients(conteneur, params) {
 
   await charger();
   if (params?.get('client')) zoneListe.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest' });
+  // Recettes saisies en série depuis la fiche (panneau ouvert sur place) : la fiche suit.
+  ecouterPourLaPage('ligne-ajoutee', () => {
+    if (page.isConnected) charger({ anime: true }).catch((erreur) => toast(erreur.message, 'erreur'));
+  });
 }

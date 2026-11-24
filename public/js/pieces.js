@@ -59,9 +59,11 @@ export const glisseDesFichiers = (evenement) => [...(evenement.dataTransfer?.typ
  * @param {string} options.quoi « la facture » ou « le justificatif ».
  * @param {() => object} options.apercu ce que l'aperçu doit montrer :
  *   `{ url, details }` pour la pièce déjà jointe à la ligne.
+ * @param {HTMLElement} [options.surface] tout le panneau : dès qu'un fichier
+ *   y entre, il devient zone de dépôt (« Lâchez pour joindre la facture »).
  * @returns {{ vider: () => void }} `vider` remet la zone à zéro (saisie suivante).
  */
-export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
+export function zoneDepot(conteneur, piece, surChange, { quoi, apercu, surface = null }) {
   let actuelle = piece;
   const nomDe = (p) => (p instanceof File ? p.name : p.nom);
   const tailleDe = (p) => (p instanceof File ? p.size : p.taille);
@@ -117,20 +119,52 @@ export function zoneDepot(conteneur, piece, surChange, { quoi, apercu }) {
       });
     }
   });
-  ['dragenter', 'dragover'].forEach((type) => conteneur.addEventListener(type, (evenement) => {
-    if (!glisseDesFichiers(evenement)) return;
-    evenement.preventDefault();
-    conteneur.classList.add('survol');
-  }));
-  conteneur.addEventListener('dragleave', (evenement) => {
-    if (!conteneur.contains(evenement.relatedTarget)) conteneur.classList.remove('survol');
-  });
-  conteneur.addEventListener('drop', (evenement) => {
-    evenement.preventDefault();
-    conteneur.classList.remove('survol');
-    const fichier = fichierDepose(evenement);
-    if (fichier) joindre(fichier);
-  });
+  if (surface) {
+    // Tout le panneau reçoit le fichier : un voile clair le dit, sans viser.
+    const voile = document.createElement('div');
+    voile.className = 'voile-depot';
+    voile.setAttribute('aria-hidden', 'true');
+    voile.innerHTML = `<span class="tuile">${icone('fichier-depot', { taille: 22 })}</span>
+      <strong>Lâchez pour joindre ${echapperHtml(quoi)}</strong><span>PDF, 10 Mo au plus</span>`;
+    surface.append(voile);
+    let profondeur = 0;
+    const cacher = () => { profondeur = 0; voile.classList.remove('visible'); };
+    surface.addEventListener('dragenter', (evenement) => {
+      if (!glisseDesFichiers(evenement)) return;
+      evenement.preventDefault();
+      profondeur += 1;
+      voile.classList.add('visible');
+    });
+    surface.addEventListener('dragover', (evenement) => { if (glisseDesFichiers(evenement)) evenement.preventDefault(); });
+    surface.addEventListener('dragleave', () => {
+      profondeur = Math.max(0, profondeur - 1);
+      if (profondeur === 0) voile.classList.remove('visible');
+    });
+    surface.addEventListener('drop', (evenement) => {
+      if (!glisseDesFichiers(evenement)) return;
+      evenement.preventDefault();
+      cacher();
+      const fichier = fichierDepose(evenement);
+      if (!fichier) return;
+      joindre(fichier);
+      conteneur.scrollIntoView({ block: 'nearest' });
+    });
+  } else {
+    ['dragenter', 'dragover'].forEach((type) => conteneur.addEventListener(type, (evenement) => {
+      if (!glisseDesFichiers(evenement)) return;
+      evenement.preventDefault();
+      conteneur.classList.add('survol');
+    }));
+    conteneur.addEventListener('dragleave', (evenement) => {
+      if (!conteneur.contains(evenement.relatedTarget)) conteneur.classList.remove('survol');
+    });
+    conteneur.addEventListener('drop', (evenement) => {
+      evenement.preventDefault();
+      conteneur.classList.remove('survol');
+      const fichier = fichierDepose(evenement);
+      if (fichier) joindre(fichier);
+    });
+  }
   return {
     vider: () => {
       actuelle = null;

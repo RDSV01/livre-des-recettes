@@ -168,7 +168,7 @@ test('caMensuel couvre les mois vides et franchit les années', () => {
   assert.equal(points.find((p) => p.annee === 2025 && p.mois === 12).total, 999);
 });
 
-test('bilanPeriode répond pour un mois, un trimestre et une année', () => {
+test('bilanPeriode répond pour un mois et un trimestre, pas pour une année', () => {
   const mois = bilanPeriode(RECETTES, { annee: 2026, type: 'mois', valeur: 1 });
   assert.equal(mois.chiffreAffaires, 300.10);
   assert.equal(mois.nombreEncaissements, 2);
@@ -178,9 +178,7 @@ test('bilanPeriode répond pour un mois, un trimestre et une année', () => {
   assert.equal(trimestre.chiffreAffaires, 0.3);
   assert.equal(trimestre.libellePeriode, '3e trimestre 2026');
 
-  const annee = bilanPeriode(RECETTES, { annee: 2026, type: 'annee' });
-  assert.equal(annee.chiffreAffaires, 600.40);
-  assert.equal(annee.nombreEncaissements, 5);
+  assert.throws(() => bilanPeriode(RECETTES, { annee: 2026, type: 'annee' }), /Type de période inconnu/);
 });
 
 test('bilanPeriode ventile ventes, prestations et non catégorisé', () => {
@@ -189,7 +187,7 @@ test('bilanPeriode ventile ventes, prestations et non catégorisé', () => {
     recette('2026-01-20', 200, { categorie: 'ventes' }),
     recette('2026-02-01', 50)
   ];
-  const bilan = bilanPeriode(recettes, { annee: 2026, type: 'annee' });
+  const bilan = bilanPeriode(recettes, { annee: 2026, type: 'trimestre', valeur: 1 });
   assert.deepEqual(bilan.ventes, { chiffreAffaires: 200, aDeclarer: 200, nombreEncaissements: 1 });
   assert.deepEqual(bilan.prestations, { chiffreAffaires: 100, aDeclarer: 100, nombreEncaissements: 1 });
   assert.deepEqual(bilan.nonCategorise, { chiffreAffaires: 50, aDeclarer: 50, nombreEncaissements: 1 });
@@ -201,7 +199,7 @@ test('le bilan porte le montant à déclarer, arrondi à l’euro', () => {
   const bilan = bilanPeriode([
     recette('2026-01-10', 1000.49, { categorie: 'prestations' }),
     recette('2026-01-20', 111, { categorie: 'ventes' })
-  ], { annee: 2026, type: 'annee' });
+  ], { annee: 2026, type: 'trimestre', valeur: 1 });
 
   assert.equal(bilan.chiffreAffaires, 1111.49, 'le chiffre d’affaires exact reste intact');
   assert.equal(bilan.aDeclarer, 1111);

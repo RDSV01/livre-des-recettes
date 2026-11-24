@@ -13,7 +13,7 @@
 
 import { api } from '../api.js';
 import { etat, registreAchatsUtile } from '../etat.js';
-import { echapperHtml, selecteur, accorder } from '../ui.js';
+import { echapperHtml, selecteur, accorder, listeEtapes } from '../ui.js';
 import { patienter, halo, annoncer, brancherSegmentes } from '../retours.js';
 import { icone } from '../icones.js';
 import { analyserCsv, lireFichierCsv } from '../csv.js';
@@ -131,11 +131,17 @@ export async function vueImport(conteneur) {
   const desc = () => REGISTRES[registre];
   const cibles = () => desc().cibles({ estMixte });
 
+  /**
+   * Les étapes, en barre de trois segments qui se remplit : un numéro, puis
+   * une coche une fois l'étape passée. Une étape faite se reprend d'un clic.
+   */
   function etapesHtml() {
     return `<ol class="etapes" aria-label="Étapes de l’import">${ETAPES.map((titre, i) => {
       const faite = etape > i + 1;
+      const contenu = `<span class="barre-etape" aria-hidden="true"><i></i></span>
+        <span class="nom-etape"><span class="num">${faite ? icone('coche', { taille: 12 }) : i + 1}</span>${titre}</span>`;
       return `<li class="etape${etape === i + 1 ? ' active' : ''}${faite ? ' faite' : ''}"${etape === i + 1 ? ' aria-current="step"' : ''}>
-        <span class="num">${faite ? icone('coche', { taille: 13 }) : i + 1}</span>${titre}</li>`;
+        ${faite ? `<button type="button" class="reprendre-etape" data-revenir="${i + 1}" title="Revenir à cette étape">${contenu}</button>` : contenu}</li>`;
     }).join('')}</ol>`;
   }
 
@@ -305,8 +311,8 @@ export async function vueImport(conteneur) {
       registre = bouton.dataset.registre;
       zone.querySelectorAll('[data-registre]').forEach((b) => b.setAttribute('aria-pressed', String(b === bouton)));
     }));
-    zone.querySelectorAll('[data-etape]').forEach((bouton) => bouton.addEventListener('click', () => {
-      aller(Number(bouton.dataset.etape));
+    zone.querySelectorAll('[data-etape], [data-revenir]').forEach((bouton) => bouton.addEventListener('click', () => {
+      aller(Number(bouton.dataset.etape ?? bouton.dataset.revenir));
     }));
 
     zone.querySelector('#i-reprendre')?.addEventListener('click', () => {
@@ -370,12 +376,28 @@ export async function vueImport(conteneur) {
       });
       bouton.addEventListener('click', async () => {
         const importerDoublons = caseDoublons?.checked ?? false;
-        const reprendre = patienter(bouton, 'Import…');
+        const nombre = rapport.valides + (importerDoublons ? rapport.doublons.length : 0);
+        // L'attente dit où elle en est, à la place du rapport : le fichier est
+        // lu et contrôlé ; reste la sauvegarde, puis l'ajout au registre.
+        const corps = zone.querySelector('.corps-verification');
+        // Le rapport est mis de côté tel quel (la case des doublons garde son
+        // état et son écouteur) : en cas d'échec, il revient à l'identique.
+        const rapportMisDeCote = [...corps.childNodes];
+        corps.replaceChildren();
+        zone.querySelectorAll('.carte-pied button').forEach((b) => { b.disabled = true; });
+        const suivi = listeEtapes(corps, ['Fichier lu et lignes contrôlées', 'Sauvegarde du livre avant l’import', `Ajout au ${registre === 'achats' ? 'registre des achats' : 'livre des recettes'} : ${accorder(nombre, un, plusieurs)}`]);
+        suivi.avancer();
+        const reprendre = () => {
+          corps.replaceChildren(...rapportMisDeCote);
+          zone.querySelectorAll('.carte-pied button').forEach((b) => { b.disabled = false; });
+        };
         // Tant que l'import est en cours, une fermeture de l'onglet demande confirmation.
         const gardeFermeture = (e) => { e.preventDefault(); };
         window.addEventListener('beforeunload', gardeFermeture);
         try {
           resultat = await desc().importer({ lignes, importerDoublons });
+          suivi.terminer();
+          await new Promise((suite) => setTimeout(suite, 350));
           aller(4);
           halo(zone.querySelector('.sceau-reussite'));
           annoncer(zone.querySelector('.reussite-import h2').textContent);

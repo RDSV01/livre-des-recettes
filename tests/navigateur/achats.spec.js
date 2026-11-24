@@ -19,6 +19,31 @@ async function nouveau(page) {
   return p;
 }
 
+test('depuis le tableau de bord, « Nouvel achat » s’ouvre sur place ; ajouté, on arrive sur le registre, annulable', async ({ page, request }) => {
+  await configurer(request, { typeActivite: 'ventes' });
+  await ajouterAchat(request, { fournisseur: 'Grossiste Papier', modeReglement: 'cheque' });
+  await ouvrir(page);
+  await page.locator('.entete-page a', { hasText: 'Nouvel achat' }).click();
+  const p = panneau(page);
+  await expect(p.locator('#titre-panneau')).toHaveText('Nouvel achat');
+  await expect(page).toHaveURL(/#\/$/);
+  await p.locator('#f-fournisseur').fill('Grossiste');
+  await expect(p.locator('.suggestions .sugg').first()).toContainText('Grossiste Papier');
+  await page.keyboard.press('Enter');
+  await expect(p.locator('#f-mode')).toHaveValue('cheque');
+  await p.locator('#f-montant').fill('42');
+  await p.locator('[type="submit"]').click();
+  await expect(page).toHaveURL(/#\/achats\?voir=/);
+  const nouvelle = page.locator('#registre tbody tr.nouvelle');
+  await expect(nouvelle).toContainText('Grossiste Papier');
+  expect((await lister(request, '/api/achats')).achats).toHaveLength(2);
+  // Comme un ajout fait dans le registre : « Ajouté », annulable.
+  await expect(nouvelle.locator('.texte-retour')).toHaveText('Ajouté');
+  await nouvelle.locator('[data-annuler-retour]').click();
+  await expect(page.locator('#registre tbody tr[data-id]')).toHaveCount(1);
+  expect((await lister(request, '/api/achats')).achats).toHaveLength(1);
+});
+
 test('livre vide : le premier achat, avec son justificatif', async ({ page, request }) => {
   await configurer(request, { typeActivite: 'ventes' });
   await ouvrir(page, 'achats');
@@ -98,6 +123,7 @@ test('dupliquer un achat récurrent, puis supprimer l’original et annuler', as
 
   await ligne(page, a.id).locator('[data-action="menu"]').click();
   await page.locator('.menu-contextuel [role="menuitem"]', { hasText: 'Supprimer' }).click();
+  await page.locator('dialog.boite[open] [data-role="ok"]').click();
   await expect(page.locator('tr.place-retiree')).toContainText('Achat de');
   await expect(page.locator('tr.place-retiree')).toContainText('(Hébergeur) supprimé');
   await page.locator('[data-restaurer-place]').click();
@@ -151,5 +177,6 @@ test('le registre des achats filtre et cherche comme celui des recettes', async 
   await page.locator('#filtre-q').fill('');
   await page.locator('[data-voir-sans-piece]').click();
   await expect(page.locator('#registre tbody tr[data-id]')).toHaveCount(1);
-  await expect(page.locator('#lien-exporter')).toHaveAttribute('href', '#/exports?registre=achats');
+  // L'export reprend l'année affichée : l'année en cours, à l'ouverture.
+  await expect(page.locator('#lien-exporter')).toHaveAttribute('href', `#/exports?registre=achats&annee=${new Date().getFullYear()}`);
 });

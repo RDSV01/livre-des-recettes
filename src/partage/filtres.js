@@ -13,20 +13,16 @@ import { analyserMontant, enCentimes } from './montants.js';
 import { anneeDe, moisDe } from './dates.js';
 
 /**
- * Une ligne correspond-elle à la recherche libre ?
- * On cherche dans les champs texte indiqués (sans tenir compte de la casse ni
- * des accents) ; si la saisie ressemble à un montant, on cherche aussi
- * l'égalité exacte du montant.
+ * La recherche libre, préparée une fois pour toute la liste : on cherche
+ * dans les champs texte indiqués (sans tenir compte de la casse ni des
+ * accents) ; si la saisie ressemble à un montant, aussi l'égalité exacte.
  */
-function correspondRecherche(element, recherche, clesTexte) {
+function rechercheLibre(recherche, clesTexte) {
   const aiguille = normaliserTexte(recherche);
-  const botteDeFoin = clesTexte
-    .map((cle) => normaliserTexte(element[cle]))
-    .join(' | ');
-  if (botteDeFoin.includes(aiguille)) return true;
-
   const montant = analyserMontant(recherche);
-  return montant !== null && enCentimes(montant) === enCentimes(element.montant);
+  const centimes = montant === null ? null : enCentimes(montant);
+  return (element) => clesTexte.map((cle) => normaliserTexte(element[cle])).join(' | ').includes(aiguille)
+    || (centimes !== null && centimes === enCentimes(element.montant));
 }
 
 /**
@@ -38,6 +34,7 @@ function filtrerElements(elements, { annee, mois, mode, piece, q } = {}, { cleDa
   const anneeN = Number(annee) || null;
   const moisN = Number(mois) || null;
   const recherche = String(q ?? '').trim();
+  const correspondRecherche = recherche ? rechercheLibre(recherche, clesTexte) : null;
 
   return elements.filter((element) => {
     const date = element[cleDate];
@@ -45,7 +42,7 @@ function filtrerElements(elements, { annee, mois, mode, piece, q } = {}, { cleDa
     if (moisN && moisDe(date) !== moisN) return false;
     if (mode && element.modeReglement !== mode) return false;
     if (piece && (piece === 'avec') !== Boolean(element.pieceJointe)) return false;
-    if (recherche && !correspondRecherche(element, recherche, clesTexte)) return false;
+    if (correspondRecherche && !correspondRecherche(element)) return false;
     return true;
   });
 }

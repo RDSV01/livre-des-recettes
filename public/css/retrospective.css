@@ -1,0 +1,1141 @@
+/* ==========================================================================
+   Rétrospective : la page des affiches, puis le lecteur plein écran.
+   Le lecteur a son propre monde, le même en thème clair et sombre : des
+   aplats francs tirés des encres de l'application (bleu nuit du menu,
+   sarcelle, or, framboise, violet, vert des prestations, ivoire du papier),
+   sur les filets d'un livre de comptes.
+   ========================================================================== */
+
+/* La palette du lecteur, la même en thème clair et sombre. */
+:root {
+  --retro-nuit: #13235c;
+  --retro-nuit-haut: #1e3683;
+  --retro-nuit-profond: #101d4d;
+  --retro-voile: #0b1435;
+  --retro-blanc: #ffffff;
+  --retro-blanc-45: rgba(255, 255, 255, 0.45);
+  --retro-bleu-pale: #c7d2fe;
+  --retro-bleu-survol: #e0e7ff;
+  --retro-bleu-ciel: #93c5fd;
+  --retro-or-clair: #fde68a;
+  --retro-or-profond: #2e2105;
+  --retro-vert-clair: #4ade80;
+  --retro-sarcelle-clair: #5eead4;
+  --retro-rose-clair: #f9a8d4;
+  --retro-framboise: #4a0f2e;
+  --retro-violet: #24145a;
+  --retro-ticket-papier: #fffdf8;
+  --retro-ticket-encre: #1c1a17;
+  --retro-ticket-gris: #6f685d;
+  --retro-ticket-trait: #b9b2a4;
+  --retro-ombre: rgba(0, 0, 0, 0.5);
+}
+
+/* ---- La page ----------------------------------------------------------------------------- */
+
+/* Le fond de la carte du chiffre d'affaires de l'année : le bleu nuit du
+   menu, calé comme lui sur la fenêtre (à hauteur égale, le même bleu). */
+.affiche-retro,
+.carte-retro-saison {
+  border-radius: var(--rayon-carte);
+  background: linear-gradient(180deg, var(--carte-forte-haut), var(--carte-forte) 60%) fixed;
+  color: var(--carte-forte-texte);
+}
+.btn.affiche-lancer,
+.btn.saison-lancer {
+  border-color: transparent;
+  background: var(--carte-forte-texte);
+  color: var(--carte-forte);
+}
+.btn.affiche-lancer:hover,
+.btn.saison-lancer:hover {
+  background: color-mix(in srgb, var(--carte-forte-texte) 88%, var(--carte-forte));
+}
+.affiche-retro {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: end;
+  gap: var(--e6, 40px);
+  padding: 40px 44px 36px;
+  overflow: hidden;
+}
+.affiche-sur {
+  color: var(--carte-forte-texte-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+.affiche-annee {
+  margin: 4px 0 10px;
+  font-size: clamp(72px, 9vw, 120px);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.affiche-resume {
+  max-width: 40ch;
+  color: var(--carte-forte-texte-2);
+  font-size: 15px;
+}
+.affiche-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e3) var(--e4);
+  margin-top: var(--e5);
+}
+.btn.affiche-lancer {
+  height: 42px;
+  padding: 0 18px;
+  font-size: 14.5px;
+}
+.affiche-note {
+  color: var(--carte-forte-texte-2);
+  font-size: 13px;
+}
+.affiche-mois,
+.passee-mois {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 8px;
+  height: 190px;
+}
+.affiche-mois span,
+.passee-mois span {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+.affiche-mois i,
+.passee-mois i {
+  width: 100%;
+  max-height: calc(100% - 22px);
+  border-radius: 4px 4px 2px 2px;
+  background: color-mix(in srgb, var(--sarcelle-rail) 75%, transparent);
+  transform-origin: bottom;
+}
+.affiche-mois .meilleur i {
+  background: var(--retro-or-clair);
+}
+.affiche-mois small {
+  color: var(--carte-forte-texte-2);
+  font-size: 11.5px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .affiche-mois i {
+    animation: retro-pousse 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(150ms + var(--i, 0) * 60ms);
+  }
+}
+@keyframes retro-pousse {
+  from { transform: scaleY(0); }
+}
+.titre-annees {
+  margin: var(--e6, 40px) 0 var(--e4);
+  font-size: 17px;
+  font-weight: 600;
+}
+.affiches-annees {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--e4);
+}
+.affiche-annee-passee {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e5);
+}
+.passee-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+.passee-tete h3 {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.affiche-annee-passee > p {
+  color: var(--texte-2);
+  font-size: 13.5px;
+}
+.passee-mois {
+  height: 72px;
+  gap: 4px;
+}
+.passee-mois span {
+  gap: 4px;
+}
+.passee-mois i {
+  max-height: calc(100% - 16px);
+  border-radius: 2px 2px 1px 1px;
+  background: color-mix(in srgb, var(--sarcelle) 55%, transparent);
+}
+.passee-mois .meilleur i {
+  background: var(--or);
+}
+.passee-mois small {
+  color: var(--texte-3);
+  font-size: 10px;
+}
+.affiche-vide {
+  padding-top: var(--e5);
+}
+
+/* ---- La carte de saison du tableau de bord (15 décembre au 31 janvier) ---------------- */
+
+.carte-retro-saison {
+  display: flex;
+  align-items: center;
+  gap: var(--e4);
+  padding: 14px 12px 14px var(--e5);
+}
+.saison-texte {
+  flex: 1;
+  min-width: 0;
+}
+.saison-texte h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.saison-texte p {
+  margin-top: 2px;
+  color: var(--carte-forte-texte-2);
+  font-size: 13px;
+}
+.carte-retro-saison .saison-masquer {
+  color: var(--carte-forte-texte-2);
+}
+.carte-retro-saison .saison-masquer:hover {
+  background: var(--carte-forte-filet);
+  color: var(--carte-forte-texte);
+}
+
+/* ---- Le lecteur -------------------------------------------------------------------------- */
+
+/* Une scène fixe ses couleurs (voir `.fond-*` plus bas) ; les commandes du
+   lecteur suivent celles de la scène affichée. */
+dialog.retro {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--s-fond);
+  color: var(--s-texte);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+dialog.retro::backdrop {
+  background: var(--retro-voile);
+}
+/* Pendant la lecture, la page derrière ne défile plus (ni sa barre de défilement). */
+:root:has(dialog.retro[open]) {
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog.retro[open] {
+    animation: retro-ouvre 500ms ease both;
+  }
+}
+@keyframes retro-ouvre {
+  from { opacity: 0; }
+}
+
+.fond-nuit,
+dialog.retro {
+  --s-fond: var(--retro-nuit);
+  --s-texte: var(--retro-blanc);
+  --s-texte-2: var(--retro-bleu-pale);
+  --s-accent: var(--retro-bleu-ciel);
+  --s-filet: rgba(255, 255, 255, 0.07);
+}
+.fond-sarcelle,
+dialog.retro[data-fond='sarcelle'] {
+  --s-fond: #0b4743;
+  --s-texte: #f0fdfa;
+  --s-texte-2: #a7ddd4;
+  --s-accent: #5eead4;
+  --s-filet: rgba(255, 255, 255, 0.07);
+}
+.fond-ivoire,
+dialog.retro[data-fond='ivoire'] {
+  --s-fond: #f6f4ef;
+  --s-texte: #1c1a17;
+  --s-texte-2: #524d45;
+  --s-accent: #1d4ed8;
+  --s-or: #a16207;
+  --s-filet: rgba(60, 50, 30, 0.08);
+}
+.fond-or,
+dialog.retro[data-fond='or'] {
+  --s-fond: #f3e6c4;
+  --s-texte: #2e2105;
+  --s-texte-2: #6b5420;
+  --s-accent: #854d0e;
+  --s-or: #a16207;
+  --s-filet: rgba(80, 55, 10, 0.1);
+}
+.fond-framboise,
+dialog.retro[data-fond='framboise'] {
+  --s-fond: #4a0f2e;
+  --s-texte: #fff1f7;
+  --s-texte-2: #f4b8d1;
+  --s-accent: #f9a8d4;
+  --s-filet: rgba(255, 255, 255, 0.07);
+}
+.fond-violet,
+dialog.retro[data-fond='violet'] {
+  --s-fond: #24145a;
+  --s-texte: #f5f3ff;
+  --s-texte-2: #cfc3fd;
+  --s-accent: #c4b5fd;
+  --s-filet: rgba(255, 255, 255, 0.07);
+}
+.fond-vert,
+dialog.retro[data-fond='vert'] {
+  --s-fond: #0c3a22;
+  --s-texte: #f0fdf4;
+  --s-texte-2: #a7e3bd;
+  --s-accent: #4ade80;
+  --s-filet: rgba(255, 255, 255, 0.07);
+}
+
+.retro-scenes {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+dialog.retro.tenu .retro-scenes {
+  cursor: grabbing;
+}
+.retro-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--s-fond);
+  color: var(--s-texte);
+}
+/* Les filets du livre de comptes, et sa marge, qui remontent lentement. */
+.retro-scene::before {
+  content: '';
+  position: absolute;
+  inset: -64px 0 0;
+  background:
+    linear-gradient(90deg, transparent calc(clamp(32px, 7vw, 120px) - 28px), var(--s-filet) 0 calc(clamp(32px, 7vw, 120px) - 27px), transparent 0),
+    repeating-linear-gradient(180deg, transparent 0 63px, var(--s-filet) 63px 64px);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .retro-scene::before {
+    animation: retro-filets 16s linear infinite;
+  }
+}
+@keyframes retro-filets {
+  to { transform: translateY(-64px); }
+}
+
+/* Les filets tracés d'un bord à l'autre (ouverture, carte de fin). */
+.retro-filets {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  pointer-events: none;
+}
+.retro-filets i {
+  height: 1px;
+  background: color-mix(in srgb, var(--s-texte) 16%, transparent);
+  transform-origin: left;
+}
+
+.retro-contenu {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 18px;
+  height: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 96px clamp(32px, 7vw, 120px) 104px;
+}
+.retro-contenu.centre {
+  justify-items: center;
+  text-align: center;
+}
+.retro-contenu.deux {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(32px, 6vw, 96px);
+}
+.retro-contenu.deux > div {
+  display: grid;
+  gap: 18px;
+}
+
+.retro-sur {
+  color: var(--s-texte-2);
+  font-size: clamp(16px, 1.5vw, 21px);
+  font-weight: 500;
+}
+.retro-annee {
+  font-size: clamp(140px, 26vw, 340px);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+}
+.retro-accroche {
+  font-size: clamp(22px, 2.6vw, 38px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.retro-geant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.25em;
+  font-size: clamp(72px, 10.5vw, 168px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.retro-geant.moyen {
+  font-size: clamp(56px, 7vw, 112px);
+}
+.retro-geant.moyen.long {
+  font-size: clamp(40px, 4.6vw, 80px);
+}
+.retro-unite {
+  color: var(--s-texte-2);
+  font-size: 0.32em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.retro-titre.long {
+  font-size: clamp(28px, 3vw, 46px);
+}
+.retro-titre {
+  max-width: 18ch;
+  font-size: clamp(36px, 4.6vw, 70px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+.retro-accent {
+  color: var(--s-accent);
+}
+.retro-texte {
+  max-width: 36ch;
+  color: var(--s-texte-2);
+  font-size: clamp(18px, 1.7vw, 24px);
+  line-height: 1.45;
+}
+.retro-texte.discret {
+  font-size: clamp(15px, 1.25vw, 18px);
+}
+
+/* Le total contre l'année d'avant. */
+.retro-duel {
+  display: grid;
+  gap: 12px;
+  width: min(760px, 100%);
+  margin-top: 18px;
+}
+.duel {
+  display: grid;
+  grid-template-columns: 4.2em minmax(0, 1fr) 7.5em;
+  align-items: center;
+  gap: 18px;
+  color: var(--s-texte-2);
+  font-size: 18px;
+}
+.duel strong {
+  font-weight: 600;
+  text-align: right;
+}
+.duel.actuel {
+  color: var(--s-texte);
+}
+.duel-piste {
+  height: 18px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--s-texte) 9%, transparent);
+  overflow: hidden;
+}
+.duel-piste i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--s-texte) 38%, transparent);
+  transform: scaleX(var(--part));
+  transform-origin: left;
+}
+.duel.actuel .duel-piste i {
+  background: var(--s-accent);
+}
+.retro-ecart {
+  justify-self: start;
+  margin-top: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--s-accent) 18%, transparent);
+  color: var(--s-texte);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* Colonnes : les mois, les jours de la semaine, la carte de fin. */
+.retro-colonnes {
+  display: grid;
+  align-items: end;
+  height: min(52vh, 460px);
+}
+.retro-colonnes.douze {
+  grid-template-columns: repeat(12, 1fr);
+  gap: clamp(6px, 0.9vw, 14px);
+}
+.retro-colonnes.sept {
+  grid-template-columns: repeat(7, 1fr);
+  gap: clamp(10px, 1.4vw, 22px);
+}
+.retro-colonnes span {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+}
+.retro-colonnes i {
+  width: 100%;
+  max-height: calc(100% - 30px);
+  border-radius: 6px 6px 2px 2px;
+  background: color-mix(in srgb, var(--s-texte) 22%, transparent);
+  transform-origin: bottom;
+  transition: background 600ms ease;
+}
+.retro-colonnes .a-venir i,
+.retro-frise .a-venir i {
+  background: transparent;
+  outline: 1px dashed color-mix(in srgb, var(--s-texte) 25%, transparent);
+}
+.retro-colonnes small,
+.retro-frise small {
+  color: var(--s-texte-2);
+  font-size: clamp(12px, 1vw, 15px);
+}
+.retro-scene.eclairee .retro-colonnes .meilleure i {
+  background: var(--s-or);
+}
+.retro-scene.eclairee .retro-colonnes .meilleure small {
+  color: var(--s-texte);
+  font-weight: 600;
+}
+
+/* Un carré par encaissement. */
+.retro-mosaique {
+  display: grid;
+  grid-template-columns: repeat(var(--colonnes), 1fr);
+  gap: clamp(3px, 0.4vw, 6px);
+  align-content: center;
+  max-height: 64vh;
+}
+.retro-mosaique i {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--s-accent);
+}
+.retro-mosaique .prestations,
+.retro-cles .prestations {
+  background: var(--retro-vert-clair);
+}
+.retro-mosaique .ventes,
+.retro-cles .ventes {
+  background: var(--retro-bleu-ciel);
+}
+.retro-mosaique .neutre,
+.retro-cles .neutre {
+  background: color-mix(in srgb, var(--s-texte) 40%, transparent);
+}
+.retro-cles {
+  display: flex;
+  gap: 20px;
+  color: var(--s-texte-2);
+  font-size: 16px;
+}
+.retro-cles span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.retro-cles i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+/* Le ticket qui sort de l'imprimante. */
+.retro-imprimante {
+  justify-self: center;
+  width: min(380px, 100%);
+}
+.fente {
+  position: relative;
+  z-index: 1;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--retro-or-profond);
+}
+.ticket-cadre {
+  margin: -9px 14px 0;
+  padding-top: 9px;
+  overflow: hidden;
+}
+.ticket {
+  --dent: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 28px 26px 40px;
+  background: var(--retro-ticket-papier);
+  color: var(--retro-ticket-encre);
+  font-size: 16px;
+  /* Le bas déchiré en dents de scie. */
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--dent)) 100%;
+}
+.ticket-tete {
+  overflow-wrap: anywhere;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--retro-ticket-trait);
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+.ticket-ligne,
+.ticket-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ticket-ligne span:first-child {
+  flex: none;
+  color: var(--retro-ticket-gris);
+}
+.ticket-ligne span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ticket-total {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--retro-ticket-trait);
+  font-size: 22px;
+  font-weight: 600;
+}
+.ticket-pied {
+  color: var(--retro-ticket-gris);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* Le premier client : son monogramme dans l'anneau de sa part. */
+.retro-anneau-client {
+  position: relative;
+  justify-self: center;
+  width: min(42vh, 380px);
+  aspect-ratio: 1;
+}
+.retro-anneau-client svg,
+.retro-anneau svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.retro-anneau-client circle {
+  fill: none;
+  stroke-width: 10;
+}
+.retro-anneau-client .anneau-piste {
+  stroke: color-mix(in srgb, var(--s-texte) 12%, transparent);
+}
+.retro-anneau-client .anneau-part {
+  stroke: var(--s-accent);
+  stroke-linecap: round;
+}
+.retro-monogramme {
+  position: absolute;
+  inset: 18%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--s-accent);
+  color: var(--retro-framboise);
+  font-size: clamp(56px, 8vh, 96px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.retro-podium {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+  margin-top: 6px;
+  padding: 0;
+  list-style: none;
+}
+.retro-podium li {
+  display: grid;
+  grid-template-columns: 2em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid color-mix(in srgb, var(--s-texte) 16%, transparent);
+  font-size: 18px;
+}
+.retro-podium .rang {
+  color: var(--s-texte-2);
+}
+.retro-podium .nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.retro-podium .montant {
+  color: var(--s-texte-2);
+}
+
+/* Les clients : deux groupes de monogrammes. */
+.retro-nuee {
+  display: grid;
+  gap: 36px;
+  align-content: center;
+}
+.groupe-titre {
+  margin-bottom: 14px;
+  color: var(--s-texte-2);
+  font-size: 17px;
+}
+.puces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.puce {
+  display: grid;
+  place-items: center;
+  width: clamp(44px, 4.4vw, 64px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  font-size: clamp(14px, 1.3vw, 19px);
+  font-weight: 600;
+}
+.nouveaux .puce {
+  background: var(--s-accent);
+  color: var(--retro-violet);
+}
+.fideles .puce {
+  border: 1.5px solid color-mix(in srgb, var(--s-texte) 45%, transparent);
+  color: var(--s-texte);
+}
+.puce.plus {
+  width: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+/* Les moyens de paiement, en anneau. */
+.retro-anneau {
+  position: relative;
+  justify-self: center;
+  width: min(48vh, 420px);
+  aspect-ratio: 1;
+}
+.retro-anneau circle {
+  fill: none;
+  stroke-width: 26;
+}
+.retro-anneau .m-0, .retro-legende .m-0 { stroke: var(--retro-bleu-ciel); background: var(--retro-bleu-ciel); }
+.retro-anneau .m-1, .retro-legende .m-1 { stroke: var(--retro-sarcelle-clair); background: var(--retro-sarcelle-clair); }
+.retro-anneau .m-2, .retro-legende .m-2 { stroke: var(--retro-or-clair); background: var(--retro-or-clair); }
+.retro-anneau .m-3, .retro-legende .m-3 { stroke: var(--retro-rose-clair); background: var(--retro-rose-clair); }
+.retro-anneau .m-4, .retro-legende .m-4 { stroke: var(--retro-blanc-45); background: var(--retro-blanc-45); }
+.anneau-centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+.anneau-centre strong {
+  font-size: clamp(44px, 6vh, 72px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.anneau-centre span {
+  color: var(--s-texte-2);
+  font-size: 17px;
+}
+.retro-legende {
+  display: grid;
+  gap: 4px;
+  max-width: 480px;
+  padding: 0;
+  list-style: none;
+}
+.retro-legende li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--s-texte) 14%, transparent);
+  font-size: 18px;
+}
+.retro-legende i {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+.retro-legende strong {
+  font-weight: 600;
+}
+
+/* Ventes et prestations : deux côtés, une barre partagée. */
+.retro-partage {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  margin-top: 8px;
+}
+.cote {
+  display: grid;
+  gap: 6px;
+}
+.cote.ventes {
+  text-align: right;
+}
+.cote strong {
+  font-size: clamp(64px, 9vw, 140px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.cote.prestations strong {
+  color: var(--retro-vert-clair);
+}
+.cote.ventes strong {
+  color: var(--retro-bleu-ciel);
+}
+.cote span {
+  color: var(--s-texte-2);
+  font-size: 20px;
+}
+.cote em {
+  font-size: 20px;
+  font-style: normal;
+}
+/* Deux découpes d'un même ruban, séparées de 4 px à la frontière `--part` :
+   la frontière se déplace sans rien remettre en page. */
+.retro-barre-partage {
+  position: relative;
+  height: 28px;
+  margin-top: 28px;
+}
+.retro-barre-partage i {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+}
+.retro-barre-partage .prestations {
+  background: var(--retro-vert-clair);
+  clip-path: inset(0 calc(100% - var(--part) + 2px) 0 0 round 6px);
+}
+.retro-barre-partage .ventes {
+  background: var(--retro-bleu-ciel);
+  clip-path: inset(0 0 0 calc(var(--part) + 2px) round 6px);
+}
+
+/* La régularité : douze mois en frise. */
+.retro-frise {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: clamp(6px, 0.8vw, 12px);
+  width: min(1000px, 100%);
+  margin: 18px 0 8px;
+}
+.retro-frise span {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+.retro-frise i {
+  width: 100%;
+  height: 64px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--s-texte) 10%, transparent);
+  transform-origin: bottom;
+}
+.retro-frise .actif i {
+  background: color-mix(in srgb, var(--s-accent) 55%, transparent);
+}
+.retro-frise .serie i {
+  background: var(--s-accent);
+}
+
+/* Les plafonds. */
+.retro-jauges {
+  display: grid;
+  gap: 40px;
+  width: min(900px, 100%);
+  margin-top: 16px;
+}
+.retro-jauge-ligne {
+  display: grid;
+  gap: 12px;
+}
+.retro-jauge-ligne p {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  font-size: clamp(20px, 2vw, 28px);
+}
+.retro-jauge-ligne strong {
+  font-size: clamp(40px, 4.4vw, 64px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.retro-jauge-ligne small {
+  color: var(--s-texte-2);
+  font-size: 16px;
+}
+.retro-jauge {
+  height: 22px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--s-texte) 10%, transparent);
+  overflow: hidden;
+}
+.retro-jauge i {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--s-accent);
+  transform: scaleX(var(--part));
+  transform-origin: left;
+}
+
+/* La carte de fin, et ce qu'on peut en faire. */
+.retro-carte {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  justify-self: center;
+  width: min(460px, 100%);
+  padding: 30px 30px 26px;
+  border: 1px solid color-mix(in srgb, var(--retro-blanc) 16%, transparent);
+  border-radius: 22px;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 31px, color-mix(in srgb, var(--retro-blanc) 5%, transparent) 31px 32px),
+    linear-gradient(165deg, var(--retro-nuit-haut), var(--retro-nuit-profond));
+  box-shadow: 0 30px 60px -20px var(--retro-ombre);
+}
+.recap-tete {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--retro-bleu-pale);
+  font-size: 15px;
+}
+.recap-tete span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--retro-blanc);
+  font-weight: 600;
+}
+.recap-libelle {
+  margin-top: 10px;
+  color: var(--retro-bleu-pale);
+  font-size: 14px;
+}
+.recap-total {
+  font-size: clamp(40px, 4.4vw, 58px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.retro-colonnes.mini {
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  height: 96px;
+}
+.retro-colonnes.mini span {
+  gap: 6px;
+}
+.retro-colonnes.mini i {
+  max-height: calc(100% - 20px);
+  border-radius: 3px 3px 1px 1px;
+  background: color-mix(in srgb, var(--retro-sarcelle-clair) 80%, transparent);
+}
+.retro-colonnes.mini .meilleure i {
+  background: var(--retro-or-clair);
+}
+.retro-colonnes.mini small {
+  font-size: 11px;
+}
+.recap-grille {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 20px;
+  margin: 6px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--retro-blanc) 14%, transparent);
+}
+.recap-grille div {
+  min-width: 0;
+}
+.recap-grille dt {
+  color: var(--retro-bleu-pale);
+  font-size: 12.5px;
+}
+.recap-grille dd {
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 600;
+}
+.retro-fin {
+  align-self: center;
+}
+.retro-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin-top: 10px;
+}
+.retro-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 22px;
+  border: 1px solid color-mix(in srgb, var(--s-texte) 30%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--s-texte);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--rapide), border-color var(--rapide);
+}
+.retro-action:hover {
+  background: color-mix(in srgb, var(--s-texte) 10%, transparent);
+}
+.retro-action.principale {
+  border-color: transparent;
+  background: var(--retro-blanc);
+  color: var(--retro-nuit);
+}
+.retro-action.principale:hover {
+  background: var(--retro-bleu-survol);
+}
+
+/* ---- Les commandes du lecteur ------------------------------------------------------------- */
+
+.retro-haut,
+.retro-bas {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 clamp(20px, 3vw, 40px);
+  color: var(--s-texte);
+  transition: color 500ms ease, opacity 300ms ease;
+}
+.retro-haut {
+  top: 18px;
+}
+.retro-bas {
+  bottom: 22px;
+}
+dialog.retro.tenu .retro-haut,
+dialog.retro.tenu .retro-bas {
+  opacity: 0.25;
+}
+.retro-progres {
+  display: grid;
+  flex: 1;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 6px;
+}
+.retro-progres span {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}
+.retro-progres i {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.retro-bouton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--rapide), opacity var(--rapide);
+}
+.retro-bouton:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 20%, transparent);
+}
+.retro-bouton:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.retro-bouton:focus-visible,
+.retro-action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.retro-marque {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+.retro-numero {
+  margin-right: 6px;
+  font-size: 14px;
+  opacity: 0.75;
+}

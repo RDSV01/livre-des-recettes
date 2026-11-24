@@ -13,6 +13,7 @@
   <link rel="preload" href="/polices/commissioner-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/retrospective.css">
   <script>
     // Thème posé avant le premier rendu : aucun éclair clair au démarrage en
     // sombre. Sans choix retenu, l'application suit le système.
@@ -32,6 +33,9 @@
       <!-- Les bandeaux globaux (mise à jour, démonstration) vivent hors de la
            vue : un seul à la fois, au-dessus du titre de la page. -->
       <div id="bandeaux"></div>
+      <!-- Le titre de la page et ses actions, en barre fine, quand l'en-tête
+           est sorti de l'écran (voir `surveillerEntete` dans app.js). -->
+      <div class="barre-compacte" id="barre-compacte" aria-hidden="true" inert></div>
       <div id="vue"></div>
     </main>
   </div>
